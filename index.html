@@ -64,8 +64,15 @@
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2>チームを組め！<small>四選三組成隊伍，點選順序就是出場順序（<span class="kb">← → 移動、Space 選取／取消、Enter 出陣</span><span class="tc">點卡片選取／取消</span>）</small></h2>
-        <div class="cpu-team">CPU チーム <span class="chips"></span><small>出場順序保密</small></div>
+        <h2>チームを組め！<small>四選三組成隊伍，點選順序就是出場順序（<span class="kb">← → 移動、Space 選取／取消、Enter 出陣、1／2／3 切換難度</span><span class="tc">點卡片選取／取消</span>）</small></h2>
+        <div class="select-row">
+          <div class="difficulty" role="group" aria-label="難易度">
+            <button type="button" data-id="easy">かんたん<small>簡單</small></button>
+            <button type="button" data-id="normal">ふつう<small>普通</small></button>
+            <button type="button" data-id="hard">むずかしい<small>困難</small></button>
+          </div>
+          <div class="cpu-team">CPU チーム <span class="chips"></span><small>出場順序保密</small></div>
+        </div>
         <div class="cards"></div>
         <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled>出陣！</button></div>
       </section>
@@ -78,6 +85,7 @@
       <section id="result" class="screen" hidden>
         <h2 class="headline"></h2>
         <p class="final"></p>
+        <p class="diff"></p>
         <ol class="breakdown"></ol>
         <button type="button" class="retry">もう一度！／再來一場</button>
       </section>

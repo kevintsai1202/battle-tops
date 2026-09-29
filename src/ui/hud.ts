@@ -1,4 +1,5 @@
 import { spinRatio } from '../sim/physics';
+import { DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
 import { currentPairing, type TeamMatch } from '../sim/team';
 import { TOP_EMBLEM, TOP_TYPES } from '../sim/tops';
 import type { FinishType, TopSpec, TopState, TopType } from '../sim/types';
@@ -85,11 +86,31 @@ export class Hud {
   /**
    * 組隊畫面：四選三，點選的順序就是出場順序（卡片右上角顯示 1、2、3）。
    * 點卡片加入或取消；湊滿 3 顆後按「出陣！」。CPU 的三顆公開顯示，順序保密。
-   * 鍵盤：← → 移動、Space 選取／取消、Enter 選取（滿 3 顆時出陣）、Backspace 退回上一顆。
-   * onHover 在游標移動時呼叫（用來換 3D 預覽）。
+   * 鍵盤：← → 移動、Space 選取／取消、Enter 選取（滿 3 顆時出陣）、Backspace 退回上一顆、1／2／3 切換難度。
+   * onHover 在游標移動時呼叫（用來換 3D 預覽）；onDifficulty 在切換難度時呼叫。
    */
-  showTeamSelect(specs: Record<TopType, TopSpec>, cpuTeam: TopType[], onHover: (t: TopType) => void, onConfirm: (team: TopType[]) => void): void {
+  showTeamSelect(
+    specs: Record<TopType, TopSpec>,
+    cpuTeam: TopType[],
+    difficulty: DifficultyId,
+    onDifficulty: (d: DifficultyId) => void,
+    onHover: (t: TopType) => void,
+    onConfirm: (team: TopType[]) => void,
+  ): void {
     const root = $('#select');
+    // 難度切換
+    const diffBtns = [...root.querySelectorAll<HTMLButtonElement>('.difficulty button')];
+    const setDiff = (d: DifficultyId) => {
+      diffBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === d));
+      onDifficulty(d);
+    };
+    diffBtns.forEach((b) => {
+      b.onclick = () => {
+        setDiff(b.dataset.id as DifficultyId);
+        b.blur();
+      };
+    });
+    diffBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === difficulty));
     const cards = $('.cards', root);
     cards.replaceChildren();
     // CPU 陣容：依固定順序顯示，不洩漏出場順序
@@ -143,21 +164,33 @@ export class Hud {
       c.addEventListener('pointerenter', (e) => {
         if (e.pointerType === 'mouse') setIdx(i);
       });
-      c.addEventListener('click', () => toggle(i));
+      // 點完就移開焦點：否則之後按 Enter／Space 會同時觸發按鈕與鍵盤處理，選取與取消互相抵消
+      c.addEventListener('click', () => {
+        toggle(i);
+        c.blur();
+      });
       els.push(c);
       cards.append(c);
     });
-    go.onclick = confirm;
+    go.onclick = () => {
+      go.blur();
+      confirm();
+    };
     this.selectKeys = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key === 'a') setIdx(idx - 1);
       else if (e.key === 'ArrowRight' || e.key === 'd') setIdx(idx + 1);
-      else if (e.key === ' ') toggle(idx);
-      else if (e.key === 'Enter') {
+      else if (e.key === ' ') {
+        e.preventDefault();
+        toggle(idx);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
         if (picks.length === 3) confirm();
         else toggle(idx);
       } else if (e.key === 'Backspace' && picks.length) {
         picks.pop();
         refresh();
+      } else if (e.key === '1' || e.key === '2' || e.key === '3') {
+        setDiff(DIFFICULTY_IDS[Number(e.key) - 1]);
       }
     };
     window.addEventListener('keydown', this.selectKeys);
@@ -188,6 +221,7 @@ export class Hud {
         if (e.pointerType === 'mouse') setIdx(i);
       });
       c.addEventListener('click', () => {
+        c.blur();
         setIdx(i);
         pick();
       });
@@ -197,7 +231,10 @@ export class Hud {
     this.selectKeys = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key === 'a') setIdx(idx - 1);
       else if (e.key === 'ArrowRight' || e.key === 'd') setIdx(idx + 1);
-      else if (e.key === 'Enter' || e.key === ' ') pick();
+      else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        pick();
+      }
     };
     window.addEventListener('keydown', this.selectKeys);
     root.hidden = false;
@@ -338,10 +375,11 @@ export class Hud {
   }
 
   /** 結果畫面：勝負、總分與每一戰的對陣和終結方式 */
-  showResult(win: boolean, m: TeamMatch, specs: Record<TopType, TopSpec>, onRetry: () => void): void {
+  showResult(win: boolean, m: TeamMatch, specs: Record<TopType, TopSpec>, difficultyLabel: string, onRetry: () => void): void {
     const el = $('#result');
     $('.headline', el).textContent = win ? 'YOU WIN!!' : 'YOU LOSE…';
     $('.final', el).textContent = `${m.score[0]} - ${m.score[1]}`;
+    $('.diff', el).textContent = `難易度：${difficultyLabel}`;
     $('.breakdown', el).replaceChildren(
       ...m.results.map((r) => {
         const li = document.createElement('li');

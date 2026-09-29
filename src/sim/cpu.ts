@@ -20,8 +20,9 @@ function toward(dx: number, dz: number, strength: number): V2 {
  * CPU 操控：依陀螺類型決定走位與必殺時機。
  * 攻擊型追擊（預判對手位置）；防禦型守中並正面迎擊；持久型守中並閃避；平衡型看轉速優劣決定攻守。
  * 太靠近邊緣時一律往中心修正，避免自己滑出場。
+ * specialRate：條件成立時每一步放必殺的機率（難度用來調整 CPU 的反應）。
  */
-export function cpuThink(sim: BattleSim, id: number, rng: Rng): CpuDecision {
+export function cpuThink(sim: BattleSim, id: number, rng: Rng, specialRate = 0.05): CpuDecision {
   const me = sim.tops[id];
   const opp = sim.tops[id === 0 ? 1 : 0];
   if (!me.alive) return { control: { x: 0, z: 0 }, special: false };
@@ -63,7 +64,7 @@ export function cpuThink(sim: BattleSim, id: number, rng: Rng): CpuDecision {
   c = { x: c.x + (rng() - 0.5) * 0.2, z: c.z + (rng() - 0.5) * 0.2 };
 
   let special = false;
-  if (me.special >= 1 && opp.alive && rng() < 0.05) {
+  if (me.special >= 1 && opp.alive && rng() < specialRate) {
     const closing = -((opp.vel.x - me.vel.x) * dx + (opp.vel.z - me.vel.z) * dz) / (dist || 1);
     switch (me.spec.type) {
       case 'attack':

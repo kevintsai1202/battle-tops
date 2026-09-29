@@ -12,6 +12,7 @@ import { BattleSim } from '../sim/battle';
 import { cpuThink } from '../sim/cpu';
 import { createTop, spinRatio } from '../sim/physics';
 import { createRng, type Rng } from '../sim/rng';
+import { DIFFICULTIES, type Difficulty, type DifficultyId } from '../sim/difficulty';
 import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type TeamMatch } from '../sim/team';
 import { TOP_SPECS, TOP_TYPES } from '../sim/tops';
@@ -49,6 +50,20 @@ const CLASH_WORDS = ['ガキィン！', 'ドガッ！', 'バキィッ！', 'ガ�
 const BIG_WORDS = ['ドゴォォン！！', 'ズガァァン！！', 'ドガガガッ！！', 'バゴォォン！！'];
 const CLASH_LINES: VoiceId[] = ['clash_1', 'clash_2', 'clash_3', 'clash_4'];
 
+/** 瀏覽器記住難度用的 localStorage 鍵 */
+const DIFFICULTY_KEY = 'battle-tops.difficulty';
+
+/** 讀取上次選的難度（無痕模式等讀不到時用普通） */
+function loadDifficulty(): Difficulty {
+  try {
+    const id = localStorage.getItem(DIFFICULTY_KEY) as DifficultyId | null;
+    if (id && id in DIFFICULTIES) return DIFFICULTIES[id];
+  } catch {
+    // 儲存空間被封鎖：用預設值
+  }
+  return DIFFICULTIES.normal;
+}
+
 /**
  * 遊戲主體：狀態機（標題 → 組隊 → 每一戰：倒數發射 → 對戰 → 回合結束 → … → 延長賽選擇 → 結果）與每幀迴圈。
  * 賽制是 3 對 3：雙方各挑三顆依序對戰，三戰總分高者勝，平手打延長賽（規則在 sim/team.ts）。
@@ -72,8 +87,10 @@ export class Game {
   round = 0;
   /** e2e 觀察用的累計數字 */
   readonly counters = { clashes: 0, bigClashes: 0, finishes: 0, specials: 0, rounds: 0, matches: 0 };
-  /** 最近一次發射的評價與轉速比例 */
-  lastLaunch = { ratio: 0, label: '' };
+  /** 最近一次發射的評價與轉速比例（cpu 為 CPU 的發射力道） */
+  lastLaunch = { ratio: 0, label: '', cpu: 0 };
+  /** 目前難度（展示模式固定普通） */
+  difficulty: Difficulty;
   /** 最近一次終結方式（e2e 觀察用） */
   lastFinish: FinishType | null = null;
 
@@ -119,6 +136,7 @@ export class Game {
 
   constructor(container: HTMLElement, opts: GameOptions) {
     this.opts = opts;
+    this.difficulty = opts.demo ? DIFFICULTIES.normal : loadDifficulty();
     this.rng = createRng(opts.seed);
     this.cpuRng = createRng(opts.seed * 31 + 7);
     // 觸控裝置（手機、平板）：開啟觸控操作並降低畫質以維持流暢
@@ -218,6 +236,8 @@ export class Game {
     this.hud.showTeamSelect(
       TOP_SPECS,
       this.cpuTeam,
+      this.difficulty.id,
+      (d) => this.setDifficulty(d),
       (t) => this.setPreview(TOP_SPECS[t]),
       (team) => {
         this.playerTeam = team;
@@ -225,6 +245,16 @@ export class Game {
         this.startMatch();
       },
     );
+  }
+
+  /** 切換難度並記在瀏覽器 */
+  private setDifficulty(id: DifficultyId): void {
+    this.difficulty = DIFFICULTIES[id];
+    try {
+      localStorage.setItem(DIFFICULTY_KEY, id);
+    } catch {
+      // 儲存空間被封鎖：這次仍然生效，只是不會記住
+    }
   }
 
   /** 選角時在場地中央轉的預覽陀螺 */
@@ -340,10 +370,11 @@ export class Game {
   private launch(error: number): void {
     this.launched = true;
     this.hud.launchMeter(false);
-    const ratio = launchSpinRatio(error);
-    const cpuRatio = 0.72 + this.rng() * 0.26;
+    const d = this.difficulty;
+    const ratio = launchSpinRatio(error, d.launch);
+    const cpuRatio = d.cpuLaunch[0] + this.rng() * (d.cpuLaunch[1] - d.cpuLaunch[0]);
     const label = ratio >= 0.97 ? 'PERFECT!!' : ratio >= 0.85 ? 'GREAT!' : ratio >= 0.7 ? 'GOOD' : 'WEAK…';
-    this.lastLaunch = { ratio, label };
+    this.lastLaunch = { ratio, label, cpu: cpuRatio };
     this.sim = new BattleSim(this.playerSpec, this.cpuSpec, {
       seed: Math.floor(this.rng() * 1e9),
       launch: [ratio, cpuRatio],
@@ -488,7 +519,7 @@ export class Game {
         } else {
           sim.setControl(0, this.playerControl());
         }
-        const ai = cpuThink(sim, 1, this.cpuRng);
+        const ai = cpuThink(sim, 1, this.cpuRng, this.difficulty.cpuSpecialRate);
         sim.setControl(1, ai.control);
         if (ai.special) sim.useSpecial(1);
       }
@@ -620,7 +651,7 @@ export class Game {
     this.voice?.play(win ? 'winner_player' : 'winner_rival', 2);
     window.setTimeout(() => this.voice?.play(win ? 'p_win' : 'r_win', 2), 2700);
     window.setTimeout(() => this.voice?.play(win ? 'r_lose' : 'p_lose', 2), 5600);
-    this.hud.showResult(win, m, TOP_SPECS, () => this.enterSelect());
+    this.hud.showResult(win, m, TOP_SPECS, this.difficulty.labelZh, () => this.enterSelect());
   }
 
   /**
@@ -720,6 +751,7 @@ export class Game {
       audioState: this.audio?.ctx.state ?? 'none',
       voice: { mode: this.voice?.mode ?? 'none', played: this.voice?.played ?? 0, last: this.voice?.last ?? null },
       launch: this.lastLaunch,
+      difficulty: this.difficulty.id,
       lastFinish: this.lastFinish,
       tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control })) ?? [],
       touchMode: this.touchMode,
