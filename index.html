@@ -23,7 +23,11 @@
           <div class="bar special"><i></i></div>
           <div class="ready">必殺 READY ▶ <span class="kb">SPACE</span><span class="tc">右下按鈕</span></div>
         </div>
-        <div class="score"><span class="s0">0</span><em>-</em><span class="s1">0</span><small>先取 3 分</small></div>
+        <div class="score">
+          <span class="s0">0</span><em>-</em><span class="s1">0</span>
+          <small class="info">BATTLE 1/3</small>
+          <div class="lineup"><span class="t0"></span><em>VS</em><span class="t1"></span></div>
+        </div>
         <div class="panel" data-side="1">
           <div class="name"></div>
           <div class="rpm"><span class="val">0</span> RPM</div>
@@ -60,13 +64,21 @@
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2>コマを選べ！<small>選擇你的陀螺（<span class="kb">← → 選擇、Enter 決定</span><span class="tc">點一下選擇、再點一次決定</span>）</small></h2>
+        <h2>チームを組め！<small>四選三組成隊伍，點選順序就是出場順序（<span class="kb">← → 移動、Space 選取／取消、Enter 出陣</span><span class="tc">點卡片選取／取消</span>）</small></h2>
+        <div class="cpu-team">CPU チーム <span class="chips"></span><small>出場順序保密</small></div>
+        <div class="cards"></div>
+        <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled>出陣！</button></div>
+      </section>
+
+      <section id="overtime" class="screen" hidden>
+        <h2>延長戦！<small>總分平手・サドンデス：從你的隊伍挑一顆出戰（<span class="kb">← → 移動、Enter 決定</span><span class="tc">點一下出戰</span>）</small></h2>
         <div class="cards"></div>
       </section>
 
       <section id="result" class="screen" hidden>
         <h2 class="headline"></h2>
         <p class="final"></p>
+        <ol class="breakdown"></ol>
         <button type="button" class="retry">もう一度！／再來一場</button>
       </section>
 

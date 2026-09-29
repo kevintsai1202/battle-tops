@@ -7,7 +7,7 @@ import { dbg, expectInViewport, expectNoHorizontalScroll } from './mobile.helper
  */
 test.use({ ...devices['Pixel 7 landscape'] });
 
-test('橫向手機：觸控選角、點擊發射、搖桿推移、必殺按鈕', async ({ page }) => {
+test('橫向手機：觸控組隊、點擊發射、搖桿推移、必殺按鈕', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto('./?seed=21');
@@ -16,20 +16,20 @@ test('橫向手機：觸控選角、點擊發射、搖桿推移、必殺按鈕',
   expect((await dbg(page)).touchMode).toBe(true);
   await expect(page.locator('#select .tc')).toBeVisible();
   await expectInViewport(page, '.card');
+  await expectInViewport(page, '.cpu-team');
+  await expectInViewport(page, '#select .go');
   await expectNoHorizontalScroll(page);
 
-  // 觸控：第一下只選取，再點一次才決定
-  const card = page.locator('.card').nth(1);
-  await card.tap();
-  await expect(card).toHaveClass(/on/);
-  await expect(page.locator('#select')).toBeVisible();
+  // 觸控組隊：點三張卡（點選順序 = 出場順序），再按出陣
+  for (const i of [1, 2, 0]) await page.locator('.card').nth(i).tap();
+  await expect(page.locator('.card .badge')).toHaveText(['3', '1', '2', '']);
   await page.screenshot({ path: 'e2e/screenshots/30-mobile-select.png' });
-  await card.tap();
+  await page.locator('#select .go').tap();
   await expect(page.locator('#select')).toBeHidden();
   await expect(page.locator('#touch')).toBeVisible();
 
   // 在「ゴー」出現時點畫面發射
-  await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 15_000 });
+  await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
   await page.touchscreen.tap(430, 120);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   await expectInViewport(page, '.panel');

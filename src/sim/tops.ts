@@ -76,3 +76,6 @@ export const TOP_SPECS: Record<TopType, TopSpec> = {
 };
 
 export const TOP_TYPES: TopType[] = ['attack', 'defense', 'stamina', 'balance'];
+
+/** 各類型陀螺頂部晶片與陣容小圖示上的字 */
+export const TOP_EMBLEM: Record<TopType, string> = { attack: '龍', defense: '亀', stamina: '鳳', balance: '狼' };

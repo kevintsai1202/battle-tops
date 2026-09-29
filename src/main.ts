@@ -6,11 +6,12 @@ import type { TopType } from './sim/types';
  * 進入點。網址參數：
  * - demo=1：CPU 對 CPU 自動對打（展示與 e2e 用）
  * - seed=數字：亂數種子
- * - p=attack|defense|stamina|balance、c=…：展示模式指定雙方陀螺
+ * - p=attack,defense、c=…：展示模式指定雙方隊伍的前幾顆（attack / defense / stamina / balance，其餘隨機補滿）
  */
 const q = new URLSearchParams(location.search);
 const types = ['attack', 'defense', 'stamina', 'balance'];
-const pickType = (v: string | null) => (v && types.includes(v) ? (v as TopType) : undefined);
+/** 解析逗號分隔的陀螺清單（例如 p=attack,defense），忽略不認得的 */
+const pickTeam = (v: string | null) => (v ? (v.split(',').filter((t) => types.includes(t)) as TopType[]) : undefined);
 
 // WebGL 不可用時直接提示，而不是一片黑
 const probe = document.createElement('canvas');
@@ -23,8 +24,8 @@ if (!probe.getContext('webgl2') && !probe.getContext('webgl')) {
   const game = new Game(document.getElementById('stage')!, {
     demo: q.get('demo') === '1',
     seed: Number(q.get('seed') ?? Date.now() % 100000),
-    player: pickType(q.get('p')),
-    cpu: pickType(q.get('c')),
+    player: pickTeam(q.get('p')),
+    cpu: pickTeam(q.get('c')),
   });
   // 除錯與 e2e 觀察用
   (window as unknown as { __game: Game }).__game = game;

@@ -1,10 +1,8 @@
 import * as THREE from 'three';
 import { ARENA, floorHeight } from '../sim/arena';
+import { TOP_EMBLEM } from '../sim/tops';
 import type { TopSpec, TopState, TopType, V2 } from '../sim/types';
 import { emblemTexture, spinBlurTexture } from './textures';
-
-/** 各類型陀螺頂部晶片上的字 */
-const EMBLEM: Record<TopType, string> = { attack: '龍', defense: '亀', stamina: '鳳', balance: '狼' };
 
 /** 攻擊環（能量層）的外形：回傳角度 θ 處的半徑 */
 function layerRadius(type: TopType, theta: number, R: number): number {
@@ -187,7 +185,7 @@ export class TopView {
       new THREE.CylinderGeometry(0.1, 0.1, 0.04, 32),
       [
         dark,
-        new THREE.MeshBasicMaterial({ map: emblemTexture(EMBLEM[spec.type], '#' + new THREE.Color(spec.glow).getHexString()) }),
+        new THREE.MeshBasicMaterial({ map: emblemTexture(TOP_EMBLEM[spec.type], '#' + new THREE.Color(spec.glow).getHexString()) }),
         dark,
       ],
     );

@@ -12,14 +12,15 @@ import { BattleSim } from '../sim/battle';
 import { cpuThink } from '../sim/cpu';
 import { createTop, spinRatio } from '../sim/physics';
 import { createRng, type Rng } from '../sim/rng';
-import { awardFinish, FINISH_POINTS, launchSpinRatio, matchWinner } from '../sim/rules';
+import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
+import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type TeamMatch } from '../sim/team';
 import { TOP_SPECS, TOP_TYPES } from '../sim/tops';
 import type { FinishType, SimEvent, TopSpec, TopState, TopType, V2 } from '../sim/types';
 import { css, Hud } from '../ui/hud';
 import { TouchControls } from '../ui/touch';
 
 /** 遊戲階段 */
-export type GameState = 'title' | 'select' | 'launch' | 'battle' | 'roundEnd' | 'result';
+export type GameState = 'title' | 'select' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result';
 
 /** 模擬固定步長 */
 const STEP = 1 / 120;
@@ -33,9 +34,9 @@ export interface GameOptions {
   /** 展示模式：CPU 對 CPU 自動對打、不需點擊（e2e 與展示用） */
   demo: boolean;
   seed: number;
-  /** 指定雙方陀螺（展示模式用） */
-  player?: TopType;
-  cpu?: TopType;
+  /** 展示模式指定雙方隊伍的前幾顆（其餘隨機補滿 3 顆） */
+  player?: TopType[];
+  cpu?: TopType[];
 }
 
 const FINISH_TEXT: Record<FinishType, { en: string; voice: VoiceId }> = {
@@ -49,7 +50,8 @@ const BIG_WORDS = ['ドゴォォン！！', 'ズガァァン！！', 'ドガガ�
 const CLASH_LINES: VoiceId[] = ['clash_1', 'clash_2', 'clash_3', 'clash_4'];
 
 /**
- * 遊戲主體：狀態機（標題 → 選角 → 倒數發射 → 對戰 → 回合結束 → 結果）與每幀迴圈。
+ * 遊戲主體：狀態機（標題 → 組隊 → 每一戰：倒數發射 → 對戰 → 回合結束 → … → 延長賽選擇 → 結果）與每幀迴圈。
+ * 賽制是 3 對 3：雙方各挑三顆依序對戰，三戰總分高者勝，平手打延長賽（規則在 sim/team.ts）。
  * 把模擬事件分派給特效、鏡頭導演、音效、語音與 HUD。
  */
 export class Game {
@@ -61,7 +63,12 @@ export class Game {
   audio: AudioEngine | null = null;
   voice: VoicePlayer | null = null;
   sim: BattleSim | null = null;
-  score: [number, number] = [0, 0];
+  /** 目前的 3 對 3 對戰 */
+  match: TeamMatch | null = null;
+  /** 玩家與 CPU 的隊伍（順序即出場順序） */
+  playerTeam: TopType[] = [];
+  cpuTeam: TopType[] = [];
+  /** 已開打的回合數（含平手重打） */
   round = 0;
   /** e2e 觀察用的累計數字 */
   readonly counters = { clashes: 0, bigClashes: 0, finishes: 0, specials: 0, rounds: 0, matches: 0 };
@@ -95,7 +102,13 @@ export class Game {
   private cutinLeft = 0;
   private lastDirectorMode = 'overview';
   private musicOn = true;
-  private roundFlags = { hurt: false, taunt: false, matchPointSaid: false };
+  private roundFlags = { hurt: false, taunt: false };
+  /** 每戰開頭主播介紹的長度：倒數在這之後才開始（秒，牆鐘） */
+  private launchLead = COUNT_START;
+  /** 上一回合的對陣（用來判斷是不是平手重打） */
+  private lastBattle = 0;
+  /** 延長賽 CPU 挑的陀螺（選擇畫面開啟時就決定） */
+  private overtimeCpu: TopType = 'attack';
   /** 除錯暫停：畫面照常渲染，但時間不前進（e2e 定格截圖用） */
   paused = false;
   /** 觸控模式：偵測到觸控裝置或第一次觸控後開啟，顯示搖桿與必殺按鈕 */
@@ -127,11 +140,7 @@ export class Game {
 
     if (opts.demo) {
       document.getElementById('title')!.hidden = true;
-      void this.boot().then(() => {
-        this.playerSpec = TOP_SPECS[opts.player ?? TOP_TYPES[Math.floor(this.rng() * 4)]];
-        this.cpuSpec = TOP_SPECS[opts.cpu ?? this.pickCpu(this.playerSpec.type)];
-        this.startMatch();
-      });
+      void this.boot().then(() => this.startDemoMatch());
     } else {
       // 不等語音下載完：選角畫面立刻出現，語音在背景載入（選角通常比下載久）
       this.hud.showTitle(() => {
@@ -171,10 +180,24 @@ export class Game {
     return this.voice.load();
   }
 
-  /** CPU 選一個和玩家不同類型的陀螺 */
-  private pickCpu(player: TopType): TopType {
-    const others = TOP_TYPES.filter((t) => t !== player);
-    return others[Math.floor(this.rng() * others.length)];
+  /** 目前總分 [玩家, CPU] */
+  get score(): [number, number] {
+    return this.match?.score ?? [0, 0];
+  }
+
+  /** 組一支 3 顆不重複的隊伍：先放指定的，其餘隨機補滿 */
+  private fillTeam(hint: TopType[] = []): TopType[] {
+    const team = [...new Set(hint)].slice(0, 3);
+    const rest = TOP_TYPES.filter((t) => !team.includes(t));
+    while (team.length < 3) team.push(rest.splice(Math.floor(this.rng() * rest.length), 1)[0]);
+    return team;
+  }
+
+  /** 展示模式：雙方隨機組隊（可用網址參數指定前幾顆）後開打 */
+  private startDemoMatch(): void {
+    this.playerTeam = this.fillTeam(this.opts.player);
+    this.cpuTeam = this.fillTeam(this.opts.cpu);
+    this.startMatch();
   }
 
   private setState(s: GameState): void {
@@ -184,19 +207,20 @@ export class Game {
 
   // ---------------- 選角 ----------------
 
+  /** 組隊畫面：CPU 先組好（公開三顆、順序保密），玩家四選三 */
   private enterSelect(): void {
     this.setState('select');
     this.hud.hideHud();
     this.hud.clearBanner();
     this.clearArena();
     this.audio?.setMusic(this.musicOn, false);
-    this.hud.showSelect(
+    this.cpuTeam = cpuPickTeam(this.rng);
+    this.hud.showTeamSelect(
       TOP_SPECS,
-      this.playerSpec.type,
+      this.cpuTeam,
       (t) => this.setPreview(TOP_SPECS[t]),
-      (t) => {
-        this.playerSpec = TOP_SPECS[t];
-        this.cpuSpec = TOP_SPECS[this.pickCpu(t)];
+      (team) => {
+        this.playerTeam = team;
         this.setPreview(null);
         this.startMatch();
       },
@@ -214,11 +238,12 @@ export class Game {
 
   // ---------------- 比賽流程 ----------------
 
+  /** 開始一場 3 對 3 */
   private startMatch(): void {
-    this.score = [0, 0];
+    this.match = createMatch(this.playerTeam, this.cpuTeam);
     this.round = 0;
+    this.lastBattle = 0;
     this.hud.hideResult();
-    this.hud.showHud(this.playerSpec, this.cpuSpec);
     this.startRound();
   }
 
@@ -232,8 +257,17 @@ export class Game {
     this.effects.clear();
   }
 
-  /** 新回合：進入倒數發射 */
+  /**
+   * 新的一戰：依對陣換上雙方陀螺、揭曉 CPU 出場的陀螺，主播介紹後進入倒數發射。
+   * 平手重打時沿用同一組對陣。
+   */
   private startRound(): void {
+    const m = this.match!;
+    const pair = currentPairing(m)!;
+    const replay = pair.battle === this.lastBattle;
+    this.lastBattle = pair.battle;
+    this.playerSpec = TOP_SPECS[pair.player];
+    this.cpuSpec = TOP_SPECS[pair.cpu];
     this.clearArena();
     this.round++;
     this.director.reset();
@@ -241,21 +275,31 @@ export class Game {
     this.launchPress = null;
     this.launched = false;
     this.specialFreeze = 0;
-    this.roundFlags = { hurt: false, taunt: false, matchPointSaid: false };
+    this.roundFlags = { hurt: false, taunt: false };
     this.audio?.setMusic(this.musicOn, true);
+    this.hud.showHud(this.playerSpec, this.cpuSpec);
+    this.hud.setMatchInfo(m, TOP_SPECS);
     this.hud.updateHud(
       [createTop(0, this.playerSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1), createTop(1, this.cpuSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1)],
-      this.score,
+      m.score,
     );
     this.setState('launch');
-    const mp = this.score[0] === 2 || this.score[1] === 2;
-    this.hud.banner(`ROUND ${this.round}`, mp ? 'マッチポイント！' : 'スタンバイ…', { small: true, seconds: 0.6 });
-    if (this.round > 1) this.voice?.play(mp ? 'match_point' : 'round_ready', 2);
+    const title = pair.overtime ? 'OVERTIME' : pair.battle === 3 ? 'FINAL BATTLE' : `BATTLE ${pair.battle}`;
+    this.hud.banner(title, `${this.playerSpec.nameJa}  VS  ${this.cpuSpec.nameJa}${replay ? '（再戦）' : ''}`, { small: true, seconds: 0 });
+    const line: VoiceId = replay ? 'round_ready' : pair.overtime || pair.battle === 3 ? 'battle_final' : pair.battle === 1 ? 'battle_1' : 'battle_2';
+    const spoke = this.voice?.play(line, 2) ?? false;
+    // 主播講完才開始倒數，避免「スリー」蓋掉開場介紹
+    this.launchLead = Math.max(1.4, (spoke ? this.voice!.duration(line) : 0) + 0.4);
+  }
+
+  /** 倒數用的時鐘：主播介紹結束時為 COUNT_START */
+  private launchClock(): number {
+    return this.stateTime - this.launchLead + COUNT_START;
   }
 
   /** 倒數與發射（每幀） */
   private updateLaunch(): void {
-    const t = this.stateTime;
+    const t = this.launchClock();
     if (t < COUNT_START) return;
     const beat = Math.floor((t - COUNT_START) / BEAT) + 1;
     if (beat > this.launchBeat && beat <= 4) {
@@ -272,7 +316,7 @@ export class Game {
       }
     }
     const progress = (t - COUNT_START) / (GO_AT - COUNT_START);
-    this.hud.launchMeter(!this.opts.demo && !this.launched, progress);
+    this.hud.launchMeter(!this.opts.demo && !this.launched && t >= COUNT_START, progress);
 
     // 展示模式：自動在 GO 附近按下
     if (this.opts.demo && this.launchPress === null && t >= GO_AT - 0.03) this.launchPress = t + (this.rng() - 0.5) * 0.12;
@@ -287,8 +331,9 @@ export class Game {
   /** 玩家按下發射（Space 或點擊）：只接受「1」之後的輸入 */
   private onLaunchPress(): void {
     if (this.state !== 'launch' || this.launched || this.launchPress !== null) return;
-    if (this.stateTime < COUNT_START + BEAT * 2) return;
-    this.launchPress = this.stateTime;
+    const t = this.launchClock();
+    if (t < COUNT_START + BEAT * 2) return;
+    this.launchPress = t;
   }
 
   /** 發射：依時機誤差決定轉速，建立模擬與畫面 */
@@ -393,7 +438,12 @@ export class Game {
     if (this.state === 'roundEnd' && this.stateTime > 3.6) this.afterRound();
     if (this.state === 'result' && this.opts.demo && this.stateTime > 4) {
       this.hud.hideResult();
-      this.startMatch();
+      this.startDemoMatch();
+    }
+    // 展示模式的延長賽：稍等一下自動挑選
+    if (this.state === 'overtime' && this.opts.demo && this.stateTime > 1.8) {
+      this.hud.hideOvertimePick();
+      this.pickOvertime(this.match!.player[Math.floor(this.rng() * 3)]);
     }
 
     // 畫面更新
@@ -405,7 +455,8 @@ export class Game {
       this.preview.view.update(this.preview.state, wallDt, this.clock);
     }
     this.effects.update(wallDt * Math.max(ts, 0.45), wallDt);
-    const shot: Shot = this.state === 'title' ? 'title' : this.state === 'select' ? 'select' : this.state === 'launch' ? 'launch' : 'battle';
+    const shot: Shot =
+      this.state === 'title' ? 'title' : this.state === 'select' || this.state === 'overtime' ? 'select' : this.state === 'launch' ? 'launch' : 'battle';
     this.rig.update(shot, this.director, tops, wallDt);
 
     const excitement = this.audio?.update(wallDt) ?? 0;
@@ -519,27 +570,71 @@ export class Game {
     }
   }
 
-  /** 回合結束後：計分，決定下一回合或比賽結果 */
+  /** 回合結束後：記錄這一戰，決定下一戰、延長賽或比賽結果 */
   private afterRound(): void {
+    const m = this.match!;
     const res = this.sim?.result;
     this.counters.rounds++;
-    if (res && res.winner !== null) this.score = awardFinish(this.score, res.loser, res.finish);
-    this.hud.updateHud(this.sim?.tops ?? [], this.score);
-    const w = matchWinner(this.score);
-    if (w === null) {
-      this.startRound();
-      return;
-    }
+    if (res) recordResult(m, res);
+    this.hud.updateHud(this.sim?.tops ?? [], m.score);
+    this.hud.setMatchInfo(m, TOP_SPECS);
+    if (m.phase === 'done') this.finishMatch();
+    else if (m.phase === 'overtime' && !m.overtimePick) this.enterOvertimePick();
+    else this.startRound();
+  }
+
+  /** 三戰總分平手：延長賽，玩家從自己的隊伍挑一顆（CPU 此時已隨機決定） */
+  private enterOvertimePick(): void {
+    const m = this.match!;
+    this.setState('overtime');
+    this.clearArena();
+    this.hud.clearBanner();
+    this.hud.hideHud();
+    this.audio?.setMusic(this.musicOn, false);
+    this.overtimeCpu = m.cpu[Math.floor(this.rng() * m.cpu.length)];
+    this.voice?.play('overtime', 2);
+    if (this.opts.demo) return;
+    this.hud.showOvertimePick(
+      m.player.map((t) => TOP_SPECS[t]),
+      (t) => this.setPreview(TOP_SPECS[t]),
+      (t) => this.pickOvertime(t),
+    );
+  }
+
+  /** 延長賽出戰的陀螺決定後開打 */
+  private pickOvertime(t: TopType): void {
+    this.setPreview(null);
+    setOvertime(this.match!, t, this.overtimeCpu);
+    this.startRound();
+  }
+
+  /** 比賽結束：結果畫面與勝負台詞 */
+  private finishMatch(): void {
+    const m = this.match!;
     this.counters.matches++;
     this.setState('result');
     this.hud.clearBanner();
     this.audio?.setMusic(this.musicOn, false);
-    const win = w === 0;
+    const win = m.winner === 0;
     // 主播宣布 → 勝者一句 → 敗者一句
     this.voice?.play(win ? 'winner_player' : 'winner_rival', 2);
     window.setTimeout(() => this.voice?.play(win ? 'p_win' : 'r_win', 2), 2700);
     window.setTimeout(() => this.voice?.play(win ? 'r_lose' : 'p_lose', 2), 5600);
-    this.hud.showResult(win, this.score, () => this.enterSelect());
+    this.hud.showResult(win, m, TOP_SPECS, () => this.enterSelect());
+  }
+
+  /**
+   * 除錯用：直接把目前的對戰改成「三戰打完總分平手」並進入延長賽選擇
+   * （正常對戰很難剛好打成平手，e2e 用它驗證延長賽畫面）。
+   */
+  debugForceOvertime(): void {
+    const m = createMatch(this.playerTeam, this.cpuTeam);
+    recordResult(m, { finish: 'over', loser: 1, winner: 0 });
+    recordResult(m, { finish: 'spin', loser: 0, winner: 1 });
+    recordResult(m, { finish: 'spin', loser: 0, winner: 1 });
+    this.match = m;
+    this.hud.hideCutin();
+    this.enterOvertimePick();
   }
 
   // ---------------- 工具 ----------------
@@ -605,6 +700,18 @@ export class Game {
       clock: this.clock,
       round: this.round,
       score: this.score,
+      match: this.match
+        ? {
+            phase: this.match.phase,
+            battle: currentPairing(this.match)?.battle ?? null,
+            overtime: currentPairing(this.match)?.overtime ?? false,
+            results: this.match.results.length,
+            winner: this.match.winner,
+            player: this.match.player,
+            cpu: this.match.cpu,
+            points: this.match.results.map((r) => r.points),
+          }
+        : null,
       director: { mode: this.director.mode, timeScale: this.director.timeScale, closeups: this.director.closeups, progress: this.director.progress },
       counters: { ...this.counters },
       sparks: this.effects.sparksEmitted,

@@ -1,9 +1,13 @@
 import { spinRatio } from '../sim/physics';
-import { TOP_TYPES } from '../sim/tops';
-import type { TopSpec, TopState, TopType } from '../sim/types';
+import { currentPairing, type TeamMatch } from '../sim/team';
+import { TOP_EMBLEM, TOP_TYPES } from '../sim/tops';
+import type { FinishType, TopSpec, TopState, TopType } from '../sim/types';
 
 /** 類型的顯示名稱 */
 const TYPE_LABEL: Record<TopType, string> = { attack: '攻擊型', defense: '防禦型', stamina: '持久型', balance: '平衡型' };
+
+/** 終結方式的英文名稱（結果畫面用） */
+const FINISH_EN: Record<FinishType, string> = { spin: 'SPIN FINISH', over: 'OVER FINISH', burst: 'BURST FINISH' };
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 
@@ -12,8 +16,52 @@ export function css(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
 }
 
+/** 陣容小圖示：圓形底 + 紋章字，顏色取陀螺發光色 */
+function chip(sp: TopSpec): HTMLElement {
+  const c = document.createElement('i');
+  c.className = 'chip';
+  c.style.setProperty('--c', css(sp.glow));
+  c.title = sp.nameZh;
+  c.textContent = TOP_EMBLEM[sp.type];
+  return c;
+}
+
+/** 陀螺卡片（組隊與延長賽共用）：順序徽章、名稱、類型、能力條、必殺技名 */
+function buildCard(sp: TopSpec): HTMLButtonElement {
+  const c = document.createElement('button');
+  c.type = 'button';
+  c.className = 'card';
+  c.style.setProperty('--c', css(sp.glow));
+  const stat = (label: string, v: number) => {
+    const row = document.createElement('div');
+    row.className = 'stat';
+    const s = document.createElement('span');
+    s.textContent = label;
+    const b = document.createElement('b');
+    b.style.width = `${Math.min(100, (v / 1.8) * 100)}%`;
+    row.append(s, b);
+    return row;
+  };
+  const badge = document.createElement('span');
+  badge.className = 'badge';
+  const ja = document.createElement('div');
+  ja.className = 'ja';
+  ja.textContent = sp.nameJa;
+  const zh = document.createElement('div');
+  zh.className = 'zh';
+  zh.textContent = sp.nameZh;
+  const tag = document.createElement('span');
+  tag.className = 'type';
+  tag.textContent = TYPE_LABEL[sp.type];
+  const spd = document.createElement('div');
+  spd.className = 'sp';
+  spd.textContent = `必殺：${sp.specialJa}`;
+  c.append(badge, ja, zh, tag, stat('攻擊', sp.attack), stat('防禦', sp.defense), stat('持久', sp.stamina), stat('機動', sp.cruise / 3), spd);
+  return c;
+}
+
 /**
- * DOM 覆蓋層：標題、選角、對戰 HUD、中央大字、擬聲字、發射量表、必殺 cut-in、結果畫面。
+ * DOM 覆蓋層：標題、組隊、延長賽選擇、對戰 HUD、中央大字、擬聲字、發射量表、必殺 cut-in、結果畫面。
  * 只負責畫面，遊戲邏輯在 Game。
  */
 export class Hud {
@@ -35,72 +83,117 @@ export class Hud {
   }
 
   /**
-   * 選角畫面：四張卡片，←→ 或滑鼠選擇，Enter／點擊決定。
-   * 觸控時第一下只選取（看 3D 預覽），再點一次同一張才決定。
-   * onHover 在選擇變動時呼叫（用來換 3D 預覽）。
+   * 組隊畫面：四選三，點選的順序就是出場順序（卡片右上角顯示 1、2、3）。
+   * 點卡片加入或取消；湊滿 3 顆後按「出陣！」。CPU 的三顆公開顯示，順序保密。
+   * 鍵盤：← → 移動、Space 選取／取消、Enter 選取（滿 3 顆時出陣）、Backspace 退回上一顆。
+   * onHover 在游標移動時呼叫（用來換 3D 預覽）。
    */
-  showSelect(specs: Record<TopType, TopSpec>, initial: TopType, onHover: (t: TopType) => void, onPick: (t: TopType) => void): void {
+  showTeamSelect(specs: Record<TopType, TopSpec>, cpuTeam: TopType[], onHover: (t: TopType) => void, onConfirm: (team: TopType[]) => void): void {
     const root = $('#select');
     const cards = $('.cards', root);
     cards.replaceChildren();
-    let idx = TOP_TYPES.indexOf(initial);
+    // CPU 陣容：依固定順序顯示，不洩漏出場順序
+    $('.cpu-team .chips', root).replaceChildren(...TOP_TYPES.filter((t) => cpuTeam.includes(t)).map((t) => chip(specs[t])));
+    const go = $<HTMLButtonElement>('.go', root);
+    const slots = $('.slots', root);
+    let idx = 0;
+    const picks: TopType[] = [];
     const els: HTMLButtonElement[] = [];
-    const stat = (label: string, v: number) => {
-      const row = document.createElement('div');
-      row.className = 'stat';
-      const s = document.createElement('span');
-      s.textContent = label;
-      const b = document.createElement('b');
-      b.style.width = `${Math.min(100, (v / 1.8) * 100)}%`;
-      row.append(s, b);
-      return row;
+
+    const refresh = () => {
+      els.forEach((e, k) => {
+        const n = picks.indexOf(TOP_TYPES[k]);
+        e.classList.toggle('on', k === idx);
+        e.classList.toggle('picked', n >= 0);
+        $('.badge', e).textContent = n >= 0 ? String(n + 1) : '';
+      });
+      slots.replaceChildren(
+        ...[0, 1, 2].map((i) => {
+          const sl = document.createElement('span');
+          sl.className = 'slot';
+          sl.textContent = `${i + 1}`;
+          if (picks[i]) sl.append(chip(specs[picks[i]]));
+          return sl;
+        }),
+      );
+      go.disabled = picks.length !== 3;
     };
+    const setIdx = (i: number) => {
+      idx = (i + TOP_TYPES.length) % TOP_TYPES.length;
+      onHover(TOP_TYPES[idx]);
+      refresh();
+    };
+    const toggle = (i: number) => {
+      const t = TOP_TYPES[i];
+      const n = picks.indexOf(t);
+      if (n >= 0) picks.splice(n, 1);
+      else if (picks.length < 3) picks.push(t);
+      setIdx(i);
+    };
+    const confirm = () => {
+      if (picks.length !== 3) return;
+      if (this.selectKeys) window.removeEventListener('keydown', this.selectKeys);
+      this.selectKeys = null;
+      root.hidden = true;
+      onConfirm([...picks]);
+    };
+
     TOP_TYPES.forEach((type, i) => {
-      const sp = specs[type];
-      const c = document.createElement('button');
-      c.type = 'button';
-      c.className = 'card';
-      c.style.setProperty('--c', css(sp.glow));
-      const ja = document.createElement('div');
-      ja.className = 'ja';
-      ja.textContent = sp.nameJa;
-      const zh = document.createElement('div');
-      zh.className = 'zh';
-      zh.textContent = sp.nameZh;
-      const tag = document.createElement('span');
-      tag.className = 'type';
-      tag.textContent = TYPE_LABEL[type];
-      const spd = document.createElement('div');
-      spd.className = 'sp';
-      spd.textContent = `必殺：${sp.specialJa}`;
-      c.append(ja, zh, tag, stat('攻擊', sp.attack), stat('防禦', sp.defense), stat('持久', sp.stamina), stat('機動', sp.cruise / 3), spd);
-      // click 在部分瀏覽器（Safari）拿不到 pointerType，改在 pointerdown 記下
-      let lastType = 'mouse';
-      c.addEventListener('pointerdown', (e) => (lastType = e.pointerType));
+      const c = buildCard(specs[type]);
       c.addEventListener('pointerenter', (e) => {
         if (e.pointerType === 'mouse') setIdx(i);
       });
-      c.addEventListener('click', () => {
-        if (lastType !== 'mouse' && idx !== i) setIdx(i);
-        else {
-          setIdx(i);
-          pick();
-        }
-      });
+      c.addEventListener('click', () => toggle(i));
       els.push(c);
       cards.append(c);
     });
+    go.onclick = confirm;
+    this.selectKeys = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') setIdx(idx - 1);
+      else if (e.key === 'ArrowRight' || e.key === 'd') setIdx(idx + 1);
+      else if (e.key === ' ') toggle(idx);
+      else if (e.key === 'Enter') {
+        if (picks.length === 3) confirm();
+        else toggle(idx);
+      } else if (e.key === 'Backspace' && picks.length) {
+        picks.pop();
+        refresh();
+      }
+    };
+    window.addEventListener('keydown', this.selectKeys);
+    root.hidden = false;
+    setIdx(0);
+  }
+
+  /** 延長賽：從自己的三顆挑一顆出戰（點一下即決定；鍵盤 ← → 移動、Enter 決定） */
+  showOvertimePick(team: TopSpec[], onHover: (t: TopType) => void, onPick: (t: TopType) => void): void {
+    const root = $('#overtime');
+    const cards = $('.cards', root);
+    cards.replaceChildren();
+    let idx = 0;
     const setIdx = (i: number) => {
-      idx = (i + TOP_TYPES.length) % TOP_TYPES.length;
+      idx = (i + team.length) % team.length;
       els.forEach((e, k) => e.classList.toggle('on', k === idx));
-      onHover(TOP_TYPES[idx]);
+      onHover(team[idx].type);
     };
     const pick = () => {
       if (this.selectKeys) window.removeEventListener('keydown', this.selectKeys);
       this.selectKeys = null;
       root.hidden = true;
-      onPick(TOP_TYPES[idx]);
+      onPick(team[idx].type);
     };
+    const els = team.map((sp, i) => {
+      const c = buildCard(sp);
+      c.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse') setIdx(i);
+      });
+      c.addEventListener('click', () => {
+        setIdx(i);
+        pick();
+      });
+      cards.append(c);
+      return c;
+    });
     this.selectKeys = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' || e.key === 'a') setIdx(idx - 1);
       else if (e.key === 'ArrowRight' || e.key === 'd') setIdx(idx + 1);
@@ -108,7 +201,38 @@ export class Hud {
     };
     window.addEventListener('keydown', this.selectKeys);
     root.hidden = false;
-    setIdx(idx);
+    setIdx(0);
+  }
+
+  /** 收起延長賽選擇畫面（展示模式自動挑選時用） */
+  hideOvertimePick(): void {
+    $('#overtime').hidden = true;
+    if (this.selectKeys) window.removeEventListener('keydown', this.selectKeys);
+    this.selectKeys = null;
+  }
+
+  /** 對戰中的賽況：BATTLE n/3 或延長賽，以及雙方陣容小圖示（出戰中、已出戰與得分） */
+  setMatchInfo(m: TeamMatch, specs: Record<TopType, TopSpec>): void {
+    const pair = currentPairing(m);
+    $('#hud .info').textContent = pair ? (pair.overtime ? '延長賽' : `BATTLE ${pair.battle}/3`) : 'FINAL';
+    const side = (team: TopType[], who: 0 | 1) =>
+      team.map((t) => {
+        const c = chip(specs[t]);
+        const rec = m.results.filter((r) => (who === 0 ? r.player : r.cpu) === t);
+        if (rec.length) {
+          c.classList.add('done');
+          const pts = rec.reduce((a, r) => a + r.points[who], 0);
+          const b = document.createElement('b');
+          b.textContent = pts ? `+${pts}` : '0';
+          c.append(b);
+        }
+        if (pair && (who === 0 ? pair.player : pair.cpu) === t) c.classList.add('cur');
+        return c;
+      });
+    // CPU 陣容依固定順序排列，避免洩漏出場順序
+    const cpuShown = TOP_TYPES.filter((t) => m.cpu.includes(t));
+    $('#hud .lineup .t0').replaceChildren(...side(m.player, 0));
+    $('#hud .lineup .t1').replaceChildren(...side(cpuShown, 1));
   }
 
   /** 顯示對戰 HUD 並填入名稱 */
@@ -213,11 +337,20 @@ export class Hud {
     $('#cutin').hidden = true;
   }
 
-  /** 結果畫面 */
-  showResult(win: boolean, score: [number, number], onRetry: () => void): void {
+  /** 結果畫面：勝負、總分與每一戰的對陣和終結方式 */
+  showResult(win: boolean, m: TeamMatch, specs: Record<TopType, TopSpec>, onRetry: () => void): void {
     const el = $('#result');
     $('.headline', el).textContent = win ? 'YOU WIN!!' : 'YOU LOSE…';
-    $('.final', el).textContent = `${score[0]} - ${score[1]}`;
+    $('.final', el).textContent = `${m.score[0]} - ${m.score[1]}`;
+    $('.breakdown', el).replaceChildren(
+      ...m.results.map((r) => {
+        const li = document.createElement('li');
+        li.className = r.winner === 0 ? 'w' : 'l';
+        const label = r.overtime ? '延長賽' : `第 ${r.battle} 戰`;
+        li.textContent = `${label}　${specs[r.player].nameZh} VS ${specs[r.cpu].nameZh}　${FINISH_EN[r.finish]}　${r.winner === 0 ? 'YOU' : 'CPU'} +${r.points[r.winner]}`;
+        return li;
+      }),
+    );
     const btn = $<HTMLButtonElement>('.retry', el);
     btn.onclick = () => {
       el.hidden = true;

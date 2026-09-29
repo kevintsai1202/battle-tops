@@ -194,5 +194,33 @@
     "speaker": "rival",
     "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
     "hash": "cf6e3723e3e0704b"
+  },
+  "battle_1": {
+    "file": "battle_1.mp3",
+    "text": "[excited] 第一バトル、スタンバイ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "2bcb23addc98df94"
+  },
+  "battle_2": {
+    "file": "battle_2.mp3",
+    "text": "[excited] 第二バトル、スタンバイ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "167aa46149ca5e87"
+  },
+  "battle_final": {
+    "file": "battle_final.mp3",
+    "text": "[shouting][excited] ファイナルバトル！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "4fff755a771c3f29"
+  },
+  "overtime": {
+    "file": "overtime.mp3",
+    "text": "[shouting][excited] 延長戦だ！サドンデス！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "eab2c7fcde89cb4f"
   }
 }

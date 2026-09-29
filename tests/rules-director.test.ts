@@ -1,20 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { CameraDirector } from '../src/director/director';
-import { awardFinish, launchSpinRatio, matchWinner } from '../src/sim/rules';
+import { launchSpinRatio } from '../src/sim/rules';
 
-describe('計分規則', () => {
-  test('停轉 1 分、出場與爆裂 2 分，加給勝者', () => {
-    expect(awardFinish([0, 0], 1, 'spin')).toEqual([1, 0]);
-    expect(awardFinish([0, 0], 0, 'over')).toEqual([0, 2]);
-    expect(awardFinish([1, 1], 1, 'burst')).toEqual([3, 1]);
-  });
-
-  test('先拿到 3 分獲勝', () => {
-    expect(matchWinner([2, 2])).toBeNull();
-    expect(matchWinner([3, 1])).toBe(0);
-    expect(matchWinner([2, 4])).toBe(1);
-  });
-
+describe('發射規則', () => {
   test('發射時機：越準轉速越高，提早或延遲對稱，最低 0.5', () => {
     expect(launchSpinRatio(0)).toBe(1);
     expect(launchSpinRatio(0.03)).toBe(1);

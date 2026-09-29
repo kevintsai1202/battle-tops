@@ -35,9 +35,16 @@ async function setPaused(page: Page, on: boolean): Promise<void> {
 /** 收集頁面錯誤與 console error，測試最後斷言為空 */
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
+  // 錯誤當下就印出來，測試中途逾時也看得到原因
+  page.on('pageerror', (e) => {
+    errors.push(String(e));
+    console.log('[pageerror]', String(e));
+  });
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() === 'error') {
+      errors.push(m.text());
+      console.log('[console.error]', m.text());
+    }
   });
   return errors;
 }
@@ -110,7 +117,7 @@ test('展示模式：撞擊觸發特寫慢動作、火花、音效與日語語�
   expect(errors).toEqual([]);
 });
 
-test('玩家流程：標題 → 選角 → 抓時機發射 → 推移操控', async ({ page }) => {
+test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('./?seed=7');
   await page.screenshot({ path: 'e2e/screenshots/10-title.png' });
@@ -118,16 +125,25 @@ test('玩家流程：標題 → 選角 → 抓時機發射 → 推移操控', as
   await page.locator('#title').click();
   await expect(page.locator('#select')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.debug().voice.mode !== 'none', null, { timeout: 30_000 });
-  // 選第二張（防禦型）再決定
+  // 組隊：攻擊 → 防禦 → 持久，卡片右上角依序顯示 1、2、3
+  await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.card .badge')).toHaveText(['1', '2', '3', '']);
+  await expect(page.locator('#select .go')).toBeEnabled();
+  await expect(page.locator('.cpu-team .chip')).toHaveCount(3);
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'e2e/screenshots/11-select.png' });
   await page.keyboard.press('Enter');
 
   await expect(page.locator('#hud')).toBeVisible();
+  await expect(page.locator('#hud .info')).toHaveText('BATTLE 1/3');
+  await expect(page.locator('#hud .lineup .chip')).toHaveCount(6);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
   // 看到「ゴー・シュート!!」大字時立刻按 Space
-  await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 15_000 });
+  await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   const s = await snap(page);

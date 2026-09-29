@@ -753,9 +753,6 @@ body.touch .tc {
   .score {
     font-size: 28px;
   }
-  .score small {
-    display: none;
-  }
   #help {
     font-size: 11px;
     bottom: 3px;
@@ -835,7 +832,279 @@ body.touch .tc {
   .bar {
     height: 6px;
   }
-  .score small {
-    display: none;
+}
+
+/* ---------- 3 對 3：組隊、陣容、延長賽、戰績 ---------- */
+.chip {
+  --c: #fff;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-family: var(--display);
+  font-style: normal;
+  font-size: 15px;
+  color: var(--c);
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.9));
+  border: 2px solid var(--c);
+  text-shadow: 0 0 6px var(--c);
+}
+
+.chip.cur {
+  box-shadow: 0 0 12px var(--c), 0 0 4px #fff;
+  transform: scale(1.15);
+}
+
+.chip.done {
+  opacity: 0.45;
+}
+
+.chip b {
+  position: absolute;
+  bottom: -13px;
+  font-family: inherit;
+  font-size: 10px;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+
+.card {
+  position: relative;
+}
+
+.card .badge {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-family: var(--display);
+  font-size: 18px;
+  color: #1a0a00;
+  background: linear-gradient(180deg, #ffe16a, #ff8a1a);
+  box-shadow: 0 0 12px #ff9a00;
+}
+
+.card.picked {
+  border-color: var(--c);
+}
+
+.card.picked .badge {
+  display: inline-flex;
+}
+
+.cpu-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--display);
+  font-size: 15px;
+  color: #9fe7ff;
+}
+
+.cpu-team .chips {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.cpu-team small {
+  font-family: inherit;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.team-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.team-bar .slots {
+  display: inline-flex;
+  gap: 10px;
+}
+
+.slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 52px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  font-family: var(--display);
+  font-size: 14px;
+}
+
+.team-bar .go {
+  font-family: var(--display);
+  font-size: 20px;
+  padding: 8px 28px;
+  border-radius: 999px;
+  border: 0;
+  color: #1a0a00;
+  background: linear-gradient(180deg, #ffe16a, #ff8a1a);
+  box-shadow: 0 0 20px rgba(255, 150, 40, 0.8);
+  cursor: pointer;
+}
+
+.team-bar .go:disabled {
+  filter: grayscale(1);
+  opacity: 0.4;
+  box-shadow: none;
+  cursor: default;
+}
+
+#overtime h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(32px, 6vw, 64px);
+  margin: 0 0 8px;
+  color: #ffe35a;
+  text-shadow: 0 0 18px rgba(255, 60, 60, 0.9), 0 4px 0 #000;
+}
+
+#overtime h2 small {
+  display: block;
+  font-family: inherit;
+  font-size: 15px;
+  opacity: 0.85;
+  color: #fff;
+  text-shadow: none;
+}
+
+#overtime .cards {
+  grid-template-columns: repeat(3, minmax(0, 200px));
+}
+
+.score .info {
+  flex-basis: 100%;
+}
+
+.score .lineup {
+  flex-basis: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.score .lineup span {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.score .lineup em {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.breakdown {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.breakdown li {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(8, 12, 30, 0.8);
+  border-left: 4px solid #888;
+}
+
+.breakdown li.w {
+  border-left-color: #ffb000;
+}
+
+.breakdown li.l {
+  border-left-color: #3ab0ff;
+  opacity: 0.85;
+}
+
+/* 矮螢幕（橫向手機）：組隊畫面與陣容精簡 */
+@media (max-height: 520px) {
+  #select h2 small,
+  #overtime h2 small {
+    font-size: 11px;
+  }
+  .cpu-team {
+    font-size: 12px;
+  }
+  .chip {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+  }
+  .team-bar {
+    margin-top: 2px;
+  }
+  .slot {
+    height: 28px;
+    min-width: 44px;
+    font-size: 12px;
+  }
+  .team-bar .go {
+    font-size: 16px;
+    padding: 5px 20px;
+  }
+  .card .badge {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    top: -8px;
+  }
+  .score .info {
+    font-size: 11px;
+  }
+  .score .lineup {
+    margin-bottom: 10px;
+  }
+  .breakdown {
+    font-size: 12px;
+    gap: 3px;
+  }
+  .breakdown li {
+    padding: 3px 10px;
+  }
+  #result .final {
+    font-size: 20px;
+  }
+  .retry {
+    margin-top: 8px;
+    font-size: 18px;
+    padding: 8px 24px;
+  }
+}
+
+/* 直向窄螢幕：陣容與戰績縮小 */
+@media (max-width: 640px) {
+  .chip {
+    width: 24px;
+    height: 24px;
+    font-size: 13px;
+  }
+  .team-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .breakdown {
+    font-size: 12px;
+  }
+  #overtime .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
