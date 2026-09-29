@@ -16,6 +16,7 @@ import { awardFinish, FINISH_POINTS, launchSpinRatio, matchWinner } from '../sim
 import { TOP_SPECS, TOP_TYPES } from '../sim/tops';
 import type { FinishType, SimEvent, TopSpec, TopState, TopType, V2 } from '../sim/types';
 import { css, Hud } from '../ui/hud';
+import { TouchControls } from '../ui/touch';
 
 /** 遊戲階段 */
 export type GameState = 'title' | 'select' | 'launch' | 'battle' | 'roundEnd' | 'result';
@@ -97,6 +98,9 @@ export class Game {
   private roundFlags = { hurt: false, taunt: false, matchPointSaid: false };
   /** 除錯暫停：畫面照常渲染，但時間不前進（e2e 定格截圖用） */
   paused = false;
+  /** 觸控模式：偵測到觸控裝置或第一次觸控後開啟，顯示搖桿與必殺按鈕 */
+  touchMode = false;
+  private readonly touch: TouchControls;
   /** 已渲染的影格數 */
   frames = 0;
 
@@ -104,14 +108,21 @@ export class Game {
     this.opts = opts;
     this.rng = createRng(opts.seed);
     this.cpuRng = createRng(opts.seed * 31 + 7);
-    this.gfx = new GameRenderer(container);
-    this.stadium = buildStadium(this.gfx.scene);
+    // 觸控裝置（手機、平板）：開啟觸控操作並降低畫質以維持流暢
+    const coarse = window.matchMedia('(any-pointer: coarse)').matches;
+    this.gfx = new GameRenderer(container, coarse);
+    this.stadium = buildStadium(this.gfx.scene, coarse);
+    this.touch = new TouchControls(() => this.trySpecial());
+    if (coarse) this.enableTouchMode();
     this.effects = new Effects(this.gfx.scene);
     this.rig = new CameraRig(this.gfx.camera);
 
     window.addEventListener('keydown', (e) => this.onKey(e, true));
     window.addEventListener('keyup', (e) => this.onKey(e, false));
-    window.addEventListener('pointerdown', () => this.onLaunchPress());
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') this.enableTouchMode();
+      this.onLaunchPress();
+    });
     window.addEventListener('blur', () => this.keys.clear());
 
     if (opts.demo) {
@@ -145,13 +156,12 @@ export class Game {
       void audio.resume().then(() => {
         if (audio.ctx.state === 'running') {
           hint.hidden = true;
-          window.removeEventListener('pointerdown', unlock);
-          window.removeEventListener('keydown', unlock);
+          for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) window.removeEventListener(ev, unlock);
         }
       });
     };
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    // iOS Safari 過去只在 touchend／click 時允許開聲音，一起監聽
+    for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) window.addEventListener(ev, unlock);
     audio.ctx.addEventListener('statechange', () => (hint.hidden = audio.ctx.state === 'running'));
     // 給瀏覽器一點時間套用剛才的手勢，仍是暫停才顯示提示
     window.setTimeout(() => (hint.hidden = audio.ctx.state === 'running'), 300);
@@ -314,7 +324,7 @@ export class Game {
     if (k === ' ' || k === 'spacebar') {
       e.preventDefault();
       if (this.state === 'launch') this.onLaunchPress();
-      else if (this.state === 'battle' && this.sim && !this.opts.demo) this.sim.useSpecial(0);
+      else this.trySpecial();
     }
     if (k === 'm') {
       this.musicOn = !this.musicOn;
@@ -322,7 +332,19 @@ export class Game {
     }
   }
 
-  /** 方向鍵換算成「相對鏡頭」的推移方向 */
+  /** 開啟觸控模式：切換說明文字（body.touch） */
+  private enableTouchMode(): void {
+    if (this.touchMode) return;
+    this.touchMode = true;
+    document.body.classList.add('touch');
+  }
+
+  /** 玩家發動必殺技（Space 或觸控按鈕） */
+  private trySpecial(): void {
+    if (this.state === 'battle' && this.sim && !this.opts.demo) this.sim.useSpecial(0);
+  }
+
+  /** 方向鍵與觸控搖桿換算成「相對鏡頭」的推移方向 */
   private playerControl(): V2 {
     let x = 0;
     let y = 0;
@@ -330,6 +352,8 @@ export class Game {
     if (this.keys.has('s') || this.keys.has('arrowdown')) y -= 1;
     if (this.keys.has('d') || this.keys.has('arrowright')) x += 1;
     if (this.keys.has('a') || this.keys.has('arrowleft')) x -= 1;
+    x += this.touch.vector.x;
+    y += this.touch.vector.y;
     if (x === 0 && y === 0) return { x: 0, z: 0 };
     const f = this.gfx.camera.getWorldDirection(new THREE.Vector3());
     const len = Math.hypot(f.x, f.z) || 1;
@@ -392,6 +416,7 @@ export class Game {
       this.hums.forEach((h, i) => tops[i] && h.set(this.world(tops[i].pos, 0.25), spinRatio(tops[i]), tops[i].alive));
     }
     if (battleLike && this.sim) this.hud.updateHud(this.sim.tops, this.score);
+    this.updateTouch();
 
     this.applyPost(ts);
     this.gfx.render();
@@ -561,6 +586,17 @@ export class Game {
     );
   }
 
+  /** 觸控操作只在倒數與對戰時出現（展示模式不顯示），並同步必殺按鈕狀態 */
+  private updateTouch(): void {
+    const show = this.touchMode && !this.opts.demo && (this.state === 'launch' || this.state === 'battle' || this.state === 'roundEnd');
+    this.touch.setVisible(show);
+    if (!show) return;
+    const me = this.sim?.tops[0];
+    if (!me) this.touch.setSpecial('charging', 0);
+    else if (me.specialUsed) this.touch.setSpecial('used', 0);
+    else this.touch.setSpecial(me.special >= 1 && me.alive && this.state === 'battle' ? 'ready' : 'charging', me.special);
+  }
+
   /** e2e 用的狀態快照 */
   debug() {
     return {
@@ -578,7 +614,10 @@ export class Game {
       voice: { mode: this.voice?.mode ?? 'none', played: this.voice?.played ?? 0, last: this.voice?.last ?? null },
       launch: this.lastLaunch,
       lastFinish: this.lastFinish,
-      tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive })) ?? [],
+      tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control })) ?? [],
+      touchMode: this.touchMode,
+      fov: this.gfx.camera.fov,
+      stick: this.touch.vector,
       colors: [css(this.playerSpec.glow), css(this.cpuSpec.glow)],
     };
   }

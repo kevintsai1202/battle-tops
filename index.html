@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Battle Tops</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,7 +21,7 @@
           <div class="bar burst"><i></i></div>
           <div class="label">必殺</div>
           <div class="bar special"><i></i></div>
-          <div class="ready">必殺 READY ▶ SPACE</div>
+          <div class="ready">必殺 READY ▶ <span class="kb">SPACE</span><span class="tc">右下按鈕</span></div>
         </div>
         <div class="score"><span class="s0">0</span><em>-</em><span class="s1">0</span><small>先取 3 分</small></div>
         <div class="panel" data-side="1">
@@ -43,7 +43,7 @@
       <div id="launch" hidden>
         <div class="target"></div>
         <div class="closing"></div>
-        <div class="hint">SPACE／點擊：在「ゴー」的瞬間發射！</div>
+        <div class="hint"><span class="kb">SPACE／點擊</span><span class="tc">點畫面</span>：在「ゴー」的瞬間發射！</div>
       </div>
 
       <!-- 必殺技 cut-in -->
@@ -56,10 +56,11 @@
         <p class="en">爆転バトル ・ 戰鬥陀螺</p>
         <p class="blink">クリックしてスタート ／ 點擊開始</p>
         <p class="note">請開啟聲音（建議戴耳機，3D 立體音效）</p>
+        <p class="rotate-hint">📱 橫向遊玩效果較好</p>
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2>コマを選べ！<small>選擇你的陀螺（← → 選擇、Enter 決定）</small></h2>
+        <h2>コマを選べ！<small>選擇你的陀螺（<span class="kb">← → 選擇、Enter 決定</span><span class="tc">點一下選擇、再點一次決定</span>）</small></h2>
         <div class="cards"></div>
       </section>
 
@@ -70,7 +71,13 @@
       </section>
 
       <div id="audio-hint" hidden>🔊 クリックで音声ON／點擊畫面開啟聲音</div>
-      <div id="help">WASD／方向鍵：推移陀螺　SPACE：必殺技　M：音樂開關</div>
+      <!-- 手機觸控操作：左下搖桿、右下必殺按鈕 -->
+      <div id="touch" hidden>
+        <div class="stick"><div class="knob"></div></div>
+        <button type="button" class="special-btn" aria-label="必殺技"><span>必殺</span></button>
+      </div>
+
+      <div id="help"><span class="kb">WASD／方向鍵：推移陀螺　SPACE：必殺技　M：音樂開關</span><span class="tc">左下搖桿：推移　右下按鈕：必殺技</span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

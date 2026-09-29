@@ -36,6 +36,7 @@ export class Hud {
 
   /**
    * 選角畫面：四張卡片，←→ 或滑鼠選擇，Enter／點擊決定。
+   * 觸控時第一下只選取（看 3D 預覽），再點一次同一張才決定。
    * onHover 在選擇變動時呼叫（用來換 3D 預覽）。
    */
   showSelect(specs: Record<TopType, TopSpec>, initial: TopType, onHover: (t: TopType) => void, onPick: (t: TopType) => void): void {
@@ -73,8 +74,19 @@ export class Hud {
       spd.className = 'sp';
       spd.textContent = `必殺：${sp.specialJa}`;
       c.append(ja, zh, tag, stat('攻擊', sp.attack), stat('防禦', sp.defense), stat('持久', sp.stamina), stat('機動', sp.cruise / 3), spd);
-      c.addEventListener('pointerenter', () => setIdx(i));
-      c.addEventListener('click', () => pick());
+      // click 在部分瀏覽器（Safari）拿不到 pointerType，改在 pointerdown 記下
+      let lastType = 'mouse';
+      c.addEventListener('pointerdown', (e) => (lastType = e.pointerType));
+      c.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse') setIdx(i);
+      });
+      c.addEventListener('click', () => {
+        if (lastType !== 'mouse' && idx !== i) setIdx(i);
+        else {
+          setIdx(i);
+          pick();
+        }
+      });
       els.push(c);
       cards.append(c);
     });

@@ -50,7 +50,7 @@ function arcTube(r: number, y: number, phi0: number, phi1: number, radius: numbe
 /**
  * 建立競技場：碗形霓虹地板、有三個出場口的圍牆、外圍平台、觀眾席與燈光。
  */
-export function buildStadium(scene: THREE.Scene): Stadium {
+export function buildStadium(scene: THREE.Scene, lowPower = false): Stadium {
   const group = new THREE.Group();
   const R = ARENA.radius;
   const rimY = floorHeight(R);
@@ -197,7 +197,7 @@ export function buildStadium(scene: THREE.Scene): Stadium {
   const key = new THREE.DirectionalLight(0xffffff, 2.2);
   key.position.set(2, 9, 3);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.mapSize.setScalar(lowPower ? 512 : 1024);
   const sc = key.shadow.camera;
   sc.left = sc.bottom = -5;
   sc.right = sc.top = 5;

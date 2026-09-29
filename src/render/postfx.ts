@@ -104,10 +104,17 @@ export class GameRenderer {
   private readonly composer: EffectComposer;
   private readonly bloom: UnrealBloomPass;
   private readonly impact: ShaderPass;
+  /**
+   * Bloom 內部緩衝相對畫面的比例。UnrealBloomPass 本身已在一半解析度運算，
+   * 省電模式再乘 0.6（約 1/3）。composer.setSize 會把 Bloom 重設回預設，所以每次 resize 都要重新套用。
+   */
+  private readonly bloomScale: number;
 
-  constructor(container: HTMLElement) {
+  /** lowPower：手機等觸控裝置用，降低像素比與 Bloom 解析度 */
+  constructor(container: HTMLElement, lowPower = false) {
+    this.bloomScale = lowPower ? 0.6 : 1;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.5 : 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
@@ -119,7 +126,6 @@ export class GameRenderer {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    // Bloom 用半解析度，筆電 GPU 才跑得動
     this.bloom = new UnrealBloomPass(new THREE.Vector2(480, 270), 1.05, 0.55, 0.62);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -136,7 +142,10 @@ export class GameRenderer {
     const h = window.innerHeight;
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
-    this.bloom.resolution.set(w / 2, h / 2);
+    if (this.bloomScale !== 1) {
+      const pr = this.renderer.getPixelRatio();
+      this.bloom.setSize(w * pr * this.bloomScale, h * pr * this.bloomScale);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.impact.uniforms.uAspect.value = w / h;

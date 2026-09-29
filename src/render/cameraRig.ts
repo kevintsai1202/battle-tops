@@ -9,6 +9,16 @@ export type Shot = 'title' | 'select' | 'launch' | 'battle';
 const ease = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 
 /**
+ * 直向或窄螢幕的視角補償：鏡頭參數是以 16:9 設計的，畫面變窄時加大垂直 FOV，
+ * 讓水平視野不要縮太多（直向手機才看得到整個場地）。16:9 以上不變，最大 95°。
+ */
+export function aspectFov(vfov: number, aspect: number): number {
+  const k = Math.min(2.2, Math.max(1, 16 / 9 / aspect));
+  const out = (2 * Math.atan(Math.tan((vfov * Math.PI) / 360) * k) * 180) / Math.PI;
+  return Math.min(95, out);
+}
+
+/**
  * 鏡頭擺位：依導演模式（全景／撞擊特寫／終結）與遊戲階段計算相機位置、視角、FOV 與傾斜，
  * 再疊上畫面震動。特寫與終結鏡頭用「硬切」進場，像動畫分鏡。
  */
@@ -123,8 +133,9 @@ export class CameraRig {
     this.camera.lookAt(this.look);
     // 荷蘭角（鏡頭滾轉）：沿相機自身的視線軸旋轉
     this.camera.rotateZ(this.roll + (Math.random() - 0.5) * s * 0.06);
-    if (Math.abs(this.camera.fov - this.fov) > 0.01) {
-      this.camera.fov = this.fov;
+    const fov = aspectFov(this.fov, this.camera.aspect);
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
   }
