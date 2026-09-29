@@ -44,10 +44,10 @@ function watchErrors(page: Page): string[] {
 
 test('展示模式：撞擊觸發特寫慢動作、火花、音效與日語語音，並打到回合終結', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/?demo=1&seed=42&p=attack&c=balance');
+  await page.goto('./?demo=1&seed=42&p=attack&c=balance');
 
   // 語音來源必須是預先生成的 Fish Audio 音檔（本機沒有日語系統語音，退路等於沒聲音）
-  await page.waitForFunction(() => (window as any).__game?.debug().voice.mode !== 'none', null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!(window as any).__game && (window as any).__game.debug().voice.mode !== 'none', null, { timeout: 30_000 });
   const boot = await snap(page);
   expect(boot.voice.mode).toBe('fish-files');
   expect(boot.audioState).toBe('running');
@@ -112,7 +112,7 @@ test('展示模式：撞擊觸發特寫慢動作、火花、音效與日語語�
 
 test('玩家流程：標題 → 選角 → 抓時機發射 → 推移操控', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/?seed=7');
+  await page.goto('./?seed=7');
   await page.screenshot({ path: 'e2e/screenshots/10-title.png' });
 
   await page.locator('#title').click();

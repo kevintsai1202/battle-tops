@@ -33,10 +33,10 @@ async function shootFinish(page: Page, url: string, want: string, file: string):
 
 test('停轉倒下動畫（防禦 vs 持久，幾乎都是停轉）', async ({ page }) => {
   test.setTimeout(600_000);
-  await shootFinish(page, '/?demo=1&seed=11&p=defense&c=stamina', 'spin', 'e2e/screenshots/21-spin-finish.png');
+  await shootFinish(page, './?demo=1&seed=11&p=defense&c=stamina', 'spin', 'e2e/screenshots/21-spin-finish.png');
 });
 
 test('出場飛出動畫（攻擊 vs 防禦，約四成出場）', async ({ page }) => {
   test.setTimeout(900_000);
-  await shootFinish(page, '/?demo=1&seed=12&p=attack&c=defense', 'over', 'e2e/screenshots/22-over-finish.png');
+  await shootFinish(page, './?demo=1&seed=12&p=attack&c=defense', 'over', 'e2e/screenshots/22-over-finish.png');
 });

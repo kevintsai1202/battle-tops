@@ -122,17 +122,21 @@ export class Game {
         this.startMatch();
       });
     } else {
-      this.hud.showTitle(() => void this.boot().then(() => this.enterSelect()));
+      // 不等語音下載完：選角畫面立刻出現，語音在背景載入（選角通常比下載久）
+      this.hud.showTitle(() => {
+        void this.boot();
+        this.enterSelect();
+      });
     }
     this.gfx.renderer.setAnimationLoop(() => this.frame());
   }
 
   /**
-   * 建立音訊並載入語音。
+   * 建立音訊並開始在背景載入語音；回傳的 Promise 在語音載入完成時結束。
    * 瀏覽器在使用者操作前不允許出聲：沒有手勢時 resume() 會一直等待，
    * 所以不 await；若仍是暫停狀態就顯示「點擊開啟聲音」，等下一次點擊或按鍵再恢復。
    */
-  private async boot(): Promise<void> {
+  private boot(): Promise<void> {
     this.audio = new AudioEngine();
     const audio = this.audio;
     void audio.resume().catch(() => undefined);
@@ -152,9 +156,9 @@ export class Game {
     // 給瀏覽器一點時間套用剛才的手勢，仍是暫停才顯示提示
     window.setTimeout(() => (hint.hidden = audio.ctx.state === 'running'), 300);
     this.voice = new VoicePlayer(this.audio);
-    await this.voice.load();
     this.audio.startCrowd();
     this.audio.setMusic(this.musicOn, false);
+    return this.voice.load();
   }
 
   /** CPU 選一個和玩家不同類型的陀螺 */

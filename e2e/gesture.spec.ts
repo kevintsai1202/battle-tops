@@ -33,7 +33,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('展示模式照常開打，點擊後聲音恢復', async ({ page }) => {
-  await page.goto('/?demo=1&seed=3');
+  await page.goto('./?demo=1&seed=3');
   // 沒有手勢也要能進入對戰
   await page.waitForFunction(() => (window as any).__game?.debug().state === 'battle', null, { timeout: 40_000 });
   const before = await dbg(page);
