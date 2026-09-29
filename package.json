@@ -1,0 +1,26 @@
+{
+  "name": "battle-tops",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "test": "vitest run --project unit",
+    "e2e": "playwright test",
+    "voice": "node --env-file-if-exists=.env scripts/gen-voice.mjs",
+    "balance": "vitest run --project balance --reporter=verbose",
+    "voice:check": "node --env-file-if-exists=.env scripts/check-voice.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

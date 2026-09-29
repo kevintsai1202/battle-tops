@@ -1,0 +1,31 @@
+import './style.css';
+import { Game } from './game/game';
+import type { TopType } from './sim/types';
+
+/**
+ * 進入點。網址參數：
+ * - demo=1：CPU 對 CPU 自動對打（展示與 e2e 用）
+ * - seed=數字：亂數種子
+ * - p=attack|defense|stamina|balance、c=…：展示模式指定雙方陀螺
+ */
+const q = new URLSearchParams(location.search);
+const types = ['attack', 'defense', 'stamina', 'balance'];
+const pickType = (v: string | null) => (v && types.includes(v) ? (v as TopType) : undefined);
+
+// WebGL 不可用時直接提示，而不是一片黑
+const probe = document.createElement('canvas');
+if (!probe.getContext('webgl2') && !probe.getContext('webgl')) {
+  const msg = document.createElement('p');
+  msg.style.cssText = 'color:#fff;padding:24px;font-size:18px';
+  msg.textContent = '這個瀏覽器環境沒有 WebGL，無法顯示 3D 畫面。請改用 Chrome／Edge 並開啟硬體加速。';
+  document.body.replaceChildren(msg);
+} else {
+  const game = new Game(document.getElementById('stage')!, {
+    demo: q.get('demo') === '1',
+    seed: Number(q.get('seed') ?? Date.now() % 100000),
+    player: pickType(q.get('p')),
+    cpu: pickType(q.get('c')),
+  });
+  // 除錯與 e2e 觀察用
+  (window as unknown as { __game: Game }).__game = game;
+}

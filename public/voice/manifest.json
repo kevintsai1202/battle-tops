@@ -1,0 +1,198 @@
+{
+  "countdown_3": {
+    "file": "countdown_3.mp3",
+    "text": "[excited] スリー！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "3f166644eda85fdc"
+  },
+  "countdown_2": {
+    "file": "countdown_2.mp3",
+    "text": "[excited] ツー！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "25a36e167059c4ee"
+  },
+  "countdown_1": {
+    "file": "countdown_1.mp3",
+    "text": "[excited] ワン！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "d160d2007d34a350"
+  },
+  "go_shoot": {
+    "file": "go_shoot.mp3",
+    "text": "[shouting][excited] ゴー、シュートォッ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "2d91f9c137e86f76"
+  },
+  "clash_1": {
+    "file": "clash_1.mp3",
+    "text": "[shouting][excited] 激突だぁぁっ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "d474b166c0ad70b9"
+  },
+  "clash_2": {
+    "file": "clash_2.mp3",
+    "text": "[excited] なんというパワーだ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "bfd7e1f6628bf1b5"
+  },
+  "clash_3": {
+    "file": "clash_3.mp3",
+    "text": "[shouting] すさまじい衝撃！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "34068bf73e800f19"
+  },
+  "clash_4": {
+    "file": "clash_4.mp3",
+    "text": "[excited] 火花が散ったぁっ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "8e456f902c4f4748"
+  },
+  "spin_finish": {
+    "file": "spin_finish.mp3",
+    "text": "[excited] スピン・フィニッシュ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "eb5438d1ff4a8a21"
+  },
+  "over_finish": {
+    "file": "over_finish.mp3",
+    "text": "[shouting][excited] オーバー・フィニッシュ！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "00683576e57e79ce"
+  },
+  "burst_finish": {
+    "file": "burst_finish.mp3",
+    "text": "[shouting][excited] バースト・フィニッシュ！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "47278ab4ffa4f787"
+  },
+  "round_ready": {
+    "file": "round_ready.mp3",
+    "text": "[excited] 次のバトル、スタンバイ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "c89e60cb890faf4e"
+  },
+  "match_point": {
+    "file": "match_point.mp3",
+    "text": "[excited] マッチポイントだ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "a64eeed8fcd0a859"
+  },
+  "winner_player": {
+    "file": "winner_player.mp3",
+    "text": "[shouting][excited] 勝負あり！ 勝者はキミだ！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "50f8e381b15de284"
+  },
+  "winner_rival": {
+    "file": "winner_rival.mp3",
+    "text": "[excited] 勝負あり！ 今回はライバルの勝利だ！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "73e0942fbce73570"
+  },
+  "p_launch": {
+    "file": "p_launch.mp3",
+    "text": "[shouting] いっけぇぇぇっ！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "8fa49507dd39a928"
+  },
+  "p_hit": {
+    "file": "p_hit.mp3",
+    "text": "[shouting] まだまだぁっ！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "6c3483ec476541a1"
+  },
+  "p_hurt": {
+    "file": "p_hurt.mp3",
+    "text": "[shouting] くっ… 負けるかぁっ！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "c032c437fdc4ad01"
+  },
+  "p_special_attack": {
+    "file": "p_special_attack.mp3",
+    "text": "[shouting][excited] 必殺！ ドラゴン・インパクト！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "3e315195db1032b5"
+  },
+  "p_special_defense": {
+    "file": "p_special_defense.mp3",
+    "text": "[shouting][excited] 必殺！ アイアン・フォートレス！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "bc24f142b1d7c9b9"
+  },
+  "p_special_stamina": {
+    "file": "p_special_stamina.mp3",
+    "text": "[shouting][excited] 必殺！ エターナル・サイクロン！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "f40fa36d97bb976d"
+  },
+  "p_special_balance": {
+    "file": "p_special_balance.mp3",
+    "text": "[shouting][excited] 必殺！ ギャラクシー・ノヴァ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "760b387446ff972c"
+  },
+  "p_win": {
+    "file": "p_win.mp3",
+    "text": "[excited] よっしゃあ！ 俺たちの勝ちだ！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "4fb5aae30f98d511"
+  },
+  "p_lose": {
+    "file": "p_lose.mp3",
+    "text": "[sad] くそっ… 次は負けないからな！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "91e1aea0e711b837"
+  },
+  "r_taunt": {
+    "file": "r_taunt.mp3",
+    "text": "[confident] フッ、その程度か？",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "b030466e90ba63ae"
+  },
+  "r_special": {
+    "file": "r_special.mp3",
+    "text": "[shouting] 見せてやる、俺の必殺技を！！",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "216d15d97c0f134c"
+  },
+  "r_win": {
+    "file": "r_win.mp3",
+    "text": "[confident] まだまだだな。",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "ffb5c879631a4c15"
+  },
+  "r_lose": {
+    "file": "r_lose.mp3",
+    "text": "[shocked] バカな… この俺が…！",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "cf6e3723e3e0704b"
+  }
+}

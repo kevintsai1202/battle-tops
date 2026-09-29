@@ -1,0 +1,38 @@
+{
+  "_comment": "日語台詞表：遊戲（src/audio/voice.ts）與生成腳本（scripts/gen-voice.mjs）共用。text 內的方括號是 Fish Audio s2 系列的語氣標記，播放 fallback 時會被去掉。",
+  "speakers": {
+    "announcer": { "voiceId": "d738c70d206149e69f8e3b6fc8af9d96", "name": "じん(ラジオパーソナリティ) / Fish Official" },
+    "player": { "voiceId": "c496c7d0e93640a59a0befd78b47f39e", "name": "男の子 / Fish Official" },
+    "rival": { "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a", "name": "さとる(ナレーション) / Fish Official" }
+  },
+  "lines": {
+    "countdown_3": { "speaker": "announcer", "text": "[excited] スリー！" },
+    "countdown_2": { "speaker": "announcer", "text": "[excited] ツー！" },
+    "countdown_1": { "speaker": "announcer", "text": "[excited] ワン！" },
+    "go_shoot": { "speaker": "player", "text": "[shouting][excited] ゴー、シュートォッ！！" },
+    "clash_1": { "speaker": "announcer", "text": "[shouting][excited] 激突だぁぁっ！" },
+    "clash_2": { "speaker": "announcer", "text": "[excited] なんというパワーだ！" },
+    "clash_3": { "speaker": "announcer", "text": "[shouting] すさまじい衝撃！！" },
+    "clash_4": { "speaker": "announcer", "text": "[excited] 火花が散ったぁっ！" },
+    "spin_finish": { "speaker": "announcer", "text": "[excited] スピン・フィニッシュ！" },
+    "over_finish": { "speaker": "announcer", "text": "[shouting][excited] オーバー・フィニッシュ！！" },
+    "burst_finish": { "speaker": "announcer", "text": "[shouting][excited] バースト・フィニッシュ！！" },
+    "round_ready": { "speaker": "announcer", "text": "[excited] 次のバトル、スタンバイ！" },
+    "match_point": { "speaker": "announcer", "text": "[excited] マッチポイントだ！" },
+    "winner_player": { "speaker": "announcer", "text": "[shouting][excited] 勝負あり！ 勝者はキミだ！！" },
+    "winner_rival": { "speaker": "announcer", "text": "[excited] 勝負あり！ 今回はライバルの勝利だ！" },
+    "p_launch": { "speaker": "player", "text": "[shouting] いっけぇぇぇっ！" },
+    "p_hit": { "speaker": "player", "text": "[shouting] まだまだぁっ！" },
+    "p_hurt": { "speaker": "player", "text": "[shouting] くっ… 負けるかぁっ！" },
+    "p_special_attack": { "speaker": "player", "text": "[shouting][excited] 必殺！ ドラゴン・インパクト！！" },
+    "p_special_defense": { "speaker": "player", "text": "[shouting][excited] 必殺！ アイアン・フォートレス！！" },
+    "p_special_stamina": { "speaker": "player", "text": "[shouting][excited] 必殺！ エターナル・サイクロン！！" },
+    "p_special_balance": { "speaker": "player", "text": "[shouting][excited] 必殺！ ギャラクシー・ノヴァ！！" },
+    "p_win": { "speaker": "player", "text": "[excited] よっしゃあ！ 俺たちの勝ちだ！" },
+    "p_lose": { "speaker": "player", "text": "[sad] くそっ… 次は負けないからな！" },
+    "r_taunt": { "speaker": "rival", "text": "[confident] フッ、その程度か？" },
+    "r_special": { "speaker": "rival", "text": "[shouting] 見せてやる、俺の必殺技を！！" },
+    "r_win": { "speaker": "rival", "text": "[confident] まだまだだな。" },
+    "r_lose": { "speaker": "rival", "text": "[shocked] バカな… この俺が…！" }
+  }
+}
