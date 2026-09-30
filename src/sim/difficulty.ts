@@ -3,7 +3,7 @@ import { STRICT_WINDOW, type LaunchWindow } from './rules';
 /** 難度代號 */
 export type DifficultyId = 'easy' | 'normal' | 'hard';
 
-/** 一檔難度調整的項目：只影響發射判定、CPU 發射力道與 CPU 使用必殺的頻率 */
+/** 一檔難度調整的項目：只影響發射判定、拉條保底、CPU 發射力道與 CPU 使用必殺的頻率 */
 export interface Difficulty {
   id: DifficultyId;
   /** 顯示名稱（日文／中文） */
@@ -15,6 +15,8 @@ export interface Difficulty {
   cpuLaunch: [number, number];
   /** CPU 條件成立時每一步放必殺的機率（原本 0.05） */
   cpuSpecialRate: number;
+  /** 拉發射台的保底力道：拉得再差也有這個比例，拉得好補到 1（見 sim/launcher.ts） */
+  pullBase: number;
 }
 
 /**
@@ -29,6 +31,7 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     launch: { perfect: 0.15, worst: 0.6, min: 0.8 },
     cpuLaunch: [0.6, 0.8],
     cpuSpecialRate: 0.015,
+    pullBase: 0.8,
   },
   normal: {
     id: 'normal',
@@ -37,6 +40,7 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     launch: { perfect: 0.1, worst: 0.5, min: 0.65 },
     cpuLaunch: [0.72, 0.95],
     cpuSpecialRate: 0.05,
+    pullBase: 0.68,
   },
   hard: {
     id: 'hard',
@@ -45,6 +49,7 @@ export const DIFFICULTIES: Record<DifficultyId, Difficulty> = {
     launch: STRICT_WINDOW,
     cpuLaunch: [0.85, 1.0],
     cpuSpecialRate: 0.05,
+    pullBase: 0.55,
   },
 };
 

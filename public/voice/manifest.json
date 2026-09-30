@@ -222,5 +222,117 @@
     "speaker": "announcer",
     "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
     "hash": "eab2c7fcde89cb4f"
+  },
+  "p_special_azure": {
+    "file": "p_special_azure.mp3",
+    "text": "[shouting][excited] 必殺！ ストーム・アサルト！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "474d97b924a3d03e"
+  },
+  "p_special_pegasus": {
+    "file": "p_special_pegasus.mp3",
+    "text": "[shouting][excited] 必殺！ テンペスト・ブリンガー！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "8987780b80cae821"
+  },
+  "p_special_ldrago": {
+    "file": "p_special_ldrago.mp3",
+    "text": "[shouting][excited] 必殺！ りゅうおうしょうこうげき！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "cde1c816c75d8ef9"
+  },
+  "p_special_valkyrie": {
+    "file": "p_special_valkyrie.mp3",
+    "text": "[shouting][excited] 必殺！ ラッシュ・ストライク！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "cc4b901088601206"
+  },
+  "p_special_draciel": {
+    "file": "p_special_draciel.mp3",
+    "text": "[shouting][excited] 必殺！ メタルボール・ガード！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "46ddd9e7eceb217f"
+  },
+  "p_special_leone": {
+    "file": "p_special_leone.mp3",
+    "text": "[shouting][excited] 必殺！ ししぼうふうへき！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "4be5395c71fcd996"
+  },
+  "p_special_kerbeus": {
+    "file": "p_special_kerbeus.mp3",
+    "text": "[shouting][excited] 必殺！ トリプル・ハウル！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "d95e1605c873e4ba"
+  },
+  "p_special_knight": {
+    "file": "p_special_knight.mp3",
+    "text": "[shouting][excited] 必殺！ シールド・インパクト！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "d2139b22605692f9"
+  },
+  "p_special_wolborg": {
+    "file": "p_special_wolborg.mp3",
+    "text": "[shouting][excited] 必殺！ ノヴァ・ブリザード！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "54da19357267942f"
+  },
+  "p_special_orion": {
+    "file": "p_special_orion.mp3",
+    "text": "[shouting][excited] 必殺！ バーナード・ループ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "434389c2b4e4d326"
+  },
+  "p_special_fafnir": {
+    "file": "p_special_fafnir.mp3",
+    "text": "[shouting][excited] 必殺！ ドレイン・スピン！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "10ea9db2f4d3d9bd"
+  },
+  "p_special_wizard": {
+    "file": "p_special_wizard.mp3",
+    "text": "[shouting][excited] 必殺！ ミラージュ・パリィ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "d1d60bd799ca6a57"
+  },
+  "p_special_dranzer": {
+    "file": "p_special_dranzer.mp3",
+    "text": "[shouting][excited] 必殺！ ファイヤー・アロー！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "266a16d7cb9a90fa"
+  },
+  "p_special_nemesis": {
+    "file": "p_special_nemesis.mp3",
+    "text": "[shouting][excited] 必殺！ てんちほうらく！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "8e920b9395c23a26"
+  },
+  "p_special_requiem": {
+    "file": "p_special_requiem.mp3",
+    "text": "[shouting][excited] 必殺！ カウンター・ブレイク！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "2a3bf437e87de8a7"
+  },
+  "p_special_scythe": {
+    "file": "p_special_scythe.mp3",
+    "text": "[shouting][excited] 必殺！ クレセント・ジャッジ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "4656a9712f2bebd0"
   }
 }

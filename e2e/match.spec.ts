@@ -44,7 +44,7 @@ test('延長賽：總分平手時從自己的隊伍挑一顆出戰', async ({ pa
   await page.goto('./?seed=33');
   await page.locator('#title').click();
   await expect(page.locator('#select')).toBeVisible();
-  for (const i of [3, 0, 1]) await page.locator('.card').nth(i).click();
+  for (const id of ['wolf', 'blaze', 'turtle']) await page.locator(`#select .card[data-id="${id}"]`).click();
   await page.locator('#select .go').click();
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
 
@@ -54,12 +54,12 @@ test('延長賽：總分平手時從自己的隊伍挑一顆出戰', async ({ pa
   await page.waitForTimeout(500);
   await page.screenshot({ path: 'e2e/screenshots/41-overtime-pick.png' });
 
-  // 挑第二顆（隊伍順序 [balance, attack, defense] 的 attack）
+  // 挑第二顆（隊伍順序 [星河狼, 烈焰龍, 鐵壁龜] 的烈焰龍）
   await page.locator('#overtime .card').nth(1).click();
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
   const d = await dbg(page);
   expect(d.match!.overtime).toBe(true);
   expect(d.match!.phase).toBe('overtime');
-  await expect(page.locator('#hud .info')).toHaveText('延長賽');
+  await expect(page.locator('#hud .info')).toHaveText('延長賽・練習場');
   await expect(page.locator('.panel[data-side="0"] .name')).toContainText('ブレイズ・ドラゴン');
 });

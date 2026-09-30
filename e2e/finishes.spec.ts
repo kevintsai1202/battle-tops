@@ -31,12 +31,12 @@ async function shootFinish(page: Page, url: string, want: string, file: string):
   throw new Error(`等了 8 回合都沒有出現 ${want} 終結`);
 }
 
-test('停轉倒下動畫（防禦 vs 持久，幾乎都是停轉）', async ({ page }) => {
+test('停轉倒下動畫（鐵壁龜 vs 疾風鳳，幾乎都是停轉）', async ({ page }) => {
   test.setTimeout(600_000);
-  await shootFinish(page, './?demo=1&seed=11&p=defense&c=stamina', 'spin', 'e2e/screenshots/21-spin-finish.png');
+  await shootFinish(page, './?demo=1&seed=11&p=turtle&c=gale', 'spin', 'e2e/screenshots/21-spin-finish.png');
 });
 
-test('出場飛出動畫（攻擊 vs 防禦，約四成出場）', async ({ page }) => {
+test('出場飛出動畫（冰川場：烈焰龍 vs 鐵壁龜，冰面容易滑出場）', async ({ page }) => {
   test.setTimeout(900_000);
-  await shootFinish(page, './?demo=1&seed=12&p=attack&c=defense', 'over', 'e2e/screenshots/22-over-finish.png');
+  await shootFinish(page, './?demo=1&seed=12&p=blaze&c=turtle&arena=glacier', 'over', 'e2e/screenshots/22-over-finish.png');
 });

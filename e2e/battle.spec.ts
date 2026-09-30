@@ -51,7 +51,7 @@ function watchErrors(page: Page): string[] {
 
 test('展示模式：撞擊觸發特寫慢動作、火花、音效與日語語音，並打到回合終結', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('./?demo=1&seed=42&p=attack&c=balance');
+  await page.goto('./?demo=1&seed=42&p=blaze&c=wolf');
 
   // 語音來源必須是預先生成的 Fish Audio 音檔（本機沒有日語系統語音，退路等於沒聲音）
   await page.waitForFunction(() => !!(window as any).__game && (window as any).__game.debug().voice.mode !== 'none', null, { timeout: 30_000 });
@@ -125,13 +125,16 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.locator('#title').click();
   await expect(page.locator('#select')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.debug().voice.mode !== 'none', null, { timeout: 30_000 });
-  // 組隊：攻擊 → 防禦 → 持久，卡片右上角依序顯示 1、2、3
+  // 組隊：名鑑前三顆（烈焰龍 → 鐵壁龜 → 疾風鳳），小格右上角依序顯示 1、2、3
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.card .badge')).toHaveText(['1', '2', '3', '']);
+  await expect(page.locator('#select .card .badge')).toHaveText(['1', '2', '3', ...Array(17).fill('')]);
+  // 右側詳細資料：游標在第三顆（疾風鳳），有雷達圖與必殺技說明
+  await expect(page.locator('#select .detail .d-zh')).toHaveText('疾風鳳');
+  await expect(page.locator('#select .detail .radar')).toBeVisible();
   await expect(page.locator('#select .go')).toBeEnabled();
   await expect(page.locator('.cpu-team .chip')).toHaveCount(3);
   await page.waitForTimeout(600);
@@ -139,15 +142,16 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.keyboard.press('Enter');
 
   await expect(page.locator('#hud')).toBeVisible();
-  await expect(page.locator('#hud .info')).toHaveText('BATTLE 1/3');
+  await expect(page.locator('#hud .info')).toHaveText('BATTLE 1/3・練習場');
   await expect(page.locator('#hud .lineup .chip')).toHaveCount(6);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
-  // 看到「ゴー・シュート!!」大字時立刻按 Space
+  // 看到「ゴー・シュート!!」大字時立刻按 Space（簡易發射，力道最高 85%）
   await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   const s = await snap(page);
   expect(s.launch.ratio).toBeGreaterThanOrEqual(0.5);
+  expect(s.launch.ratio).toBeLessThanOrEqual(0.85);
   expect(s.launch.label).not.toBe('');
 
   // 必殺技：把量表灌滿後按 Space，確認 cut-in 出現並觸發必殺事件

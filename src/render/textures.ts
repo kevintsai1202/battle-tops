@@ -8,32 +8,128 @@ function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContex
   return [c, c.getContext('2d')!];
 }
 
+/** 數字色碼轉 CSS 字串 */
+const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
+
+/** 地板貼圖的風格：一般格線、齒軌（標準戰鬥盤）、熔岩裂縫、冰面、極限軌道帶 */
+export type FloorStyle = 'grid' | 'gear' | 'lava' | 'ice' | 'rail';
+
 /**
- * 競技場地板的霓虹格線貼圖。套在 LatheGeometry 上：
+ * 競技場地板的霓虹貼圖。套在 LatheGeometry 上：
  * 水平線（固定 v）會變成同心圓，垂直線（固定 u）會變成放射線。
+ * grid 為格線主色、rim 為最外圈與中心的亮色；style 決定額外花紋。
  */
-export function floorTexture(): THREE.CanvasTexture {
+export function floorTexture(grid = 0x1a7fff, rim = 0x44ffff, style: FloorStyle = 'grid'): THREE.CanvasTexture {
   const [c, g] = canvas(1024, 512);
+  const main = hex(grid);
   g.fillStyle = '#000';
   g.fillRect(0, 0, 1024, 512);
-  // 同心圓
-  for (let i = 1; i <= 8; i++) {
-    const y = (i / 8) * 512 - 2;
-    g.fillStyle = i === 8 ? '#4ff' : i % 2 === 0 ? '#1a7fff' : '#0b3a80';
-    g.fillRect(0, y - (i === 8 ? 3 : 1), 1024, i === 8 ? 6 : 2);
-  }
-  // 放射線
-  for (let i = 0; i < 24; i++) {
-    const x = (i / 24) * 1024;
-    g.fillStyle = i % 2 === 0 ? '#1a6fe0' : '#0a2f6a';
-    g.fillRect(x - 1, 60, 2, 452);
+  if (style === 'rail') {
+    // 極限軌道帶：斜向齒紋，沿 u 方向重複（在旋轉面上會繞一圈）
+    g.fillStyle = main;
+    for (let x = -64; x < 1024 + 64; x += 32) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x + 14, 0);
+      g.lineTo(x + 40, 512);
+      g.lineTo(x + 26, 512);
+      g.fill();
+    }
+    g.fillStyle = hex(rim);
+    g.fillRect(0, 0, 1024, 10);
+    g.fillRect(0, 500, 1024, 12);
+  } else {
+    // 同心圓
+    for (let i = 1; i <= 8; i++) {
+      const y = (i / 8) * 512 - 2;
+      g.globalAlpha = i === 8 ? 1 : i % 2 === 0 ? 0.9 : 0.4;
+      g.fillStyle = i === 8 ? hex(rim) : main;
+      g.fillRect(0, y - (i === 8 ? 3 : 1), 1024, i === 8 ? 6 : 2);
+    }
+    // 放射線
+    for (let i = 0; i < 24; i++) {
+      const x = (i / 24) * 1024;
+      g.globalAlpha = i % 2 === 0 ? 0.85 : 0.35;
+      g.fillStyle = main;
+      g.fillRect(x - 1, 60, 2, 452);
+    }
+    g.globalAlpha = 1;
+    if (style === 'lava') {
+      // 熔岩裂縫：隨機折線，發亮的橘紅色
+      g.strokeStyle = '#ff5a14';
+      g.shadowColor = '#ff8a2a';
+      g.shadowBlur = 10;
+      for (let n = 0; n < 40; n++) {
+        let x = Math.random() * 1024;
+        let y = Math.random() * 512;
+        g.lineWidth = 1 + Math.random() * 3;
+        g.beginPath();
+        g.moveTo(x, y);
+        for (let k = 0; k < 6; k++) {
+          x += (Math.random() - 0.5) * 80;
+          y += (Math.random() - 0.3) * 50;
+          g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+      g.shadowBlur = 0;
+    } else if (style === 'ice') {
+      // 冰面裂紋與霜花：細白線
+      g.strokeStyle = 'rgba(220,250,255,0.55)';
+      for (let n = 0; n < 60; n++) {
+        const x = Math.random() * 1024;
+        const y = Math.random() * 512;
+        g.lineWidth = 0.5 + Math.random() * 1.5;
+        g.beginPath();
+        g.moveTo(x, y);
+        g.lineTo(x + (Math.random() - 0.5) * 120, y + (Math.random() - 0.5) * 60);
+        g.stroke();
+      }
+    } else if (style === 'gear') {
+      // 標準戰鬥盤：中心的比賽標記環
+      g.fillStyle = hex(rim);
+      g.fillRect(0, 150, 1024, 4);
+    }
   }
   // 中心圓盤
-  g.fillStyle = '#2a8cff';
-  g.fillRect(0, 0, 1024, 6);
+  if (style !== 'rail') {
+    g.fillStyle = hex(rim);
+    g.fillRect(0, 0, 1024, 6);
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
+  return tex;
+}
+
+/** 水面波紋：同心的亮帶加上螺旋條紋（旋轉時看得出水流方向） */
+export function rippleTexture(): THREE.CanvasTexture {
+  const [c, g] = canvas(512, 512);
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, 512, 512);
+  g.translate(256, 256);
+  for (let r = 20; r < 256; r += 18) {
+    g.strokeStyle = `rgba(255,255,255,${0.12 + 0.2 * Math.abs(Math.sin(r * 0.11))})`;
+    g.lineWidth = 3;
+    g.beginPath();
+    g.arc(0, 0, r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  // 螺旋條紋
+  for (let arm = 0; arm < 5; arm++) {
+    g.strokeStyle = 'rgba(255,255,255,0.35)';
+    g.lineWidth = 4;
+    g.beginPath();
+    for (let t = 0; t < 1; t += 0.02) {
+      const a = arm * ((Math.PI * 2) / 5) + t * 2.4;
+      const r = 20 + t * 230;
+      if (t === 0) g.moveTo(r * Math.cos(a), r * Math.sin(a));
+      else g.lineTo(r * Math.cos(a), r * Math.sin(a));
+    }
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 

@@ -20,7 +20,7 @@ function plainText(id: VoiceId): string {
  * 載入 public/voice/manifest.json 列出的 Fish Audio 音檔並解碼，
  * 去掉開頭與結尾的靜音（讓「ゴー・シュート！」準確落在倒數節拍上）。
  * 同一時間只講一句：高優先權可以打斷低優先權，閒聊類台詞遇到有人在講就略過。
- * 播放時自動壓低音效與音樂。缺檔時退回瀏覽器的日語語音合成。
+ * 播放時自動壓低音效與音樂。整批缺檔時退回瀏覽器的日語語音合成；個別台詞缺檔時只有那一句用語音合成。
  */
 export class VoicePlayer {
   mode: VoiceMode = 'none';
@@ -95,12 +95,13 @@ export class VoicePlayer {
     if (this.busy && this.current) {
       if (priority === 0 || priority < this.current.priority) return false;
       this.current.src?.stop();
-      if (this.mode === 'speechSynthesis') speechSynthesis.cancel();
+      if (this.current.src === null && 'speechSynthesis' in window) speechSynthesis.cancel();
     }
     const dur = this.duration(id);
-    if (this.mode === 'fish-files') {
-      const buf = this.buffers.get(id);
-      if (!buf) return false;
+    // 這一句沒有音檔（例如新增的台詞還沒生成）：單句退回瀏覽器語音合成
+    const buf = this.mode === 'fish-files' ? this.buffers.get(id) : undefined;
+    const synth = !buf && this.mode !== 'none' && 'speechSynthesis' in window;
+    if (buf) {
       const src = this.audio.ctx.createBufferSource();
       src.buffer = buf;
       src.connect(this.audio.voice);
@@ -112,7 +113,7 @@ export class VoicePlayer {
       }
       src.start();
       this.current = { src, priority, until: now + dur };
-    } else if (this.mode === 'speechSynthesis') {
+    } else if (synth) {
       const u = new SpeechSynthesisUtterance(plainText(id));
       u.lang = 'ja-JP';
       u.rate = 1.15;

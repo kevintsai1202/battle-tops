@@ -9,7 +9,7 @@ const len = (x: number, z: number) => Math.hypot(x, z);
 
 /** 建一顆完全沒有轉速的陀螺，用來單獨觀察坡度力 */
 function still(x: number, z: number): TopState {
-  return createTop(0, TOP_SPECS.balance, { x, z }, { x: 0, z: 0 }, 0, 1);
+  return createTop(0, TOP_SPECS.wolf, { x, z }, { x: 0, z: 0 }, 0, 1);
 }
 
 describe('碗形場地坡度', () => {
@@ -31,15 +31,15 @@ describe('碗形場地坡度', () => {
 
 describe('轉速衰減', () => {
   test('轉速會隨時間下降', () => {
-    const t = createTop(0, TOP_SPECS.balance, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const t = createTop(0, TOP_SPECS.wolf, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
     const before = t.spin;
     for (let i = 0; i < 120; i++) integrateTop(t, 1 / 120);
     expect(t.spin).toBeLessThan(before);
   });
 
   test('持久型比攻擊型保留更多轉速比例', () => {
-    const atk = createTop(0, TOP_SPECS.attack, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
-    const sta = createTop(1, TOP_SPECS.stamina, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const atk = createTop(0, TOP_SPECS.blaze, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const sta = createTop(1, TOP_SPECS.gale, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
     for (let i = 0; i < 120 * 10; i++) {
       integrateTop(atk, 1 / 120);
       integrateTop(sta, 1 / 120);
@@ -48,10 +48,10 @@ describe('轉速衰減', () => {
   });
 
   test('轉速低時開始晃動（tilt 上升）', () => {
-    const t = createTop(0, TOP_SPECS.balance, { x: 0, z: 0 }, { x: 0, z: 0 }, 0.2, 1);
+    const t = createTop(0, TOP_SPECS.wolf, { x: 0, z: 0 }, { x: 0, z: 0 }, 0.2, 1);
     integrateTop(t, 1 / 120);
     expect(t.tilt).toBeGreaterThan(0);
-    const fresh = createTop(0, TOP_SPECS.balance, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const fresh = createTop(0, TOP_SPECS.wolf, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
     integrateTop(fresh, 1 / 120);
     expect(fresh.tilt).toBe(0);
   });
@@ -59,8 +59,8 @@ describe('轉速衰減', () => {
 
 /** 兩顆正面相撞的陀螺：a 在左往右、b 在右往左，彼此略微重疊 */
 function headOn(dirA: 1 | -1, dirB: 1 | -1) {
-  const a = createTop(0, TOP_SPECS.balance, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, dirA);
-  const b = createTop(1, TOP_SPECS.balance, { x: 0.3, z: 0 }, { x: -3, z: 0 }, 1, dirB);
+  const a = createTop(0, TOP_SPECS.wolf, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, dirA);
+  const b = createTop(1, TOP_SPECS.wolf, { x: 0.3, z: 0 }, { x: -3, z: 0 }, 1, dirB);
   return { a, b };
 }
 
@@ -105,19 +105,19 @@ describe('陀螺互撞', () => {
   });
 
   test('攻擊型打防禦差的對手，造成的轉速損失比持久型打同一對手更大', () => {
-    const victim = () => createTop(1, TOP_SPECS.stamina, { x: 0.3, z: 0 }, { x: -3, z: 0 }, 1, 1);
+    const victim = () => createTop(1, TOP_SPECS.gale, { x: 0.3, z: 0 }, { x: -3, z: 0 }, 1, 1);
     const vA = victim();
     const vB = victim();
-    const atk = createTop(0, TOP_SPECS.attack, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, 1);
-    const sta = createTop(0, TOP_SPECS.stamina, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, 1);
+    const atk = createTop(0, TOP_SPECS.blaze, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, 1);
+    const sta = createTop(0, TOP_SPECS.gale, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, 1);
     resolveCollision(atk, vA, createRng(1));
     resolveCollision(sta, vB, createRng(1));
     expect(vA.spin).toBeLessThan(vB.spin);
   });
 
   test('主動衝撞的一方受到的傷害比被撞的一方少', () => {
-    const a = createTop(0, TOP_SPECS.balance, { x: -0.3, z: 0 }, { x: 5, z: 0 }, 1, 1);
-    const b = createTop(1, TOP_SPECS.balance, { x: 0.3, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const a = createTop(0, TOP_SPECS.wolf, { x: -0.3, z: 0 }, { x: 5, z: 0 }, 1, 1);
+    const b = createTop(1, TOP_SPECS.wolf, { x: 0.3, z: 0 }, { x: 0, z: 0 }, 1, 1);
     resolveCollision(a, b, () => 0.5);
     expect(a.spin).toBeGreaterThan(b.spin);
     expect(a.burst).toBeLessThan(b.burst);
@@ -133,19 +133,19 @@ describe('陀螺互撞', () => {
   });
 
   test('沒接觸時不處理', () => {
-    const a = createTop(0, TOP_SPECS.balance, { x: -2, z: 0 }, { x: 0, z: 0 }, 1, 1);
-    const b = createTop(1, TOP_SPECS.balance, { x: 2, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const a = createTop(0, TOP_SPECS.wolf, { x: -2, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    const b = createTop(1, TOP_SPECS.wolf, { x: 2, z: 0 }, { x: 0, z: 0 }, 1, 1);
     expect(resolveCollision(a, b, createRng(1))).toBeNull();
   });
 });
 
 describe('場地邊緣與出場口', () => {
   const wallAngle = ARENA.pockets[0] + Math.PI / 3; // 兩個出場口正中間，一定是牆
-  const edge = ARENA.radius - TOP_SPECS.balance.radius + 0.02;
+  const edge = ARENA.radius - TOP_SPECS.wolf.radius + 0.02;
 
   test('一般牆面：高速撞牆會反彈回場內，不出場', () => {
     const dir = { x: Math.cos(wallAngle), z: Math.sin(wallAngle) };
-    const t = createTop(0, TOP_SPECS.balance, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
+    const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
     const r = resolveRim(t);
     expect(r.ringOut).toBe(false);
     expect(t.vel.x * dir.x + t.vel.z * dir.z).toBeLessThan(0);
@@ -155,14 +155,14 @@ describe('場地邊緣與出場口', () => {
   test('出場口：高速往外衝會出場', () => {
     const a = ARENA.pockets[0];
     const dir = { x: Math.cos(a), z: Math.sin(a) };
-    const t = createTop(0, TOP_SPECS.balance, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
+    const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
     expect(resolveRim(t).ringOut).toBe(true);
   });
 
   test('出場口：低速滑過去不會出場', () => {
     const a = ARENA.pockets[0];
     const dir = { x: Math.cos(a), z: Math.sin(a) };
-    const t = createTop(0, TOP_SPECS.balance, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 1, z: dir.z * 1 }, 1, 1);
+    const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 1, z: dir.z * 1 }, 1, 1);
     expect(resolveRim(t).ringOut).toBe(false);
   });
 });

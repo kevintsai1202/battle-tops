@@ -43,11 +43,16 @@
       <div id="fx-layer"></div>
       <div id="banner"></div>
 
-      <!-- 發射時機量表：外圈收縮，對準內圈時按下 -->
+      <!-- 發射台：時機環（外圈收縮，對上內圈 = ゴー）＋ 拉條（按住往下拉、放手發射，左右拉可瞄準） -->
       <div id="launch" hidden>
-        <div class="target"></div>
-        <div class="closing"></div>
-        <div class="hint"><span class="kb">SPACE／點擊</span><span class="tc">點畫面</span>：在「ゴー」的瞬間發射！</div>
+        <div class="ring"><div class="target"></div><div class="closing"></div></div>
+        <div class="launcher"><div class="grip">⇩</div></div>
+        <svg class="cord"><line x1="0" y1="0" x2="0" y2="0" /><circle r="16" cx="0" cy="0" /></svg>
+        <div class="power"><i></i><span>POWER</span></div>
+        <div class="hint">
+          <span class="kb">滑鼠按住往下拖（拉條），在「ゴー」的瞬間放手！左右拖可瞄準・SPACE：簡易發射（最高 85%）</span
+          ><span class="tc">手指按住往下滑（拉條），在「ゴー」的瞬間放手！左右滑可瞄準</span>
+        </div>
       </div>
 
       <!-- 必殺技 cut-in -->
@@ -64,16 +69,21 @@
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2>チームを組め！<small>四選三組成隊伍，點選順序就是出場順序（<span class="kb">← → 移動、Space 選取／取消、Enter 出陣、1／2／3 切換難度</span><span class="tc">點卡片選取／取消</span>）</small></h2>
+        <h2>チームを組め！<small>挑三顆組成隊伍，點選順序就是出場順序（<span class="kb">方向鍵移動、Space 選取／取消、Enter 出陣、1／2／3 難度、Q／E 場地</span><span class="tc">點小格選取／取消</span>）</small></h2>
         <div class="select-row">
           <div class="difficulty" role="group" aria-label="難易度">
             <button type="button" data-id="easy">かんたん<small>簡單</small></button>
             <button type="button" data-id="normal">ふつう<small>普通</small></button>
             <button type="button" data-id="hard">むずかしい<small>困難</small></button>
           </div>
+          <div class="arena" role="group" aria-label="場地"></div>
           <div class="cpu-team">CPU チーム <span class="chips"></span><small>出場順序保密</small></div>
         </div>
-        <div class="cards"></div>
+        <p class="arena-desc"></p>
+        <div class="select-main">
+          <div class="cards"></div>
+          <div class="detail"></div>
+        </div>
         <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled>出陣！</button></div>
       </section>
 

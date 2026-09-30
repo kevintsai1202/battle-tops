@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { CameraDirector } from '../director/director';
-import { floorHeight } from '../sim/arena';
+import { ARENA, floorHeight, type ArenaSpec } from '../sim/arena';
 import type { TopState, V2 } from '../sim/types';
 
 /** 遊戲層告訴鏡頭目前要拍什麼 */
@@ -34,6 +34,8 @@ export class CameraRig {
   private lastShot: Shot = 'title';
   /** 特寫時從撞擊點的哪一側拍（1 或 -1） */
   private side = 1;
+  /** 目前場地（鏡頭焦點貼地用） */
+  arena: ArenaSpec = ARENA;
 
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
@@ -78,7 +80,7 @@ export class CameraRig {
       this.orbit = Math.atan2(targetPos.z, targetPos.x);
     } else if (mode === 'closeup') {
       // 撞擊特寫：貼近撞擊點側面低角度，邊環繞邊推近，開頭快速變焦
-      const f = worldOf(director.focus, 0.22);
+      const f = worldOf(this.arena, director.focus, 0.22);
       const n = director.normal;
       const p = director.progress;
       const sideDir = new THREE.Vector3(-n.z * this.side, 0, n.x * this.side);
@@ -91,7 +93,7 @@ export class CameraRig {
       targetRoll = 0.2 * this.side * (1 - p * 0.5);
     } else if (mode === 'finish') {
       // 終結鏡頭：繞著終結點慢慢轉
-      const f = worldOf(director.focus, 0.2);
+      const f = worldOf(this.arena, director.focus, 0.2);
       const ang = director.modeTime * 0.45 + this.side;
       targetPos.set(f.x + Math.cos(ang) * 2.6, f.y + 1.3, f.z + Math.sin(ang) * 2.6);
       targetLook.copy(f);
@@ -142,6 +144,6 @@ export class CameraRig {
 }
 
 /** sim 座標轉世界座標（貼著碗面，再往上 lift） */
-function worldOf(p: V2, lift: number): THREE.Vector3 {
-  return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), 3.2)) + lift, p.z);
+function worldOf(arena: ArenaSpec, p: V2, lift: number): THREE.Vector3 {
+  return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), arena.radius), arena) + lift, p.z);
 }

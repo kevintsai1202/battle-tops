@@ -5,19 +5,20 @@ import { CameraDirector } from '../director/director';
 import { CameraRig, type Shot } from '../render/cameraRig';
 import { Effects } from '../render/effects';
 import { GameRenderer } from '../render/postfx';
-import { buildStadium, type Stadium } from '../render/stadium';
+import { buildLights, buildStadium, type Stadium, type StadiumLights } from '../render/stadium';
 import { TopView } from '../render/topView';
-import { floorHeight } from '../sim/arena';
+import { ARENA_IDS, ARENAS, floorHeight, type ArenaId, type ArenaSpec } from '../sim/arena';
 import { BattleSim } from '../sim/battle';
 import { cpuThink } from '../sim/cpu';
 import { createTop, spinRatio } from '../sim/physics';
 import { createRng, type Rng } from '../sim/rng';
 import { DIFFICULTIES, type Difficulty, type DifficultyId } from '../sim/difficulty';
+import { keyLaunchRatio, measurePull, pullLaunchRatio, pullQuality, type PullMetrics, type PullSample } from '../sim/launcher';
 import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type TeamMatch } from '../sim/team';
-import { TOP_SPECS, TOP_TYPES } from '../sim/tops';
-import type { FinishType, SimEvent, TopSpec, TopState, TopType, V2 } from '../sim/types';
-import { css, Hud } from '../ui/hud';
+import { TOP_IDS, TOP_SPECS } from '../sim/tops';
+import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
+import { css, Hud, type ArenaChoice, type CordView } from '../ui/hud';
 import { TouchControls } from '../ui/touch';
 
 /** 遊戲階段 */
@@ -36,8 +37,10 @@ export interface GameOptions {
   demo: boolean;
   seed: number;
   /** 展示模式指定雙方隊伍的前幾顆（其餘隨機補滿 3 顆） */
-  player?: TopType[];
-  cpu?: TopType[];
+  player?: TopId[];
+  cpu?: TopId[];
+  /** 展示模式的場地（省略為練習場） */
+  arena?: ArenaId;
 }
 
 const FINISH_TEXT: Record<FinishType, { en: string; voice: VoiceId }> = {
@@ -50,8 +53,37 @@ const CLASH_WORDS = ['ガキィン！', 'ドガッ！', 'バキィッ！', 'ガ�
 const BIG_WORDS = ['ドゴォォン！！', 'ズガァァン！！', 'ドガガガッ！！', 'バゴォォン！！'];
 const CLASH_LINES: VoiceId[] = ['clash_1', 'clash_2', 'clash_3', 'clash_4'];
 
-/** 瀏覽器記住難度用的 localStorage 鍵 */
+/** 瀏覽器記住難度與場地用的 localStorage 鍵 */
 const DIFFICULTY_KEY = 'battle-tops.difficulty';
+const ARENA_KEY = 'battle-tops.arena';
+
+/** 原創四顆沿用舊的必殺語音檔（依類型命名），其餘用 p_special_<代號> */
+const LEGACY_SPECIAL_VOICE: Record<string, string> = {
+  blaze: 'p_special_attack',
+  turtle: 'p_special_defense',
+  gale: 'p_special_stamina',
+  wolf: 'p_special_balance',
+};
+
+/** 必殺技台詞 id */
+function specialVoice(spec: TopSpec): VoiceId {
+  return (LEGACY_SPECIAL_VOICE[spec.id] ?? `p_special_${spec.id}`) as VoiceId;
+}
+
+/** 玩家陀螺的發射位置與基準初速方向（BattleSim 的開場配置，瞄準箭頭用） */
+const PLAYER_START = { x: -2.1, z: 0 };
+const PLAYER_LAUNCH_DIR = { x: 2.0, z: 0.7 };
+
+/** 讀取上次選的場地（讀不到時用練習場） */
+function loadArena(): ArenaChoice {
+  try {
+    const id = localStorage.getItem(ARENA_KEY);
+    if (id === 'random' || (id && id in ARENAS)) return id as ArenaChoice;
+  } catch {
+    // 儲存空間被封鎖：用預設值
+  }
+  return 'practice';
+}
 
 /** 讀取上次選的難度（無痕模式等讀不到時用普通） */
 function loadDifficulty(): Difficulty {
@@ -81,14 +113,17 @@ export class Game {
   /** 目前的 3 對 3 對戰 */
   match: TeamMatch | null = null;
   /** 玩家與 CPU 的隊伍（順序即出場順序） */
-  playerTeam: TopType[] = [];
-  cpuTeam: TopType[] = [];
+  playerTeam: TopId[] = [];
+  cpuTeam: TopId[] = [];
+  /** 組隊畫面選的場地（含隨機）與這場比賽實際使用的場地 */
+  arenaChoice: ArenaChoice;
+  arena: ArenaSpec = ARENAS.practice;
   /** 已開打的回合數（含平手重打） */
   round = 0;
   /** e2e 觀察用的累計數字 */
-  readonly counters = { clashes: 0, bigClashes: 0, finishes: 0, specials: 0, rounds: 0, matches: 0 };
-  /** 最近一次發射的評價與轉速比例（cpu 為 CPU 的發射力道） */
-  lastLaunch = { ratio: 0, label: '', cpu: 0 };
+  readonly counters = { clashes: 0, bigClashes: 0, finishes: 0, specials: 0, rounds: 0, matches: 0, hazards: 0 };
+  /** 最近一次發射的評價與轉速比例（cpu 為 CPU 的發射力道；aim 為玩家的瞄準角度；pull 為拉條量測，按 Space 發射時為 null） */
+  lastLaunch: { ratio: number; label: string; cpu: number; aim: number; pull: PullMetrics | null } = { ratio: 0, label: '', cpu: 0, aim: 0, pull: null };
   /** 目前難度（展示模式固定普通） */
   difficulty: Difficulty;
   /** 最近一次終結方式（e2e 觀察用） */
@@ -96,14 +131,21 @@ export class Game {
 
   private readonly opts: GameOptions;
   private readonly rig: CameraRig;
-  private readonly stadium: Stadium;
+  private stadium: Stadium;
+  private readonly lights: StadiumLights;
+  /** 拉條中的狀態：按下的指標與取樣點（沒在拉時為 null） */
+  private pull: { pointerId: number; samples: PullSample[] } | null = null;
+  /** 放手時量測到的拉條（Space 發射時為 null） */
+  private pullResult: PullMetrics | null = null;
+  /** 瞄準箭頭（拉條時顯示在玩家發射位置） */
+  private readonly aimArrow: THREE.Mesh;
   private readonly rng: Rng;
   private readonly keys = new Set<string>();
   private views: TopView[] = [];
   private hums: Hum[] = [];
   private preview: { view: TopView; state: TopState } | null = null;
-  private playerSpec: TopSpec = TOP_SPECS.attack;
-  private cpuSpec: TopSpec = TOP_SPECS.defense;
+  private playerSpec: TopSpec = TOP_SPECS.blaze;
+  private cpuSpec: TopSpec = TOP_SPECS.turtle;
   private cpuRng: Rng;
   private acc = 0;
   private clock = 0;
@@ -125,7 +167,7 @@ export class Game {
   /** 上一回合的對陣（用來判斷是不是平手重打） */
   private lastBattle = 0;
   /** 延長賽 CPU 挑的陀螺（選擇畫面開啟時就決定） */
-  private overtimeCpu: TopType = 'attack';
+  private overtimeCpu: TopId = 'blaze';
   /** 除錯暫停：畫面照常渲染，但時間不前進（e2e 定格截圖用） */
   paused = false;
   /** 觸控模式：偵測到觸控裝置或第一次觸控後開啟，顯示搖桿與必殺按鈕 */
@@ -137,23 +179,35 @@ export class Game {
   constructor(container: HTMLElement, opts: GameOptions) {
     this.opts = opts;
     this.difficulty = opts.demo ? DIFFICULTIES.normal : loadDifficulty();
+    this.arenaChoice = opts.demo ? (opts.arena ?? 'practice') : loadArena();
     this.rng = createRng(opts.seed);
     this.cpuRng = createRng(opts.seed * 31 + 7);
     // 觸控裝置（手機、平板）：開啟觸控操作並降低畫質以維持流暢
     const coarse = window.matchMedia('(any-pointer: coarse)').matches;
     this.gfx = new GameRenderer(container, coarse);
-    this.stadium = buildStadium(this.gfx.scene, coarse);
+    this.lights = buildLights(this.gfx.scene, coarse);
+    this.arena = ARENAS[this.arenaChoice === 'random' ? 'practice' : this.arenaChoice];
+    this.stadium = buildStadium(this.gfx.scene, this.arena);
+    this.lights.setTheme(this.arena);
+    this.aimArrow = buildAimArrow();
+    this.aimArrow.visible = false;
+    this.gfx.scene.add(this.aimArrow);
     this.touch = new TouchControls(() => this.trySpecial());
     if (coarse) this.enableTouchMode();
     this.effects = new Effects(this.gfx.scene);
+    this.effects.arena = this.arena;
     this.rig = new CameraRig(this.gfx.camera);
+    this.rig.arena = this.arena;
 
     window.addEventListener('keydown', (e) => this.onKey(e, true));
     window.addEventListener('keyup', (e) => this.onKey(e, false));
     window.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') this.enableTouchMode();
-      this.onLaunchPress();
+      this.onPullStart(e);
     });
+    window.addEventListener('pointermove', (e) => this.onPullMove(e));
+    window.addEventListener('pointerup', (e) => this.onPullEnd(e));
+    window.addEventListener('pointercancel', (e) => this.onPullEnd(e));
     window.addEventListener('blur', () => this.keys.clear());
 
     if (opts.demo) {
@@ -204,9 +258,9 @@ export class Game {
   }
 
   /** 組一支 3 顆不重複的隊伍：先放指定的，其餘隨機補滿 */
-  private fillTeam(hint: TopType[] = []): TopType[] {
+  private fillTeam(hint: TopId[] = []): TopId[] {
     const team = [...new Set(hint)].slice(0, 3);
-    const rest = TOP_TYPES.filter((t) => !team.includes(t));
+    const rest = TOP_IDS.filter((t) => !team.includes(t));
     while (team.length < 3) team.push(rest.splice(Math.floor(this.rng() * rest.length), 1)[0]);
     return team;
   }
@@ -225,7 +279,7 @@ export class Game {
 
   // ---------------- 選角 ----------------
 
-  /** 組隊畫面：CPU 先組好（公開三顆、順序保密），玩家四選三 */
+  /** 組隊畫面：CPU 先組好（公開三顆、順序保密），玩家從全部陀螺挑三顆，並選難度與場地 */
   private enterSelect(): void {
     this.setState('select');
     this.hud.hideHud();
@@ -233,18 +287,44 @@ export class Game {
     this.clearArena();
     this.audio?.setMusic(this.musicOn, false);
     this.cpuTeam = cpuPickTeam(this.rng);
-    this.hud.showTeamSelect(
-      TOP_SPECS,
-      this.cpuTeam,
-      this.difficulty.id,
-      (d) => this.setDifficulty(d),
-      (t) => this.setPreview(TOP_SPECS[t]),
-      (team) => {
+    this.hud.showTeamSelect({
+      specs: TOP_SPECS,
+      cpuTeam: this.cpuTeam,
+      difficulty: this.difficulty.id,
+      arena: this.arenaChoice,
+      onDifficulty: (d) => this.setDifficulty(d),
+      onArena: (a) => this.chooseArena(a),
+      onHover: (t) => this.setPreview(TOP_SPECS[t]),
+      onConfirm: (team) => {
         this.playerTeam = team;
         this.setPreview(null);
         this.startMatch();
       },
-    );
+    });
+  }
+
+  /** 組隊畫面切換場地：記在瀏覽器；不是隨機就立刻換上該場地預覽 */
+  private chooseArena(choice: ArenaChoice): void {
+    this.arenaChoice = choice;
+    try {
+      localStorage.setItem(ARENA_KEY, choice);
+    } catch {
+      // 儲存空間被封鎖：這次仍然生效，只是不會記住
+    }
+    if (choice !== 'random') this.setArena(ARENAS[choice]);
+  }
+
+  /** 換場地：重建場館外觀、燈光主題，並通知特效與鏡頭 */
+  private setArena(a: ArenaSpec): void {
+    if (a === this.arena) return;
+    this.arena = a;
+    this.stadium.dispose();
+    this.stadium = buildStadium(this.gfx.scene, a);
+    this.lights.setTheme(a);
+    this.effects.arena = a;
+    this.rig.arena = a;
+    // 預覽中的陀螺要貼到新場地的地面
+    if (this.preview) this.setPreview(this.preview.state.spec);
   }
 
   /** 切換難度並記在瀏覽器 */
@@ -262,14 +342,17 @@ export class Game {
     if (this.preview) this.preview.view.dispose();
     this.preview = null;
     if (!spec) return;
-    const state = createTop(0, spec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
-    this.preview = { view: new TopView(this.gfx.scene, spec), state };
+    // 火山中央是火山錐：預覽陀螺放在錐頂也沒關係（只是展示）
+    const state = createTop(0, spec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1);
+    this.preview = { view: new TopView(this.gfx.scene, spec, this.arena), state };
   }
 
   // ---------------- 比賽流程 ----------------
 
-  /** 開始一場 3 對 3 */
+  /** 開始一場 3 對 3：隨機場地在這時抽出，整場（含延長賽）都用同一個場地 */
   private startMatch(): void {
+    const choice = this.arenaChoice;
+    this.setArena(ARENAS[choice === 'random' ? ARENA_IDS[Math.floor(this.rng() * ARENA_IDS.length)] : choice]);
     this.match = createMatch(this.playerTeam, this.cpuTeam);
     this.round = 0;
     this.lastBattle = 0;
@@ -308,14 +391,20 @@ export class Game {
     this.roundFlags = { hurt: false, taunt: false };
     this.audio?.setMusic(this.musicOn, true);
     this.hud.showHud(this.playerSpec, this.cpuSpec);
-    this.hud.setMatchInfo(m, TOP_SPECS);
+    this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh);
     this.hud.updateHud(
-      [createTop(0, this.playerSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1), createTop(1, this.cpuSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1)],
+      [createTop(0, this.playerSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1), createTop(1, this.cpuSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1)],
       m.score,
     );
+    this.pull = null;
+    this.pullResult = null;
     this.setState('launch');
     const title = pair.overtime ? 'OVERTIME' : pair.battle === 3 ? 'FINAL BATTLE' : `BATTLE ${pair.battle}`;
-    this.hud.banner(title, `${this.playerSpec.nameJa}  VS  ${this.cpuSpec.nameJa}${replay ? '（再戦）' : ''}`, { small: true, seconds: 0 });
+    this.hud.banner(title, `${this.playerSpec.nameJa}  VS  ${this.cpuSpec.nameJa}${replay ? '（再戦）' : ''}
+＠${this.arena.nameZh}`, {
+      small: true,
+      seconds: 0,
+    });
     const line: VoiceId = replay ? 'round_ready' : pair.overtime || pair.battle === 3 ? 'battle_final' : pair.battle === 1 ? 'battle_1' : 'battle_2';
     const spoke = this.voice?.play(line, 2) ?? false;
     // 主播講完才開始倒數，避免「スリー」蓋掉開場介紹
@@ -346,40 +435,125 @@ export class Game {
       }
     }
     const progress = (t - COUNT_START) / (GO_AT - COUNT_START);
-    this.hud.launchMeter(!this.opts.demo && !this.launched && t >= COUNT_START, progress);
+    this.hud.launchMeter(!this.opts.demo && !this.launched && t >= COUNT_START, progress, this.cordView());
+    this.updateAimArrow();
 
     // 展示模式：自動在 GO 附近按下
     if (this.opts.demo && this.launchPress === null && t >= GO_AT - 0.03) this.launchPress = t + (this.rng() - 0.5) * 0.12;
+    // 拉著不放太久：自動放手
+    if (this.pull && t > GO_AT + 0.6) this.releasePull();
 
     const press = this.launchPress;
-    const late = t > GO_AT + 0.4;
+    const late = t > GO_AT + 0.4 && !this.pull;
     if (!this.launched && ((press !== null && t >= Math.max(GO_AT, press)) || late)) {
       this.launch(press === null ? 1 : press - GO_AT);
     }
   }
 
-  /** 玩家按下發射（Space 或點擊）：只接受「1」之後的輸入 */
+  /** Space 簡易發射：只接受「1」之後的輸入，力道最高 85% */
   private onLaunchPress(): void {
-    if (this.state !== 'launch' || this.launched || this.launchPress !== null) return;
+    if (this.state !== 'launch' || this.launched || this.launchPress !== null || this.pull) return;
     const t = this.launchClock();
     if (t < COUNT_START + BEAT * 2) return;
+    this.pullResult = null;
     this.launchPress = t;
   }
 
-  /** 發射：依時機誤差決定轉速，建立模擬與畫面 */
+  /** 按下：倒數開始後在畫面任意處按住，開始拉條 */
+  private onPullStart(e: PointerEvent): void {
+    if (this.state !== 'launch' || this.launched || this.launchPress !== null || this.pull || this.opts.demo) return;
+    if (this.launchClock() < COUNT_START) return;
+    this.pull = { pointerId: e.pointerId, samples: [{ t: performance.now() / 1000, x: e.clientX, y: e.clientY }] };
+  }
+
+  /** 拉動：記錄取樣點（速度與方向用） */
+  private onPullMove(e: PointerEvent): void {
+    if (!this.pull || e.pointerId !== this.pull.pointerId) return;
+    this.pull.samples.push({ t: performance.now() / 1000, x: e.clientX, y: e.clientY });
+    // 只留最近 1.5 秒，避免按著不動太久時陣列一直長
+    const cut = performance.now() / 1000 - 1.5;
+    while (this.pull.samples.length > 2 && this.pull.samples[1].t < cut) this.pull.samples.shift();
+  }
+
+  /** 放手：量測拉條並在這個時間點發射 */
+  private onPullEnd(e: PointerEvent): void {
+    if (!this.pull || e.pointerId !== this.pull.pointerId) return;
+    this.pull.samples.push({ t: performance.now() / 1000, x: e.clientX, y: e.clientY });
+    this.releasePull();
+  }
+
+  /** 結束拉條：記下量測結果與放手時間（發射時機） */
+  private releasePull(): void {
+    if (!this.pull) return;
+    this.pullResult = measurePull(this.pull.samples, this.pullScale());
+    this.pull = null;
+    this.launchPress = this.launchClock();
+  }
+
+  /** 拉條的尺度：畫面短邊 */
+  private pullScale(): number {
+    return Math.min(window.innerWidth, window.innerHeight);
+  }
+
+  /** 拉條中的畫面資料（沒在拉時為 null） */
+  private cordView(): CordView | null {
+    if (!this.pull) return null;
+    const s = this.pull.samples;
+    const m = measurePull(s, this.pullScale());
+    return { from: { x: s[0].x, y: s[0].y }, to: { x: s[s.length - 1].x, y: s[s.length - 1].y }, power: pullQuality(m), aim: m.aim };
+  }
+
+  /**
+   * 螢幕上的瞄準角度（正值 = 往右）換成模擬中的初速旋轉角。
+   * 看發射時的鏡頭：把基準方向轉一點點，投影到畫面上是往右還是往左。
+   */
+  private worldAim(screenAim: number): number {
+    const cam = this.gfx.camera;
+    const f = cam.getWorldDirection(new THREE.Vector3());
+    const right = new THREE.Vector3(-f.z, 0, f.x);
+    // 基準方向逆時針（正角度）轉動時的變化方向
+    const d = { x: -PLAYER_LAUNCH_DIR.z, z: PLAYER_LAUNCH_DIR.x };
+    const sign = d.x * right.x + d.z * right.z >= 0 ? 1 : -1;
+    return screenAim * sign;
+  }
+
+  /** 拉條時在玩家發射位置顯示瞄準箭頭 */
+  private updateAimArrow(): void {
+    const view = this.cordView();
+    this.aimArrow.visible = view !== null && view.power > 0.02;
+    if (!view) return;
+    const a = Math.atan2(PLAYER_LAUNCH_DIR.z, PLAYER_LAUNCH_DIR.x) + this.worldAim(view.aim);
+    const r = Math.hypot(PLAYER_START.x, PLAYER_START.z);
+    this.aimArrow.position.set(PLAYER_START.x, floorHeight(r, this.arena) + 0.05, PLAYER_START.z);
+    // 箭頭幾何沿 +x；three.js 的 rotation.y 正值是從 +x 轉向 -z，與模擬的角度方向相反
+    this.aimArrow.rotation.y = -a;
+    this.aimArrow.scale.set(0.6 + view.power * 1.2, 1, 1);
+  }
+
+  /**
+   * 發射：依時機誤差與拉條決定轉速、依拉的方向決定發射角度，建立模擬與畫面。
+   * 拉條發射：時機分 ×（難度保底 + 拉條品質）；Space 發射：只看時機、最高 85%；展示模式只看時機。
+   */
   private launch(error: number): void {
     this.launched = true;
     this.hud.launchMeter(false);
+    this.aimArrow.visible = false;
     const d = this.difficulty;
-    const ratio = launchSpinRatio(error, d.launch);
+    const timing = launchSpinRatio(error, d.launch);
+    const pull = this.pullResult;
+    const ratio = this.opts.demo ? timing : pull ? pullLaunchRatio(timing, pull, d.pullBase) : keyLaunchRatio(timing);
+    const aim = this.opts.demo ? (this.rng() - 0.5) * 0.6 : pull ? this.worldAim(pull.aim) : 0;
+    const cpuAim = (this.rng() - 0.5) * 0.7;
     const cpuRatio = d.cpuLaunch[0] + this.rng() * (d.cpuLaunch[1] - d.cpuLaunch[0]);
     const label = ratio >= 0.97 ? 'PERFECT!!' : ratio >= 0.85 ? 'GREAT!' : ratio >= 0.7 ? 'GOOD' : 'WEAK…';
-    this.lastLaunch = { ratio, label, cpu: cpuRatio };
+    this.lastLaunch = { ratio, label, cpu: cpuRatio, aim, pull };
     this.sim = new BattleSim(this.playerSpec, this.cpuSpec, {
       seed: Math.floor(this.rng() * 1e9),
       launch: [ratio, cpuRatio],
+      arena: this.arena,
+      aim: [aim, cpuAim],
     });
-    this.views = this.sim.tops.map((t) => new TopView(this.gfx.scene, t.spec));
+    this.views = this.sim.tops.map((t) => new TopView(this.gfx.scene, t.spec, this.arena));
     if (this.audio) {
       this.hums = this.sim.tops.map((t, i) => this.audio!.createHum(this.world(t.pos, 0.2), i === 0 ? 1 : 0.8));
       for (const t of this.sim.tops) this.audio.launch(this.world(t.pos, 0.3));
@@ -491,7 +665,7 @@ export class Game {
     this.rig.update(shot, this.director, tops, wallDt);
 
     const excitement = this.audio?.update(wallDt) ?? 0;
-    this.stadium.update(this.clock, excitement);
+    this.stadium.update(this.clock, excitement, this.sim?.time ?? this.clock);
     if (this.audio) {
       this.audio.setListener(this.gfx.camera);
       this.audio.setTimeScale(ts);
@@ -565,6 +739,21 @@ export class Game {
         this.effects.wall(e.pos, e.intensity, sim.tops[e.id].spec.glow);
         this.audio?.wall(this.world(e.pos, 0.2), e.intensity);
         break;
+      case 'hazard':
+        // 場地機關：熔岩噴發（轟到陀螺時畫面震動）、濺水、撞冰柱
+        this.counters.hazards++;
+        this.effects.hazard(e.kind, e.pos, e.intensity);
+        if (e.kind === 'erupt') {
+          if (e.intensity > 0) {
+            this.director.shake = Math.max(this.director.shake, 0.5);
+            this.audio?.finish(this.world(e.pos, 0.2));
+          } else {
+            this.audio?.wall(this.world(e.pos, 0.2), 2.5);
+          }
+        } else {
+          this.audio?.wall(this.world(e.pos, 0.2), e.kind === 'pillar' ? e.intensity : 1.2);
+        }
+        break;
       case 'special': {
         this.counters.specials++;
         const t = sim.tops[e.id];
@@ -573,7 +762,7 @@ export class Game {
         this.cutinLeft = 1.5;
         this.effects.special(t.pos, t.spec.glow);
         this.audio?.special(this.world(t.pos, 0.3));
-        this.voice?.play(isPlayer ? (`p_special_${t.spec.type}` as VoiceId) : 'r_special', 1);
+        this.voice?.play(isPlayer ? specialVoice(t.spec) : 'r_special', 1);
         this.specialFreeze = 1.1;
         this.director.shake = Math.max(this.director.shake, 0.6);
         break;
@@ -608,7 +797,7 @@ export class Game {
     this.counters.rounds++;
     if (res) recordResult(m, res);
     this.hud.updateHud(this.sim?.tops ?? [], m.score);
-    this.hud.setMatchInfo(m, TOP_SPECS);
+    this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh);
     if (m.phase === 'done') this.finishMatch();
     else if (m.phase === 'overtime' && !m.overtimePick) this.enterOvertimePick();
     else this.startRound();
@@ -633,7 +822,7 @@ export class Game {
   }
 
   /** 延長賽出戰的陀螺決定後開打 */
-  private pickOvertime(t: TopType): void {
+  private pickOvertime(t: TopId): void {
     this.setPreview(null);
     setOvertime(this.match!, t, this.overtimeCpu);
     this.startRound();
@@ -651,7 +840,7 @@ export class Game {
     this.voice?.play(win ? 'winner_player' : 'winner_rival', 2);
     window.setTimeout(() => this.voice?.play(win ? 'p_win' : 'r_win', 2), 2700);
     window.setTimeout(() => this.voice?.play(win ? 'r_lose' : 'p_lose', 2), 5600);
-    this.hud.showResult(win, m, TOP_SPECS, this.difficulty.labelZh, () => this.enterSelect());
+    this.hud.showResult(win, m, TOP_SPECS, `難易度：${this.difficulty.labelZh}・場地：${this.arena.nameZh}`, () => this.enterSelect());
   }
 
   /**
@@ -672,7 +861,7 @@ export class Game {
 
   /** sim 座標轉世界座標 */
   private world(p: V2, lift: number): THREE.Vector3 {
-    return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), 3.2)) + lift, p.z);
+    return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), this.arena.radius), this.arena) + lift, p.z);
   }
 
   /** sim 座標轉螢幕像素座標 */
@@ -714,7 +903,8 @@ export class Game {
 
   /** 觸控操作只在倒數與對戰時出現（展示模式不顯示），並同步必殺按鈕狀態 */
   private updateTouch(): void {
-    const show = this.touchMode && !this.opts.demo && (this.state === 'launch' || this.state === 'battle' || this.state === 'roundEnd');
+    // 發射階段不顯示：手指要拿來拉發射台，避免按到搖桿
+    const show = this.touchMode && !this.opts.demo && (this.state === 'battle' || this.state === 'roundEnd');
     this.touch.setVisible(show);
     if (!show) return;
     const me = this.sim?.tops[0];
@@ -753,6 +943,9 @@ export class Game {
       launch: this.lastLaunch,
       difficulty: this.difficulty.id,
       lastFinish: this.lastFinish,
+      arena: this.arena.id,
+      arenaChoice: this.arenaChoice,
+      pulling: this.pull !== null,
       tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control })) ?? [],
       touchMode: this.touchMode,
       fov: this.gfx.camera.fov,
@@ -760,4 +953,24 @@ export class Game {
       colors: [css(this.playerSpec.glow), css(this.cpuSpec.glow)],
     };
   }
+}
+
+/** 瞄準箭頭：平貼地面的發光箭頭（幾何沿 +x 方向） */
+function buildAimArrow(): THREE.Mesh {
+  const sh = new THREE.Shape();
+  sh.moveTo(0, -0.05);
+  sh.lineTo(1.1, -0.05);
+  sh.lineTo(1.1, -0.16);
+  sh.lineTo(1.45, 0);
+  sh.lineTo(1.1, 0.16);
+  sh.lineTo(1.1, 0.05);
+  sh.lineTo(0, 0.05);
+  sh.closePath();
+  const geo = new THREE.ShapeGeometry(sh);
+  // Shape 在 xy 平面：轉到地面（xz），箭頭仍沿 +x
+  geo.rotateX(-Math.PI / 2);
+  return new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({ color: 0xffe35a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
 }

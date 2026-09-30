@@ -1,21 +1,22 @@
 import * as THREE from 'three';
-import { ARENA, floorHeight } from '../sim/arena';
-import { TOP_EMBLEM } from '../sim/tops';
-import type { TopSpec, TopState, TopType, V2 } from '../sim/types';
+import { ARENA, floorHeight, type ArenaSpec } from '../sim/arena';
+import { TOP_SPECS } from '../sim/tops';
+import type { LayerShape, TopSpec, TopState, V2 } from '../sim/types';
 import { emblemTexture, spinBlurTexture } from './textures';
 
-/** 攻擊環（能量層）的外形：回傳角度 θ 處的半徑 */
-function layerRadius(type: TopType, theta: number, R: number): number {
+/** 攻擊環（能量層）的外形：回傳角度 θ 處的半徑（n 為刃／凸塊數，depth 為起伏比例） */
+export function layerRadius(shape: LayerShape, theta: number, R: number): number {
   const f = (x: number) => x - Math.floor(x);
-  switch (type) {
-    case 'attack': // 三片鋸齒刃
-      return R * (0.7 + 0.3 * Math.pow(f((3 * theta) / (Math.PI * 2)), 2.2));
-    case 'defense': // 圓厚、六個凸塊
-      return R * (0.9 + 0.1 * Math.cos(6 * theta));
-    case 'stamina': // 寬大圓盤、八片薄翼
-      return R * (0.86 + 0.14 * Math.pow(Math.abs(Math.sin(4 * theta)), 6));
-    case 'balance': // 四支獠牙
-      return R * (0.68 + 0.32 * Math.pow(Math.abs(Math.cos(2 * theta)), 6));
+  const { n, depth: d } = shape;
+  switch (shape.kind) {
+    case 'saw': // 鋸齒刃
+      return R * (1 - d + d * Math.pow(f((n * theta) / (Math.PI * 2)), 2.2));
+    case 'bumps': // 圓厚凸塊
+      return R * (1 - d + d * Math.cos(n * theta));
+    case 'wings': // 薄翼
+      return R * (1 - d + d * Math.pow(Math.abs(Math.sin((n / 2) * theta)), 6));
+    case 'fangs': // 獠牙
+      return R * (1 - d + d * Math.pow(Math.abs(Math.cos((n / 2) * theta)), 6));
   }
 }
 
@@ -123,9 +124,14 @@ export class TopView {
   private wobbleAxis = new THREE.Vector3(1, 0, 0);
   /** 倒下時固定的傾倒軸 */
   private fallAxis: THREE.Vector3 | null = null;
+  /** 所在場地（貼地高度用） */
+  private readonly arena: ArenaSpec;
+  private readonly glow: THREE.Color;
 
-  constructor(scene: THREE.Scene, spec: TopSpec) {
+  constructor(scene: THREE.Scene, spec: TopSpec, arena: ArenaSpec = ARENA) {
     this.scene = scene;
+    this.arena = arena;
+    this.glow = new THREE.Color(spec.glow);
     const R = spec.radius;
     const metal = new THREE.MeshStandardMaterial({ color: 0xb8c0d0, metalness: 1, roughness: 0.22 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x22242c, metalness: 0.6, roughness: 0.4 });
@@ -150,7 +156,7 @@ export class TopView {
     const N = 160;
     for (let i = 0; i <= N; i++) {
       const th = (i / N) * Math.PI * 2;
-      const r = layerRadius(spec.type, th, R);
+      const r = layerRadius(spec.shape, th, R);
       const x = r * Math.cos(th);
       const y = r * Math.sin(th);
       if (i === 0) shape.moveTo(x, y);
@@ -185,7 +191,7 @@ export class TopView {
       new THREE.CylinderGeometry(0.1, 0.1, 0.04, 32),
       [
         dark,
-        new THREE.MeshBasicMaterial({ map: emblemTexture(TOP_EMBLEM[spec.type], '#' + new THREE.Color(spec.glow).getHexString()) }),
+        new THREE.MeshBasicMaterial({ map: emblemTexture(spec.emblem, '#' + new THREE.Color(spec.glow).getHexString()) }),
         dark,
       ],
     );
@@ -241,11 +247,12 @@ export class TopView {
 
   /** 依模擬狀態更新外觀；dt 為（已套用慢動作的）模擬時間 */
   update(t: TopState, dt: number, time: number): void {
+    const R = this.arena.radius;
     const r = Math.hypot(t.pos.x, t.pos.z);
     const ratio = t.spin / t.spec.maxSpin;
-    let y = floorHeight(Math.min(r, ARENA.radius));
+    let y = floorHeight(Math.min(r, R), this.arena);
 
-    if (t.finish === 'over' && r > ARENA.radius - t.spec.radius) {
+    if (t.finish === 'over' && r > R - t.spec.radius) {
       // 飛出場外：先往上拋再落下
       const ft = t.finishTime;
       y += 0.9 * ft - 5 * ft * ft;
@@ -273,22 +280,27 @@ export class TopView {
     }
 
     this.root.position.set(t.pos.x, y, t.pos.z);
-    this.spinGroup.rotation.y = t.angle;
+    // 右旋（spinDir = 1）從上方看為順時針
+    this.spinGroup.rotation.y = -t.angle;
     (this.blur.material as THREE.MeshBasicMaterial).opacity = 0.04 + 0.22 * ratio;
     this.blur.visible = !this.bursted;
 
-    // 必殺氣場
-    this.aura.visible = t.buff !== null && t.alive;
+    // 必殺氣場：自己的增益用自己的顏色；被對手施加減益時用對手的顏色、閃得比較慢
+    const fx = t.buff ?? t.hex;
+    this.aura.visible = fx !== null && t.alive;
     if (this.aura.visible) {
-      this.aura.rotation.y += dt * 8;
-      (this.aura.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.35 * Math.sin(time * 30);
-      this.aura.scale.setScalar(1 + 0.08 * Math.sin(time * 12));
+      const mat = this.aura.material as THREE.MeshBasicMaterial;
+      const debuff = t.buff === null;
+      mat.color.copy(debuff ? new THREE.Color(TOP_SPECS[fx!.from]?.glow ?? 0xffffff) : this.glow);
+      this.aura.rotation.y += dt * (debuff ? -3 : 8);
+      mat.opacity = debuff ? 0.3 + 0.2 * Math.sin(time * 8) : 0.55 + 0.35 * Math.sin(time * 30);
+      this.aura.scale.setScalar((debuff ? 0.85 : 1) + 0.08 * Math.sin(time * 12));
     }
 
     const speed = Math.hypot(t.vel.x, t.vel.z);
     this.trail.update(
       new THREE.Vector3(t.pos.x, y + 0.03, t.pos.z),
-      this.bursted || (t.finish === 'over' && r > ARENA.radius) ? 0 : Math.min(0.09, speed * 0.02) * (0.4 + ratio),
+      this.bursted || (t.finish === 'over' && r > R) ? 0 : Math.min(0.09, speed * 0.02) * (0.4 + ratio),
     );
 
     this.updateDebris(dt);
@@ -316,7 +328,7 @@ export class TopView {
       d.vel.y -= 9.8 * dt;
       d.obj.position.addScaledVector(d.vel, dt);
       const r = Math.hypot(d.obj.position.x, d.obj.position.z);
-      const floor = r < ARENA.radius ? floorHeight(r) + 0.03 : -1.15;
+      const floor = r < this.arena.radius ? floorHeight(r, this.arena) + 0.03 : -1.15;
       if (d.obj.position.y < floor) {
         d.obj.position.y = floor;
         d.vel.y = Math.abs(d.vel.y) * 0.35;

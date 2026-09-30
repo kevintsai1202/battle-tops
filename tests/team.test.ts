@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { createRng } from '../src/sim/rng';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime } from '../src/sim/team';
-import type { TopType } from '../src/sim/types';
+import type { TopId } from '../src/sim/types';
 
-const P: TopType[] = ['attack', 'defense', 'stamina'];
-const C: TopType[] = ['balance', 'stamina', 'attack'];
+const P: TopId[] = ['attack', 'defense', 'stamina'];
+const C: TopId[] = ['balance', 'stamina', 'attack'];
 
 /** 玩家（0）贏一戰 */
 const pWin = (finish: 'spin' | 'over' | 'burst' = 'spin') => ({ finish, loser: 1, winner: 0 as const });

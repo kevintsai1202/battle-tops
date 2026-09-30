@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ARENA, floorHeight } from '../sim/arena';
+import { ARENA, floorHeight, type ArenaSpec } from '../sim/arena';
 import type { V2 } from '../sim/types';
 import { glowTexture, ringTexture } from './textures';
 
@@ -52,6 +52,8 @@ export class Effects {
   private readonly glowTex = glowTexture();
   /** 累計發射的火花數（e2e 觀察用） */
   sparksEmitted = 0;
+  /** 目前場地（火花落地、特效貼地用） */
+  arena: ArenaSpec = ARENA;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -95,9 +97,9 @@ export class Effects {
   }
 
   /** 從 sim 座標取得撞擊點的世界座標（離地一點點） */
-  static worldAt(p: V2, lift = 0.3): THREE.Vector3 {
-    const r = Math.min(Math.hypot(p.x, p.z), ARENA.radius);
-    return new THREE.Vector3(p.x, floorHeight(r) + lift, p.z);
+  worldAt(p: V2, lift = 0.3): THREE.Vector3 {
+    const r = Math.min(Math.hypot(p.x, p.z), this.arena.radius);
+    return new THREE.Vector3(p.x, floorHeight(r, this.arena) + lift, p.z);
   }
 
   /** 發射 count 顆火花：主方向 dir 附近隨機散開 */
@@ -181,7 +183,7 @@ export class Effects {
    * 火花主要沿切線方向噴出（表面互相摩擦的方向）。
    */
   clash(p: V2, normal: V2, intensity: number, colorA: number, colorB: number, big: boolean): void {
-    const at = Effects.worldAt(p);
+    const at = this.worldAt(p);
     const hot = [new THREE.Color(0xfff6d0), new THREE.Color(0xffc040), new THREE.Color(0xff7a20)];
     const cols = [...hot, new THREE.Color(colorA), new THREE.Color(colorB)];
     const tangent = new THREE.Vector3(normal.z, 0.35, -normal.x);
@@ -202,14 +204,14 @@ export class Effects {
 
   /** 撞牆：少量火花 */
   wall(p: V2, intensity: number, color: number): void {
-    const at = Effects.worldAt(p, 0.2);
+    const at = this.worldAt(p, 0.2);
     const out = new THREE.Vector3(-p.x, 0.6, -p.z).normalize();
     this.emit(at, Math.round(6 + intensity * 6), out, 1.4, 2 + intensity, [new THREE.Color(0xffd090), new THREE.Color(color)], 0.35);
   }
 
   /** 必殺技發動：光柱、上升火花與地面環 */
   special(p: V2, color: number): void {
-    const at = Effects.worldAt(p, 0.1);
+    const at = this.worldAt(p, 0.1);
     const c = new THREE.Color(color);
     this.emit(at, 160, new THREE.Vector3(0, 1, 0), 0.9, 7, [c, new THREE.Color(0xffffff)], 0.9);
     this.ring(at, c, 3.5, 0.7, true);
@@ -220,7 +222,7 @@ export class Effects {
 
   /** 回合終結：大爆發 */
   finish(p: V2, color: number): void {
-    const at = Effects.worldAt(p);
+    const at = this.worldAt(p);
     const c = new THREE.Color(color);
     const cols = [new THREE.Color(0xffffff), new THREE.Color(0xffd070), c];
     this.emit(at, 420, new THREE.Vector3(0, 0.6, 0), 2.2, 9, cols, 1.1);
@@ -229,6 +231,29 @@ export class Effects {
     this.ring(at, new THREE.Color(0xffffff), 2.2, 0.5, false);
     this.arc(at, c, 10, 1.0);
     this.burstLight(at, new THREE.Color(0xfff0e0), 3, 20);
+  }
+
+  /**
+   * 場地機關：熔岩噴發（火柱）、濺水（水花）、撞冰柱（冰屑）。
+   * intensity 為事件強度（噴發時為被轟到的陀螺數）。
+   */
+  hazard(kind: 'erupt' | 'splash' | 'pillar', p: V2, intensity: number): void {
+    if (kind === 'erupt') {
+      const at = this.worldAt(p, 0.05);
+      const cols = [new THREE.Color(0xffe080), new THREE.Color(0xff7a1a), new THREE.Color(0xff3a0a)];
+      this.emit(at, 150, new THREE.Vector3(0, 1, 0), 0.7, 7.5, cols, 1.1);
+      this.ring(at, new THREE.Color(0xff6a1a), 2.2, 0.7, true);
+      this.burstLight(at, new THREE.Color(0xff8a3a), intensity > 0 ? 2.2 : 1.4, intensity > 0 ? 14 : 8);
+    } else if (kind === 'splash') {
+      const at = this.worldAt(p, 0.1);
+      const cols = [new THREE.Color(0xd8ffff), new THREE.Color(0x60e0ff), new THREE.Color(0xffffff)];
+      this.emit(at, Math.round(10 + intensity * 6), new THREE.Vector3(0, 1, 0), 1.6, 2.5 + intensity * 0.5, cols, 0.6);
+      this.ring(at.clone().setY(at.y - 0.05), new THREE.Color(0x80f0ff), 1 + intensity * 0.2, 0.6, true);
+    } else {
+      const at = this.worldAt(p, 0.25);
+      const out = new THREE.Vector3(p.x, 0.5, p.z).normalize();
+      this.emit(at, Math.round(12 + intensity * 8), out, 1.4, 2 + intensity, [new THREE.Color(0xffffff), new THREE.Color(0x9ae8ff)], 0.45);
+    }
   }
 
   /** 清除所有進行中的特效（新回合） */
@@ -267,7 +292,7 @@ export class Effects {
       this.sp[k + 1] += this.sv[k + 1] * fxDt;
       this.sp[k + 2] += this.sv[k + 2] * fxDt;
       const r = Math.hypot(this.sp[k], this.sp[k + 2]);
-      const floor = r < ARENA.radius ? floorHeight(r) : -1.2;
+      const floor = r < this.arena.radius ? floorHeight(r, this.arena) : -1.2;
       if (this.sp[k + 1] < floor) {
         this.sp[k + 1] = floor;
         this.sv[k + 1] = Math.abs(this.sv[k + 1]) * 0.4;

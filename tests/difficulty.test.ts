@@ -45,7 +45,7 @@ describe('放寬後的發射判定', () => {
 describe('CPU 必殺頻率', () => {
   /** 兩顆靠很近、CPU 量表全滿（攻擊型在 2.2 內就會想放必殺） */
   function ready() {
-    const sim = new BattleSim(TOP_SPECS.balance, TOP_SPECS.attack, { seed: 1, launch: [0.9, 0.9] });
+    const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.blaze, { seed: 1, launch: [0.9, 0.9] });
     sim.tops[0].pos = { x: -0.5, z: 0 };
     sim.tops[1].pos = { x: 0.5, z: 0 };
     sim.tops[1].special = 1;

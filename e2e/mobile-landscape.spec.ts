@@ -1,8 +1,8 @@
 import { devices, expect, test } from '@playwright/test';
-import { dbg, expectInViewport, expectNoHorizontalScroll } from './mobile.helpers';
+import { dbg, expectInViewport, expectNoHorizontalScroll, swipe } from './mobile.helpers';
 
 /**
- * 手機橫向（Pixel 7 模擬、觸控）：點選流程、虛擬搖桿、必殺按鈕、版面不超出畫面。
+ * 手機橫向（Pixel 7 模擬、觸控）：點選流程、滑動拉發射台、虛擬搖桿、必殺按鈕、版面不超出畫面。
  * 搖桿用 CDP 送真實觸控事件（touchStart → touchMove），走瀏覽器原生的 touch → pointer 路徑。
  */
 test.use({ ...devices['Pixel 7 landscape'] });
@@ -15,23 +15,32 @@ test('橫向手機：觸控組隊、點擊發射、搖桿推移、必殺按鈕',
   await expect(page.locator('#select')).toBeVisible();
   expect((await dbg(page)).touchMode).toBe(true);
   await expect(page.locator('#select .tc')).toBeVisible();
-  await expectInViewport(page, '.card');
+  // 名鑑 20 格在可捲動的格狀區內：區塊本身、詳細資料、場地與出陣按鈕都要在畫面內
+  await expectInViewport(page, '#select .cards');
+  await expectInViewport(page, '#select .detail');
+  await expectInViewport(page, '#select .arena');
   await expectInViewport(page, '.cpu-team');
   await expectInViewport(page, '#select .go');
   await expectNoHorizontalScroll(page);
 
-  // 觸控組隊：點三張卡（點選順序 = 出場順序），再按出陣
-  for (const i of [1, 2, 0]) await page.locator('.card').nth(i).tap();
-  await expect(page.locator('.card .badge')).toHaveText(['3', '1', '2', '']);
+  // 觸控組隊：點三格（點選順序 = 出場順序），再按出陣
+  for (const id of ['turtle', 'gale', 'blaze']) await page.locator(`#select .card[data-id="${id}"]`).tap();
+  await expect(page.locator('#select .card .badge')).toHaveText(['3', '1', '2', ...Array(17).fill('')]);
   await page.screenshot({ path: 'e2e/screenshots/30-mobile-select.png' });
   await page.locator('#select .go').tap();
   await expect(page.locator('#select')).toBeHidden();
-  await expect(page.locator('#touch')).toBeVisible();
+  // 發射階段不顯示搖桿（手指要拉發射台）
+  await expect(page.locator('#launch')).toBeVisible({ timeout: 45_000 });
+  await expect(page.locator('#touch')).toBeHidden();
 
-  // 在「ゴー」出現時點畫面發射
+  // 在「ゴー」出現時手指往下滑（拉條）發射
   await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
-  await page.touchscreen.tap(430, 120);
+  await swipe(page, { x: 430, y: 90 }, { x: 430, y: 330 });
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
+  const launched = await page.evaluate(() => (window as any).__game.debug().launch);
+  expect(launched.pull.length).toBeGreaterThan(0.9);
+  expect(launched.pull.speed).toBeGreaterThan(0.1);
+  await expect(page.locator('#touch')).toBeVisible();
   await expectInViewport(page, '.panel');
   await expectInViewport(page, '#touch .stick');
   await expectInViewport(page, '#touch .special-btn');

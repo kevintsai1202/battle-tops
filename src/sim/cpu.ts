@@ -1,3 +1,4 @@
+import type { ArenaSpec } from './arena';
 import type { BattleSim } from './battle';
 import { spinRatio } from './physics';
 import type { Rng } from './rng';
@@ -17,9 +18,36 @@ function toward(dx: number, dz: number, strength: number): V2 {
 }
 
 /**
- * CPU 操控：依陀螺類型決定走位與必殺時機。
- * 攻擊型追擊（預判對手位置）；防禦型守中並正面迎擊；持久型守中並閃避；平衡型看轉速優劣決定攻守。
- * 太靠近邊緣時一律往中心修正，避免自己滑出場。
+ * 守備位置的半徑：一般場地守中心；積水場守在水池外緣（水裡轉速流失快）、
+ * 火山守在火山錐外的溝槽（中心是斜坡站不住）。
+ */
+export function homeRadius(arena: ArenaSpec): number {
+  if (arena.water) return arena.water.r + 0.35;
+  if (arena.mound) return arena.mound.sigma * 1.3;
+  return 0;
+}
+
+/**
+ * 守備位置：守中心時就是中心；守圓環時是環上「對手那一側」的點，
+ * 兩顆都守環時才會沿著環靠近、碰得到對方。
+ */
+function homePoint(opp: V2, home: number): V2 {
+  if (home <= 0) return { x: 0, z: 0 };
+  const ro = Math.hypot(opp.x, opp.z);
+  const dir = ro > 1e-6 ? { x: opp.x / ro, z: opp.z / ro } : { x: 1, z: 0 };
+  return { x: dir.x * home, z: dir.z * home };
+}
+
+/** 往守備位置的推移方向 */
+function toHome(me: V2, opp: V2, home: number, strength: number): V2 {
+  const p = homePoint(opp, home);
+  return toward(p.x - me.x, p.z - me.z, strength);
+}
+
+/**
+ * CPU 操控：依陀螺類型決定走位、依必殺技的時機提示（cue）決定何時放必殺。
+ * 攻擊型追擊（預判對手位置）；防禦型守位並正面迎擊；持久型守位並閃避；平衡型看轉速優劣決定攻守。
+ * 守位依場地而定（見 homeRadius）；太靠近邊緣時一律往中心修正，避免自己滑出場。
  * specialRate：條件成立時每一步放必殺的機率（難度用來調整 CPU 的反應）。
  */
 export function cpuThink(sim: BattleSim, id: number, rng: Rng, specialRate = 0.05): CpuDecision {
@@ -27,7 +55,11 @@ export function cpuThink(sim: BattleSim, id: number, rng: Rng, specialRate = 0.0
   const opp = sim.tops[id === 0 ? 1 : 0];
   if (!me.alive) return { control: { x: 0, z: 0 }, special: false };
 
+  const home = homeRadius(sim.arena);
   const r = Math.hypot(me.pos.x, me.pos.z);
+  const hp = homePoint(opp.pos, home);
+  /** 離守備位置多遠 */
+  const offHome = Math.hypot(hp.x - me.pos.x, hp.z - me.pos.z);
   const dx = opp.pos.x - me.pos.x;
   const dz = opp.pos.z - me.pos.z;
   const dist = Math.hypot(dx, dz);
@@ -43,15 +75,15 @@ export function cpuThink(sim: BattleSim, id: number, rng: Rng, specialRate = 0.0
       break;
     }
     case 'defense':
-      c = r > 1.0 ? toward(-me.pos.x, -me.pos.z, 0.8) : toward(dx, dz, 0.3);
+      c = offHome > 1.0 ? toHome(me.pos, opp.pos, home, 0.8) : toward(dx, dz, 0.3);
       break;
     case 'stamina':
-      if (r > 0.6) c = toward(-me.pos.x, -me.pos.z, 0.9);
-      // 只閃避高速衝來的對手；對手慢的時候就守在中心硬碰硬
+      if (offHome > 0.6) c = toHome(me.pos, opp.pos, home, 0.9);
+      // 只閃避高速衝來的對手；對手慢的時候就守在原地硬碰硬
       else if (dist < 1.2 && Math.hypot(opp.vel.x, opp.vel.z) > 2.5) c = toward(-dx, -dz, 0.6);
       break;
     case 'balance':
-      c = myRatio > oppRatio ? toward(dx, dz, 0.7) : toward(-me.pos.x, -me.pos.z, 0.7);
+      c = myRatio > oppRatio ? toward(dx, dz, 0.7) : toHome(me.pos, opp.pos, home, 0.7);
       break;
   }
 
@@ -66,18 +98,18 @@ export function cpuThink(sim: BattleSim, id: number, rng: Rng, specialRate = 0.0
   let special = false;
   if (me.special >= 1 && opp.alive && rng() < specialRate) {
     const closing = -((opp.vel.x - me.vel.x) * dx + (opp.vel.z - me.vel.z) * dz) / (dist || 1);
-    switch (me.spec.type) {
-      case 'attack':
+    switch (me.spec.special.cue) {
+      case 'close':
         special = dist < 2.2;
         break;
-      case 'defense':
-        special = closing > 2 || me.burst > 0.6;
+      case 'far':
+        special = dist > 1.6 || myRatio < 0.45;
         break;
-      case 'stamina':
+      case 'lowSpin':
         special = myRatio < 0.5 || me.burst > 0.5;
         break;
-      case 'balance':
-        special = dist < 2 || myRatio < 0.45;
+      case 'danger':
+        special = closing > 2 || me.burst > 0.6 || myRatio < 0.35;
         break;
     }
   }
