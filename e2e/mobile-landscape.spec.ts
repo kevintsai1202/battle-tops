@@ -33,8 +33,9 @@ test('橫向手機：觸控組隊、點擊發射、搖桿推移、必殺按鈕',
   await expect(page.locator('#launch')).toBeVisible({ timeout: 45_000 });
   await expect(page.locator('#touch')).toBeHidden();
 
-  // 在「ゴー」出現時手指往下滑（拉條）發射
-  await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
+  // 倒數到「1」時手指往下滑（拉條），放手後等到「ゴー」發射。
+  // headless 的 CDP 觸控很慢（一次滑動 0.4 秒以上），等到「ゴー」才滑會超過自動放手的 0.6 秒
+  await page.locator('#banner .bn', { hasText: /^1$/ }).waitFor({ timeout: 45_000 });
   await swipe(page, { x: 430, y: 90 }, { x: 430, y: 330 });
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   const launched = await page.evaluate(() => (window as any).__game.debug().launch);

@@ -16,7 +16,7 @@ test('直向手機：提示橫向遊玩、組隊與 HUD 不超出、場地視角
   await expectNoHorizontalScroll(page);
   for (const id of ['gale', 'blaze', 'wolf']) await page.locator(`#select .card[data-id="${id}"]`).tap();
   await page.locator('#select .go').tap();
-  await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
+  await page.locator('#banner .bn', { hasText: /^1$/ }).waitFor({ timeout: 45_000 });
   await swipe(page, { x: 200, y: 250 }, { x: 170, y: 650 });
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   await expectInViewport(page, '.panel');

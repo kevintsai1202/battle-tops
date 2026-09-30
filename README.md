@@ -10,6 +10,8 @@
 | ![撞擊特寫](docs/screenshots/closeup.png) | ![必殺技](docs/screenshots/special-cutin.png) |
 | **爆裂終結** | **選擇陀螺** |
 | ![爆裂終結](docs/screenshots/burst-finish.png) | ![選擇陀螺](docs/screenshots/select.png) |
+| **火山場（熔岩噴發）** | **拉發射台** |
+| ![火山場](docs/screenshots/arena-volcano.png) | ![拉發射台](docs/screenshots/ripcord.png) |
 
 - 撞擊特寫：重擊時切到撞擊點側面的低角度鏡頭，時間慢到 7%，一邊環繞一邊推近。畫面上同時有反白衝擊幀、放射模糊、色差、集中線、放電弧線、火花與衝擊波，並跳出擬聲字（ドゴォォン！）。
 - 立體音效：全部由 Web Audio 程式合成，沒有素材授權問題。聲源用 HRTF 定位，聆聽者跟著鏡頭移動。
