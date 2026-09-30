@@ -1,5 +1,5 @@
 import { ARENA, inCircle, ventPhase, type ArenaSpec } from './arena';
-import { applyAura, createTop, eruptPush, integrateTop, resolveCollision, resolvePillars, resolveRim, SPIN_FINISH_RATIO } from './physics';
+import { applyAura, createTop, eruptPush, integrateTop, mobility, resolveCollision, resolvePillars, resolveRim, SPIN_FINISH_RATIO } from './physics';
 import { createRng, range, type Rng } from './rng';
 import { runSpecial } from './specials';
 import type { FinishType, RoundResult, SimEvent, TopSpec, TopState, V2 } from './types';
@@ -18,6 +18,10 @@ export interface BattleOptions {
 
 /** 濺水事件的最短間隔（秒），避免每一步都發 */
 const SPLASH_GAP = 0.35;
+/** 快甩衝刺：加上的速度（再乘機動倍率）、消耗的轉速（佔最高轉速）、冷卻秒數 */
+const DASH_SPEED = 3.2;
+const DASH_SPIN_COST = 0.03;
+export const DASH_COOLDOWN = 0.9;
 
 /** 把向量 v 旋轉 a 弧度 */
 function rotate(v: V2, a: number): V2 {
@@ -44,6 +48,8 @@ export class BattleSim {
   private readonly ventCycle: number[];
   /** 各陀螺上一次濺水事件的時間 */
   private readonly lastSplash = [-9, -9];
+  /** 各陀螺上一次快甩衝刺的時間 */
+  private readonly lastDash = [-9, -9];
 
   constructor(specA: TopSpec, specB: TopSpec, opts: BattleOptions) {
     this.rng = createRng(opts.seed);
@@ -77,6 +83,22 @@ export class BattleSim {
     t.specialUsed = true;
     runSpecial(t, opp, this.arena);
     this.events.push({ type: 'special', id, top: t.spec.id });
+    return true;
+  }
+
+  /**
+   * 快甩衝刺（手機快甩手勢）：朝 dir 方向（世界座標，會正規化）加速，消耗一點轉速，有冷卻時間。
+   * 速度乘上機動倍率：低機動的軸心衝得比較慢。成功時回傳 true 並發出 dash 事件。
+   */
+  dash(id: number, dir: V2): boolean {
+    const t = this.tops[id];
+    const len = Math.hypot(dir.x, dir.z);
+    if (!t.alive || this.result || len < 1e-6 || this.time - this.lastDash[id] < DASH_COOLDOWN) return false;
+    this.lastDash[id] = this.time;
+    const v = DASH_SPEED * mobility(t);
+    t.vel = { x: t.vel.x + (dir.x / len) * v, z: t.vel.z + (dir.z / len) * v };
+    t.spin = Math.max(0, t.spin - t.spec.maxSpin * DASH_SPIN_COST);
+    this.events.push({ type: 'dash', id, pos: { ...t.pos }, dir: { x: dir.x / len, z: dir.z / len } });
     return true;
   }
 

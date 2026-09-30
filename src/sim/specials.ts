@@ -1,4 +1,5 @@
 import type { ArenaSpec } from './arena';
+import { mobility } from './physics';
 import type { SpecialStep, TopState, V2 } from './types';
 
 /** 單位向量（長度為 0 時回傳 fallback） */
@@ -20,9 +21,12 @@ function runStep(s: SpecialStep, me: TopState, opp: TopState, arena: ArenaSpec):
   const toOpp = unit(opp.pos.x - me.pos.x, opp.pos.z - me.pos.z);
   const max = me.spec.maxSpin;
   switch (s.op) {
-    case 'dash':
-      me.vel = { x: me.vel.x * s.keep + toOpp.x * s.speed, z: me.vel.z * s.keep + toOpp.z * s.speed };
+    case 'dash': {
+      // 突進速度看機動：低機動的軸心衝不快
+      const v = s.speed * mobility(me);
+      me.vel = { x: me.vel.x * s.keep + toOpp.x * v, z: me.vel.z * s.keep + toOpp.z * v };
       break;
+    }
     case 'brake':
       me.vel = { x: me.vel.x * s.keep, z: me.vel.z * s.keep };
       break;

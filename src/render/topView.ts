@@ -1,23 +1,163 @@
 import * as THREE from 'three';
 import { ARENA, floorHeight, type ArenaSpec } from '../sim/arena';
+import type { PartId } from '../sim/parts';
 import { TOP_SPECS } from '../sim/tops';
-import type { LayerShape, TopSpec, TopState, V2 } from '../sim/types';
+import type { Lobe, TopLook, TopSpec, TopState, V2 } from '../sim/types';
 import { emblemTexture, spinBlurTexture } from './textures';
 
-/** 攻擊環（能量層）的外形：回傳角度 θ 處的半徑（n 為刃／凸塊數，depth 為起伏比例） */
-export function layerRadius(shape: LayerShape, theta: number, R: number): number {
-  const f = (x: number) => x - Math.floor(x);
-  const { n, depth: d } = shape;
-  switch (shape.kind) {
-    case 'saw': // 鋸齒刃
-      return R * (1 - d + d * Math.pow(f((n * theta) / (Math.PI * 2)), 2.2));
-    case 'bumps': // 圓厚凸塊
-      return R * (1 - d + d * Math.cos(n * theta));
-    case 'wings': // 薄翼
-      return R * (1 - d + d * Math.pow(Math.abs(Math.sin((n / 2) * theta)), 6));
-    case 'fangs': // 獠牙
-      return R * (1 - d + d * Math.pow(Math.abs(Math.cos((n / 2) * theta)), 6));
+/** 輪廓起伏的放大倍率：原型的凸起多半很淺，縮小到遊戲尺寸後放大一點才看得出形狀 */
+const LOBE_EXAGGERATE = 1.4;
+
+/** 兩個角度（度）的差，落在 -180..180 */
+function angDiff(a: number, b: number): number {
+  return ((((a - b) % 360) + 540) % 360) - 180;
+}
+
+/**
+ * 攻擊環輪廓：角度 θ（弧度）處的半徑。基準圓加上每組凸起；凸起是峰值位置可偏移的平滑隆起，
+ * skew 讓峰值往旋轉前方偏（spinDir 決定哪邊是前方），做出鋸齒或前傾的刃。最外緣約等於 R。
+ */
+export function ringRadius(lobes: Lobe[], theta: number, R: number, spinDir: 1 | -1 = 1): number {
+  const total = lobes.reduce((a, l) => a + Math.max(0, l.height), 0) * LOBE_EXAGGERATE;
+  let r = 1 - Math.min(0.45, total);
+  const deg = (theta * 180) / Math.PI;
+  for (const l of lobes) {
+    const sk = Math.max(-0.9, Math.min(0.9, (l.skew ?? 0) * spinDir));
+    for (let k = 0; k < l.n; k++) {
+      const u = angDiff(deg, l.phase + (k * 360) / l.n) / (l.width / 2);
+      if (u <= -1 || u >= 1) continue;
+      // 峰值在 u = sk 的不對稱隆起：從 -1 升到 sk、再降到 1
+      const v = u < sk ? (u + 1) / (sk + 1) : (1 - u) / (1 - sk);
+      r += l.height * LOBE_EXAGGERATE * v * v * (3 - 2 * v);
+    }
   }
+  return R * r;
+}
+
+/** 依輪廓擠出一片環（在 xz 平面，底面在 y = 0）；hole > 0 時中間挖一個圓孔 */
+function extrudeProfile(lobes: Lobe[], R: number, spinDir: 1 | -1, depth: number, hole = 0): THREE.ExtrudeGeometry {
+  const shape = new THREE.Shape();
+  const N = 180;
+  for (let i = 0; i <= N; i++) {
+    const th = (i / N) * Math.PI * 2;
+    const r = ringRadius(lobes, th, R, spinDir);
+    if (i === 0) shape.moveTo(r * Math.cos(th), r * Math.sin(th));
+    else shape.lineTo(r * Math.cos(th), r * Math.sin(th));
+  }
+  if (hole > 0) {
+    const h = new THREE.Path();
+    h.absarc(0, 0, hole, 0, Math.PI * 2, true);
+    shape.holes.push(h);
+  }
+  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.008, bevelSegments: 2, curveSegments: 1 });
+  g.rotateX(-Math.PI / 2);
+  return g;
+}
+
+/**
+ * 軸心（尖端在 y = 0）：依軸心零件做出不同外形——平頭、橡膠平頭、錐頭、尖頭、針頭、球頭、寬球、軸承。
+ * 上方的外殼用外觀的軸心顏色。
+ */
+function buildDriver(part: PartId, look: TopLook): THREE.Object3D {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshStandardMaterial({ color: look.tip, metalness: 0.3, roughness: 0.45 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1c1d22, metalness: 0.5, roughness: 0.5 });
+  const rubber = new THREE.MeshStandardMaterial({ color: 0x141416, metalness: 0, roughness: 0.9 });
+  const metal = new THREE.MeshStandardMaterial({ color: look.metal, metalness: 1, roughness: 0.25 });
+  const add = (geo: THREE.BufferGeometry, mat: THREE.Material, y: number, sy = 1) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.y = y;
+    m.scale.y = sy;
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  switch (part) {
+    case 'flat':
+      add(new THREE.CylinderGeometry(0.055, 0.06, 0.07, 20), dark, 0.035);
+      break;
+    case 'rubber':
+      add(new THREE.CylinderGeometry(0.07, 0.078, 0.07, 20), rubber, 0.035);
+      break;
+    case 'taper':
+      add(new THREE.CylinderGeometry(0.065, 0.028, 0.08, 20), dark, 0.04);
+      break;
+    case 'sharp': {
+      const c = add(new THREE.ConeGeometry(0.05, 0.1, 18), metal, 0.05);
+      c.rotation.x = Math.PI;
+      break;
+    }
+    case 'needle': {
+      const c = add(new THREE.ConeGeometry(0.032, 0.12, 14), metal, 0.06);
+      c.rotation.x = Math.PI;
+      break;
+    }
+    case 'ball':
+      add(new THREE.SphereGeometry(0.052, 18, 12), metal, 0.052);
+      break;
+    case 'wideBall':
+      add(new THREE.SphereGeometry(0.08, 20, 12), dark, 0.05, 0.62);
+      break;
+    case 'bearing': {
+      const c = add(new THREE.ConeGeometry(0.045, 0.09, 18), metal, 0.045);
+      c.rotation.x = Math.PI;
+      const ring = add(new THREE.TorusGeometry(0.06, 0.013, 8, 24), new THREE.MeshStandardMaterial({ color: look.tip, metalness: 0.8, roughness: 0.2 }), 0.1);
+      ring.rotation.x = Math.PI / 2;
+      break;
+    }
+    default:
+      add(new THREE.CylinderGeometry(0.05, 0.05, 0.07, 16), dark, 0.035);
+  }
+  // 外殼：尖端上方的圓台
+  add(new THREE.CylinderGeometry(0.11, 0.07, 0.09, 24), shell, 0.155);
+  return g;
+}
+
+/**
+ * 重心盤（金屬件，放在 y = 0.2 附近）：依盤零件做出不同外形——
+ * 標準圓盤、輕量（鏤空缺口）、重量（厚大）、外緣（外圈加厚）、刃盤（外緣小刃）、護鎖盤（三個鎖扣）。
+ */
+function buildDisk(part: PartId, R: number, look: TopLook, spinDir: 1 | -1): THREE.Object3D {
+  const g = new THREE.Group();
+  const metal = new THREE.MeshStandardMaterial({ color: look.metal, metalness: 1, roughness: 0.22 });
+  const add = (geo: THREE.BufferGeometry, y: number) => {
+    const m = new THREE.Mesh(geo, metal);
+    m.position.y = y;
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+  switch (part) {
+    case 'light':
+      add(extrudeProfile([{ n: 6, phase: 30, width: 30, height: -0.12 }], R * 0.82, spinDir, 0.035), 0.205);
+      break;
+    case 'heavy':
+      add(new THREE.CylinderGeometry(R * 0.92, R * 0.88, 0.085, 48), 0.225);
+      break;
+    case 'rim': {
+      add(new THREE.CylinderGeometry(R * 0.8, R * 0.76, 0.045, 48), 0.215);
+      const t = add(new THREE.TorusGeometry(R * 0.82, 0.03, 10, 48), 0.225);
+      t.rotation.x = Math.PI / 2;
+      break;
+    }
+    case 'blade':
+      add(extrudeProfile([{ n: 8, phase: 0, width: 26, height: 0.12, skew: 0.7 }], R * 0.9, spinDir, 0.05), 0.2);
+      break;
+    case 'guard': {
+      add(new THREE.CylinderGeometry(R * 0.84, R * 0.8, 0.06, 48), 0.22);
+      for (let k = 0; k < 3; k++) {
+        const a = (k * Math.PI * 2) / 3;
+        const tab = add(new THREE.BoxGeometry(0.07, 0.05, 0.06), 0.26);
+        tab.position.x = Math.cos(a) * R * 0.78;
+        tab.position.z = Math.sin(a) * R * 0.78;
+        tab.rotation.y = -a;
+      }
+      break;
+    }
+    default:
+      add(new THREE.CylinderGeometry(R * 0.86, R * 0.8, 0.06, 48), 0.22);
+  }
+  return g;
 }
 
 /** 拖尾光帶：記錄最近的位置，組成一條往後漸細、漸淡的發光帶 */
@@ -133,58 +273,32 @@ export class TopView {
     this.arena = arena;
     this.glow = new THREE.Color(spec.glow);
     const R = spec.radius;
-    const metal = new THREE.MeshStandardMaterial({ color: 0xb8c0d0, metalness: 1, roughness: 0.22 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x22242c, metalness: 0.6, roughness: 0.4 });
+    const look = spec.look;
     const glowMat = new THREE.MeshBasicMaterial({ color: spec.glow });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x22242c, metalness: 0.6, roughness: 0.4 });
 
-    // 軸心（尖端朝下，尖端在 y = 0）
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.12, 16), dark);
-    tip.rotation.x = Math.PI;
-    tip.position.y = 0.06;
-    const driver = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.07, 0.1, 24), dark);
-    driver.position.y = 0.16;
-
-    // 金屬盤
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.86, R * 0.8, 0.06, 48), metal);
-    disc.position.y = 0.23;
+    // 軸心與重心盤：外形依目前裝的零件
+    const driver = buildDriver(spec.parts.driver, look);
+    const disk = buildDisk(spec.parts.disk, R, look, spec.spinDir);
     const discRing = new THREE.Mesh(new THREE.TorusGeometry(R * 0.84, 0.012, 6, 48), glowMat);
     discRing.rotation.x = Math.PI / 2;
-    discRing.position.y = 0.25;
+    discRing.position.y = 0.255;
 
-    // 攻擊環：以極座標外形擠出
-    const shape = new THREE.Shape();
-    const N = 160;
-    for (let i = 0; i <= N; i++) {
-      const th = (i / N) * Math.PI * 2;
-      const r = layerRadius(spec.shape, th, R);
-      const x = r * Math.cos(th);
-      const y = r * Math.sin(th);
-      if (i === 0) shape.moveTo(x, y);
-      else shape.lineTo(x, y);
-    }
-    const layerGeo = new THREE.ExtrudeGeometry(shape, {
-      depth: 0.07,
-      bevelEnabled: true,
-      bevelThickness: 0.012,
-      bevelSize: 0.01,
-      bevelSegments: 2,
-      curveSegments: 1,
-    });
-    layerGeo.rotateX(-Math.PI / 2);
+    // 攻擊環（主色）：依原型輪廓擠出
     const layer = new THREE.Mesh(
-      layerGeo,
-      new THREE.MeshStandardMaterial({
-        color: spec.color,
-        metalness: 0.55,
-        roughness: 0.3,
-        emissive: spec.glow,
-        emissiveIntensity: 0.18,
-      }),
+      extrudeProfile(look.ring, R, spec.spinDir, 0.07, R * 0.3),
+      new THREE.MeshStandardMaterial({ color: look.primary, metalness: 0.45, roughness: 0.32, emissive: spec.glow, emissiveIntensity: 0.12 }),
     );
     layer.position.y = 0.27;
-    const layerRing = new THREE.Mesh(new THREE.TorusGeometry(R * 0.55, 0.014, 6, 48), glowMat);
+    // 第二層（副色，像能量環或透明件）：縮小一圈疊在上面
+    const inner = new THREE.Mesh(
+      extrudeProfile(look.inner, R * 0.7, spec.spinDir, 0.035, 0.1),
+      new THREE.MeshStandardMaterial({ color: look.secondary, metalness: 0.3, roughness: 0.35, transparent: true, opacity: 0.92 }),
+    );
+    inner.position.y = 0.345;
+    const layerRing = new THREE.Mesh(new THREE.TorusGeometry(R * 0.55, 0.012, 6, 48), glowMat);
     layerRing.rotation.x = Math.PI / 2;
-    layerRing.position.y = 0.36;
+    layerRing.position.y = 0.39;
 
     // 紋章晶片
     const chip = new THREE.Mesh(
@@ -195,19 +309,17 @@ export class TopView {
         dark,
       ],
     );
-    chip.position.y = 0.37;
+    chip.position.y = 0.4;
 
-    for (const m of [tip, driver, disc, layer, chip]) {
-      m.castShadow = true;
-    }
-    this.spinGroup.add(tip, driver, disc, discRing, layer, layerRing, chip);
+    for (const m of [layer, inner, chip]) m.castShadow = true;
+    this.spinGroup.add(driver, disk, discRing, layer, inner, layerRing, chip);
 
     // 旋轉模糊盤：轉得越快越明顯
     this.blur = new THREE.Mesh(
       new THREE.CircleGeometry(R * 1.04, 48),
       new THREE.MeshBasicMaterial({
         map: spinBlurTexture(),
-        color: spec.color,
+        color: look.primary,
         transparent: true,
         opacity: 0.2,
         depthWrite: false,
@@ -215,7 +327,7 @@ export class TopView {
       }),
     );
     this.blur.rotation.x = -Math.PI / 2;
-    this.blur.position.y = 0.39;
+    this.blur.position.y = 0.43;
     this.spinGroup.add(this.blur);
 
     // 必殺氣場（上下漸淡的光柱）

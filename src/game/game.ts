@@ -5,6 +5,7 @@ import { CameraDirector } from '../director/director';
 import { CameraRig, type Shot } from '../render/cameraRig';
 import { Effects } from '../render/effects';
 import { GameRenderer } from '../render/postfx';
+import { Showcase } from '../render/showcase';
 import { buildLights, buildStadium, type Stadium, type StadiumLights } from '../render/stadium';
 import { TopView } from '../render/topView';
 import { ARENA_IDS, ARENAS, floorHeight, type ArenaId, type ArenaSpec } from '../sim/arena';
@@ -13,13 +14,14 @@ import { cpuThink } from '../sim/cpu';
 import { createTop, spinRatio } from '../sim/physics';
 import { createRng, type Rng } from '../sim/rng';
 import { DIFFICULTIES, type Difficulty, type DifficultyId } from '../sim/difficulty';
-import { keyLaunchRatio, measurePull, pullLaunchRatio, pullQuality, type PullMetrics, type PullSample } from '../sim/launcher';
+import { keyLaunchRatio, measurePull, pullLaunchRatio, pullQuality, trimPullSamples, type PullMetrics, type PullSample } from '../sim/launcher';
 import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
+import { STOCK, type TeamLoadouts } from '../sim/parts';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type TeamMatch } from '../sim/team';
-import { TOP_IDS, TOP_SPECS } from '../sim/tops';
+import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
 import { css, Hud, type ArenaChoice, type CordView } from '../ui/hud';
-import { TouchControls } from '../ui/touch';
+import { SwipeControls, type StickVector } from '../ui/touch';
 
 /** 遊戲階段 */
 export type GameState = 'title' | 'select' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result';
@@ -115,13 +117,15 @@ export class Game {
   /** 玩家與 CPU 的隊伍（順序即出場順序） */
   playerTeam: TopId[] = [];
   cpuTeam: TopId[] = [];
+  /** 玩家隊伍換上的備用零件（CPU 一律原廠） */
+  playerLoadouts: TeamLoadouts = {};
   /** 組隊畫面選的場地（含隨機）與這場比賽實際使用的場地 */
   arenaChoice: ArenaChoice;
   arena: ArenaSpec = ARENAS.practice;
   /** 已開打的回合數（含平手重打） */
   round = 0;
   /** e2e 觀察用的累計數字 */
-  readonly counters = { clashes: 0, bigClashes: 0, finishes: 0, specials: 0, rounds: 0, matches: 0, hazards: 0 };
+  readonly counters = { clashes: 0, bigClashes: 0, finishes: 0, specials: 0, rounds: 0, matches: 0, hazards: 0, dashes: 0 };
   /** 最近一次發射的評價與轉速比例（cpu 為 CPU 的發射力道；aim 為玩家的瞄準角度；pull 為拉條量測，按 Space 發射時為 null） */
   lastLaunch: { ratio: number; label: string; cpu: number; aim: number; pull: PullMetrics | null } = { ratio: 0, label: '', cpu: 0, aim: 0, pull: null };
   /** 目前難度（展示模式固定普通） */
@@ -144,6 +148,8 @@ export class Game {
   private views: TopView[] = [];
   private hums: Hum[] = [];
   private preview: { view: TopView; state: TopState } | null = null;
+  /** 組隊畫面的外觀與絕招示範（只在組隊畫面存在） */
+  private showcase: Showcase | null = null;
   private playerSpec: TopSpec = TOP_SPECS.blaze;
   private cpuSpec: TopSpec = TOP_SPECS.turtle;
   private cpuRng: Rng;
@@ -170,9 +176,9 @@ export class Game {
   private overtimeCpu: TopId = 'blaze';
   /** 除錯暫停：畫面照常渲染，但時間不前進（e2e 定格截圖用） */
   paused = false;
-  /** 觸控模式：偵測到觸控裝置或第一次觸控後開啟，顯示搖桿與必殺按鈕 */
+  /** 觸控模式：偵測到觸控裝置或第一次觸控後開啟，對戰中用滑動操作 */
   touchMode = false;
-  private readonly touch: TouchControls;
+  private readonly touch: SwipeControls;
   /** 已渲染的影格數 */
   frames = 0;
 
@@ -192,7 +198,7 @@ export class Game {
     this.aimArrow = buildAimArrow();
     this.aimArrow.visible = false;
     this.gfx.scene.add(this.aimArrow);
-    this.touch = new TouchControls(() => this.trySpecial());
+    this.touch = new SwipeControls({ onSpecial: () => this.trySpecial(), onFlick: (d) => this.tryDash(d) });
     if (coarse) this.enableTouchMode();
     this.effects = new Effects(this.gfx.scene);
     this.effects.arena = this.arena;
@@ -265,8 +271,14 @@ export class Game {
     return team;
   }
 
+  /** 玩家陀螺的規格（套用換上的零件） */
+  playerSpecOf(id: TopId): TopSpec {
+    return buildSpec(id, this.playerLoadouts[id] ?? STOCK);
+  }
+
   /** 展示模式：雙方隨機組隊（可用網址參數指定前幾顆）後開打 */
   private startDemoMatch(): void {
+    this.playerLoadouts = {};
     this.playerTeam = this.fillTeam(this.opts.player);
     this.cpuTeam = this.fillTeam(this.opts.cpu);
     this.startMatch();
@@ -294,13 +306,32 @@ export class Game {
       arena: this.arenaChoice,
       onDifficulty: (d) => this.setDifficulty(d),
       onArena: (a) => this.chooseArena(a),
-      onHover: (t) => this.setPreview(TOP_SPECS[t]),
-      onConfirm: (team) => {
+      // 外觀與絕招示範在詳細資料的舞台窗裡播放；主場景的場地中央不再放預覽陀螺（會被名鑑擋住）
+      onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
+      thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
+      onConfirm: (team, loadouts) => {
         this.playerTeam = team;
+        this.playerLoadouts = loadouts;
         this.setPreview(null);
+        this.closeShowcase();
         this.startMatch();
       },
     });
+  }
+
+  /** 組隊畫面的絕招示範：第一次需要時用詳細資料的畫布建立 */
+  private ensureShowcase(): Showcase | null {
+    if (!this.showcase) {
+      const canvas = this.hud.stageCanvas();
+      if (canvas) this.showcase = new Showcase(canvas, (name) => this.hud.stageFlash(name));
+    }
+    return this.showcase;
+  }
+
+  /** 離開組隊畫面：釋放絕招示範的渲染器 */
+  private closeShowcase(): void {
+    this.showcase?.dispose();
+    this.showcase = null;
   }
 
   /** 組隊畫面切換場地：記在瀏覽器；不是隨機就立刻換上該場地預覽 */
@@ -379,7 +410,7 @@ export class Game {
     const pair = currentPairing(m)!;
     const replay = pair.battle === this.lastBattle;
     this.lastBattle = pair.battle;
-    this.playerSpec = TOP_SPECS[pair.player];
+    this.playerSpec = this.playerSpecOf(pair.player);
     this.cpuSpec = TOP_SPECS[pair.cpu];
     this.clearArena();
     this.round++;
@@ -470,9 +501,8 @@ export class Game {
   private onPullMove(e: PointerEvent): void {
     if (!this.pull || e.pointerId !== this.pull.pointerId) return;
     this.pull.samples.push({ t: performance.now() / 1000, x: e.clientX, y: e.clientY });
-    // 只留最近 1.5 秒，避免按著不動太久時陣列一直長
-    const cut = performance.now() / 1000 - 1.5;
-    while (this.pull.samples.length > 2 && this.pull.samples[1].t < cut) this.pull.samples.shift();
+    // 只留最近一段（起點一定保留），避免按著不動太久時陣列一直長
+    trimPullSamples(this.pull.samples, performance.now() / 1000);
   }
 
   /** 放手：量測拉條並在這個時間點發射 */
@@ -594,7 +624,23 @@ export class Game {
     if (this.state === 'battle' && this.sim && !this.opts.demo) this.sim.useSpecial(0);
   }
 
-  /** 方向鍵與觸控搖桿換算成「相對鏡頭」的推移方向 */
+  /** 手機快甩：螢幕方向換成相對鏡頭的世界方向後衝刺 */
+  private tryDash(d: StickVector): void {
+    if (this.state !== 'battle' || !this.sim || this.opts.demo) return;
+    this.sim.dash(0, this.screenToWorld(d.x, d.y));
+  }
+
+  /** 螢幕上的方向（x 往右、y 往前）換成相對鏡頭的世界方向 */
+  private screenToWorld(x: number, y: number): V2 {
+    const f = this.gfx.camera.getWorldDirection(new THREE.Vector3());
+    const len = Math.hypot(f.x, f.z) || 1;
+    const fx = f.x / len;
+    const fz = f.z / len;
+    // 右方向 = 前方向順時針轉 90°
+    return { x: -fz * x + fx * y, z: fx * x + fz * y };
+  }
+
+  /** 方向鍵與觸控滑動換算成「相對鏡頭」的推移方向 */
   private playerControl(): V2 {
     let x = 0;
     let y = 0;
@@ -605,12 +651,7 @@ export class Game {
     x += this.touch.vector.x;
     y += this.touch.vector.y;
     if (x === 0 && y === 0) return { x: 0, z: 0 };
-    const f = this.gfx.camera.getWorldDirection(new THREE.Vector3());
-    const len = Math.hypot(f.x, f.z) || 1;
-    const fx = f.x / len;
-    const fz = f.z / len;
-    // 右方向 = 前方向順時針轉 90°
-    return { x: -fz * x + fx * y, z: fx * x + fz * y };
+    return this.screenToWorld(x, y);
   }
 
   // ---------------- 每幀 ----------------
@@ -654,6 +695,7 @@ export class Game {
     // 畫面更新
     const tops = this.sim?.tops ?? [];
     this.views.forEach((v, i) => tops[i] && v.update(tops[i], simDt, this.clock));
+    this.showcase?.update(wallDt);
     if (this.preview) {
       this.preview.state.angle += 260 * wallDt;
       this.preview.state.precession += wallDt * 3;
@@ -754,6 +796,12 @@ export class Game {
           this.audio?.wall(this.world(e.pos, 0.2), e.kind === 'pillar' ? e.intensity : 1.2);
         }
         break;
+      case 'dash':
+        // 快甩衝刺：小衝擊波與發射聲
+        this.counters.dashes++;
+        this.effects.wall(e.pos, 2.2, sim.tops[e.id].spec.glow);
+        this.audio?.launch(this.world(e.pos, 0.25));
+        break;
       case 'special': {
         this.counters.specials++;
         const t = sim.tops[e.id];
@@ -815,8 +863,8 @@ export class Game {
     this.voice?.play('overtime', 2);
     if (this.opts.demo) return;
     this.hud.showOvertimePick(
-      m.player.map((t) => TOP_SPECS[t]),
-      (t) => this.setPreview(TOP_SPECS[t]),
+      m.player.map((t) => this.playerSpecOf(t)),
+      (t) => this.setPreview(this.playerSpecOf(t)),
       (t) => this.pickOvertime(t),
     );
   }
@@ -901,16 +949,26 @@ export class Game {
     );
   }
 
-  /** 觸控操作只在倒數與對戰時出現（展示模式不顯示），並同步必殺按鈕狀態 */
+  /** 觸控操作只在對戰中啟用（發射階段手指要拉發射台；展示模式不啟用），並更新畫面下方的操作提示 */
   private updateTouch(): void {
-    // 發射階段不顯示：手指要拿來拉發射台，避免按到搖桿
-    const show = this.touchMode && !this.opts.demo && (this.state === 'battle' || this.state === 'roundEnd');
-    this.touch.setVisible(show);
-    if (!show) return;
+    const on = this.touchMode && !this.opts.demo && this.state === 'battle';
+    this.touch.setEnabled(on);
+    const hint = this.touchHint;
+    hint.hidden = !on;
+    if (!on) return;
     const me = this.sim?.tops[0];
-    if (!me) this.touch.setSpecial('charging', 0);
-    else if (me.specialUsed) this.touch.setSpecial('used', 0);
-    else this.touch.setSpecial(me.special >= 1 && me.alive && this.state === 'battle' ? 'ready' : 'charging', me.special);
+    const ready = !!me && me.alive && !me.specialUsed && me.special >= 1;
+    if (hint.classList.contains('ready') !== ready) {
+      hint.classList.toggle('ready', ready);
+      hint.textContent = ready ? '必殺 READY！三指觸控發動' : '滑動：推移　快甩：衝刺　三指：必殺';
+    } else if (!hint.textContent) {
+      hint.textContent = '滑動：推移　快甩：衝刺　三指：必殺';
+    }
+  }
+
+  /** 畫面下方的觸控操作提示 */
+  private get touchHint(): HTMLElement {
+    return document.getElementById('touch-hint')!;
   }
 
   /** e2e 用的狀態快照 */
@@ -933,6 +991,7 @@ export class Game {
             points: this.match.results.map((r) => r.points),
           }
         : null,
+      showcase: this.showcase ? { loops: this.showcase.loops, fires: this.showcase.fires } : null,
       director: { mode: this.director.mode, timeScale: this.director.timeScale, closeups: this.director.closeups, progress: this.director.progress },
       counters: { ...this.counters },
       sparks: this.effects.sparksEmitted,
@@ -949,7 +1008,10 @@ export class Game {
       tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control })) ?? [],
       touchMode: this.touchMode,
       fov: this.gfx.camera.fov,
-      stick: this.touch.vector,
+      swipe: this.touch.vector,
+      flicks: this.touch.flicks,
+      loadouts: this.playerLoadouts,
+      playerStats: this.playerSpec.stats,
       colors: [css(this.playerSpec.glow), css(this.cpuSpec.glow)],
     };
   }

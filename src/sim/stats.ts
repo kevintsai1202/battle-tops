@@ -1,3 +1,4 @@
+import { clampStats } from './parts';
 import type { BaseStats } from './types';
 
 /** 由基本屬性推導出的物理能力值 */
@@ -14,9 +15,6 @@ export interface PhysicsParams {
   maxSpin: number;
 }
 
-/** 限制在 [lo, hi] */
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
 /**
  * 基本屬性 → 物理能力值。這是「屬性決定能力」的唯一公式，調平衡時只改這裡。
  * 係數以最早的四顆原創陀螺校準：代入它們的屬性，會得到接近原本手調的數值（誤差 25% 內，見 tests/stats.test.ts）。
@@ -30,12 +28,14 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  * - 機動 1～10 → 驅動力 1.0～6.0、巡航速度 1.4～5.0
  */
 export function derivePhysics(s: BaseStats): PhysicsParams {
-  const atk = clamp(s.attack, 1, 10);
-  const def = clamp(s.defense, 1, 10);
-  const sta = clamp(s.stamina, 1, 10);
-  const bur = clamp(s.burst, 1, 10);
-  const dash = clamp(s.dash, 1, 10);
-  const weight = clamp(s.weight, 25, 80);
+  // 與雷達圖共用同一個範圍限制（sim/parts.ts 的 clampStats）
+  const c = clampStats(s);
+  const atk = c.attack;
+  const def = c.defense;
+  const sta = c.stamina;
+  const bur = c.burst;
+  const dash = c.dash;
+  const weight = c.weight;
   return {
     radius: 0.28 + 0.0015 * weight,
     mass: 0.5 + weight / 80,

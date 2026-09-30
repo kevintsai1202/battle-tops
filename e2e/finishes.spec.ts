@@ -3,6 +3,7 @@ import { test, type Page } from '@playwright/test';
 /**
  * 停轉倒下與出場飛出兩種終結動畫的畫面（爆裂在 battle.spec.ts 已截圖）。
  * 瀏覽器裡的對戰受影格時間影響不完全可重現，所以等到想要的終結方式出現為止（最多 8 回合）。
+ * headless 軟體渲染時一回合要 2～3 分鐘牆鐘時間（撞擊特寫與必殺 cut-in 都會放慢時間），等待上限要留寬。
  */
 
 type Dbg = { counters: { finishes: number }; lastFinish: string | null; round: number };
@@ -16,7 +17,7 @@ async function shootFinish(page: Page, url: string, want: string, file: string):
   await page.goto(url);
   let seen = 0;
   for (let i = 0; i < 8; i++) {
-    await page.waitForFunction((n) => (window as any).__game.debug().counters.finishes > n, seen, { timeout: 150_000, polling: 250 });
+    await page.waitForFunction((n) => (window as any).__game.debug().counters.finishes > n, seen, { timeout: 300_000, polling: 250 });
     const d = await dbg(page);
     seen = d.counters.finishes;
     console.log(`第 ${d.round} 回合終結：${d.lastFinish}`);
@@ -32,7 +33,7 @@ async function shootFinish(page: Page, url: string, want: string, file: string):
 }
 
 test('停轉倒下動畫（鐵壁龜 vs 疾風鳳，幾乎都是停轉）', async ({ page }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000);
   await shootFinish(page, './?demo=1&seed=11&p=turtle&c=gale', 'spin', 'e2e/screenshots/21-spin-finish.png');
 });
 

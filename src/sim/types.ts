@@ -1,3 +1,5 @@
+import type { StockParts } from './parts';
+
 /** 地面平面上的 2D 向量（x、z 對應 three.js 的水平座標） */
 export type V2 = { x: number; z: number };
 
@@ -29,8 +31,33 @@ export interface BaseStats {
   dash: number;
 }
 
-/** 攻擊環外形：鋸齒刃、圓厚凸塊、薄翼、獠牙 */
-export type LayerShape = { kind: 'saw' | 'bumps' | 'wings' | 'fangs'; n: number; depth: number };
+/**
+ * 攻擊環外形的一組凸起：n 個平均分布，第一個在 phase 度，每個角寬 width 度、
+ * 高度 height（佔半徑的比例，負值為凹口）、偏斜 skew（-1～1，峰值往旋轉前方偏，做出鋸齒或前傾的刃）。
+ */
+export interface Lobe {
+  n: number;
+  phase: number;
+  width: number;
+  height: number;
+  skew?: number;
+}
+
+/**
+ * 陀螺外觀（參考原型的配色與俯視輪廓，資料來源見 docs/design.md「外觀」）：
+ * 攻擊環（主色）上疊一層較小的第二層（副色，像能量環或透明件），下面是金屬盤與軸心。
+ */
+export interface TopLook {
+  /** 攻擊環主色、第二層副色、金屬件顏色、軸心外殼顏色 */
+  primary: number;
+  secondary: number;
+  metal: number;
+  tip: number;
+  /** 攻擊環輪廓（凸起疊加） */
+  ring: Lobe[];
+  /** 第二層輪廓 */
+  inner: Lobe[];
+}
 
 /** 必殺技觸發時對自己或對手套用的暫時倍率（沒寫的欄位視為 1 或不啟用） */
 export interface BuffMods {
@@ -105,6 +132,11 @@ export interface SpecialDef {
   descZh: string;
   cue: SpecialCue;
   steps: SpecialStep[];
+  /**
+   * 集氣時間（秒，5～10）：一般對戰中大約多久集滿必殺量表。越強的必殺越慢。
+   * 量表同時靠時間與撞擊累積，兩者都除以這個值（見 sim/physics.ts 的 addCharge）。
+   */
+  charge: number;
 }
 
 /** 陀螺規格（不變的數值）：基本屬性與由屬性推導出的物理能力值 */
@@ -121,10 +153,16 @@ export interface TopSpec {
   spinDir: 1 | -1;
   /** 紋章字（頂部晶片與小圖示） */
   emblem: string;
-  /** 攻擊環外形 */
-  shape: LayerShape;
-  /** 基本屬性 */
+  /** 外觀：配色與攻擊環輪廓 */
+  look: TopLook;
+  /** 基本屬性（攻擊環 + 目前裝的盤與軸，限制在合法範圍） */
   stats: BaseStats;
+  /** 攻擊環本身的屬性（= 原廠屬性 − 原廠盤 − 原廠軸；可能超出 1～10，只用來組裝） */
+  ring: BaseStats;
+  /** 原廠盤與原廠軸 */
+  stock: StockParts;
+  /** 目前裝的盤與軸（原廠組合時等於 stock） */
+  parts: StockParts;
   special: SpecialDef;
   /** 以下為推導值 —— 半徑（世界單位） */
   radius: number;
@@ -198,6 +236,8 @@ export type SimEvent =
   | { type: 'wall'; pos: V2; intensity: number; id: number }
   | { type: 'finish'; finish: FinishType; loser: number; pos: V2 }
   | { type: 'special'; id: number; top: TopId }
+  /** 快甩衝刺（手機）：dir 為衝刺方向 */
+  | { type: 'dash'; id: number; pos: V2; dir: V2 }
   | { type: 'hazard'; kind: HazardKind; pos: V2; intensity: number };
 
 /** 一回合的結果 */

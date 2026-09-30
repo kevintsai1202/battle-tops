@@ -21,7 +21,7 @@
           <div class="bar burst"><i></i></div>
           <div class="label">必殺</div>
           <div class="bar special"><i></i></div>
-          <div class="ready">必殺 READY ▶ <span class="kb">SPACE</span><span class="tc">右下按鈕</span></div>
+          <div class="ready">必殺 READY ▶ <span class="kb">SPACE</span><span class="tc">三指觸控</span></div>
         </div>
         <div class="score">
           <span class="s0">0</span><em>-</em><span class="s1">0</span>
@@ -101,13 +101,11 @@
       </section>
 
       <div id="audio-hint" hidden>🔊 クリックで音声ON／點擊畫面開啟聲音</div>
-      <!-- 手機觸控操作：左下搖桿、右下必殺按鈕 -->
-      <div id="touch" hidden>
-        <div class="stick"><div class="knob"></div></div>
-        <button type="button" class="special-btn" aria-label="必殺技"><span>必殺</span></button>
-      </div>
+      <!-- 手機觸控操作：畫面任意處滑動推移（圓圈 = 按下處、圓點 = 手指）、快甩衝刺、三指觸控必殺 -->
+      <div id="swipe" hidden><div class="ring"></div><div class="dot"></div></div>
+      <div id="touch-hint" hidden></div>
 
-      <div id="help"><span class="kb">WASD／方向鍵：推移陀螺　SPACE：必殺技　M：音樂開關</span><span class="tc">左下搖桿：推移　右下按鈕：必殺技</span></div>
+      <div id="help"><span class="kb">WASD／方向鍵：推移陀螺　SPACE：必殺技　M：音樂開關</span><span class="tc">滑動：推移　快甩：衝刺　三指觸控：必殺技</span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

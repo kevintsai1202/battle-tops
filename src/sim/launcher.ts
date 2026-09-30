@@ -62,6 +62,17 @@ export function measurePull(samples: PullSample[], scale: number): PullMetrics {
   return { length, speed, aim };
 }
 
+/** 拉條取樣保留的秒數（按著不動太久時，陣列不會一直長） */
+export const PULL_KEEP = 1.5;
+
+/**
+ * 丟掉太舊的拉條取樣（就地修改）：只丟中間的舊點，起點（按下的位置）一定保留，
+ * 否則拉得很慢時長度會只從最近幾點算起。
+ */
+export function trimPullSamples(samples: PullSample[], now: number, keep: number = PULL_KEEP): void {
+  while (samples.length > 2 && samples[1].t < now - keep) samples.splice(1, 1);
+}
+
 /** 拉條品質 0..1：速度佔 55%、長度佔 45% */
 export function pullQuality(m: PullMetrics): number {
   return clamp01(0.45 * m.length + 0.55 * m.speed);

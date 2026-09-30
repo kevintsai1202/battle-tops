@@ -6,8 +6,10 @@ export type MobileDbg = {
   touchMode: boolean;
   fov: number;
   director: { mode: string };
-  counters: { specials: number };
-  stick: { x: number; y: number };
+  counters: { specials: number; dashes: number };
+  /** 觸控滑動的推移向量與快甩次數 */
+  swipe: { x: number; y: number };
+  flicks: number;
   tops: { control: { x: number; z: number } }[];
 };
 

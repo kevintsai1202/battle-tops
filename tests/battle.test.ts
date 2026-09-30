@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { BattleSim } from '../src/sim/battle';
+import { BattleSim, DASH_COOLDOWN } from '../src/sim/battle';
 import { ARENAS, ARENA_IDS, type ArenaSpec } from '../src/sim/arena';
 import { cpuThink } from '../src/sim/cpu';
 import { createRng } from '../src/sim/rng';
-import { TOP_IDS, TOP_SPECS } from '../src/sim/tops';
+import { buildSpec, TOP_IDS, TOP_SPECS } from '../src/sim/tops';
 import type { FinishType, TopId } from '../src/sim/types';
 
 const STEP = 1 / 120;
@@ -68,6 +68,19 @@ describe('BattleSim', () => {
     expect(sim.useSpecial(0)).toBe(true);
     sim.tops[0].special = 1;
     expect(sim.useSpecial(0)).toBe(false);
+  });
+
+  test('必殺技的突進速度看機動：換上低機動的軸心（例如針頭）突進得比較慢', () => {
+    /** 雷皇龍裝上指定軸心、靜止時放必殺後的速度 */
+    const dashSpeed = (driver: string | null) => {
+      const sim = new BattleSim(buildSpec('ldrago', { disk: null, driver }), TOP_SPECS.turtle, { seed: 1, launch: [0.9, 0.9] });
+      const a = sim.tops[0];
+      a.vel = { x: 0, z: 0 };
+      a.special = 1;
+      sim.useSpecial(0);
+      return Math.hypot(a.vel.x, a.vel.z);
+    };
+    expect(dashSpeed('needle')).toBeLessThan(dashSpeed(null) * 0.75);
   });
 
   test('攻擊型必殺技會往對手方向突進', () => {
@@ -147,7 +160,10 @@ describe('每顆陀螺的必殺技', () => {
     sim.tops[0].special = 1;
     sim.useSpecial(0);
     expect(sim.tops[1].hex?.mods.ctrl).toBeLessThan(1);
-    for (let i = 0; i < 120 * 3; i++) sim.step(STEP);
+    // 等到減益時間（取自必殺定義）再多 0.2 秒
+    const hex = TOP_SPECS.wolborg.special.steps.find((s) => s.op === 'hex');
+    const wait = (hex && 'time' in hex ? hex.time : 0) + 0.2;
+    for (let i = 0; i < Math.round(wait / STEP); i++) sim.step(STEP);
     expect(sim.tops[1].hex).toBeNull();
   });
 });
@@ -191,5 +207,45 @@ describe('CPU 對打耐久測試（平衡性）', () => {
       }
     });
     runAll(pairs, ARENAS[arenaId]);
+  });
+});
+
+describe('快甩衝刺（手機）', () => {
+  test('朝指定方向加速，並消耗一點轉速；發出 dash 事件', () => {
+    const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.turtle, { seed: 1, launch: [0.9, 0.9] });
+    const a = sim.tops[0];
+    a.vel = { x: 0, z: 0 };
+    const spin = a.spin;
+    expect(sim.dash(0, { x: 0, z: 1 })).toBe(true);
+    expect(a.vel.z).toBeGreaterThan(1);
+    expect(Math.abs(a.vel.x)).toBeLessThan(1e-9);
+    expect(a.spin).toBeLessThan(spin);
+    expect(sim.drainEvents().some((e) => e.type === 'dash' && e.id === 0)).toBe(true);
+  });
+
+  test('冷卻時間內不能連續衝刺，冷卻結束後可以', () => {
+    const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.turtle, { seed: 1, launch: [0.9, 0.9] });
+    expect(sim.dash(0, { x: 1, z: 0 })).toBe(true);
+    expect(sim.dash(0, { x: 1, z: 0 })).toBe(false);
+    for (let i = 0; i < Math.ceil(DASH_COOLDOWN / STEP) + 1; i++) sim.step(STEP);
+    expect(sim.dash(0, { x: 1, z: 0 })).toBe(true);
+  });
+
+  test('被終結後不能衝刺；方向長度為 0 時不衝刺', () => {
+    const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.turtle, { seed: 1, launch: [0.9, 0.9] });
+    expect(sim.dash(0, { x: 0, z: 0 })).toBe(false);
+    sim.tops[0].burst = 1;
+    sim.step(STEP);
+    expect(sim.dash(0, { x: 1, z: 0 })).toBe(false);
+  });
+
+  test('低機動的軸心衝得比較慢', () => {
+    const speed = (driver: string | null) => {
+      const sim = new BattleSim(buildSpec('ldrago', { disk: null, driver }), TOP_SPECS.turtle, { seed: 1, launch: [0.9, 0.9] });
+      sim.tops[0].vel = { x: 0, z: 0 };
+      sim.dash(0, { x: 1, z: 0 });
+      return sim.tops[0].vel.x;
+    };
+    expect(speed('needle')).toBeLessThan(speed(null));
   });
 });

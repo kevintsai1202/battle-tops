@@ -4,6 +4,8 @@ import type { BuffMods, TopSpec, TopState, V2 } from './types';
 
 /** 玩家／CPU 推移的最大加速度 */
 const CONTROL_ACCEL = 3.4;
+/** 機動 0 分時的推移倍率（10 分為 1）：機動決定推移靈活度，換低機動的軸心才有代價 */
+const CONTROL_MIN_MOBILITY = 0.4;
 /** 推移時每秒額外消耗的轉速比例 */
 const CONTROL_SPIN_COST = 0.012;
 /** 轉速衰減：常數項（rad/s²）與比例項（1/s），都會再除以持久力 */
@@ -25,8 +27,17 @@ const SPIN_LOSS = 0.008;
 /** 撞擊強度超過此值才累積爆裂量 */
 const BURST_MIN_INTENSITY = 2.6;
 const BURST_K = 0.03;
-/** 每單位撞擊強度累積的必殺量 */
-const SPECIAL_K = 0.045;
+/** 被動集氣：完全不碰撞時，在「集氣時間 × PASSIVE_FILL」秒集滿（保底，攻擊型以外的陀螺也放得出必殺） */
+export const PASSIVE_FILL = 1.3;
+/**
+ * 撞擊集氣：每單位正面衝擊速度累積的量（再除以集氣時間）。
+ * 只看法線方向的衝擊，不看表面速度差：否則左旋對右旋時表面速度互相抵銷，左旋陀螺幾乎集不到氣。
+ */
+const CLASH_CHARGE = 0.1;
+/** 單次撞擊計入集氣的衝擊速度上限（避免一次重擊就直接集滿） */
+const CLASH_CHARGE_CAP = 6;
+/** 吸轉：正面衝擊速度達到這個值才吸滿（低於此值依比例打折） */
+const STEAL_FULL_IMPACT = 4;
 /** 熔岩灼燒時的轉速衰減倍率 */
 const LAVA_HEAT = 2.2;
 /** 熔岩噴發的往外衝量（速度）與轉速損失比例 */
@@ -56,6 +67,23 @@ export function createTop(id: number, spec: TopSpec, pos: V2, vel: V2, spinRatio
     finishTime: 0,
     terrain: 'ground',
   };
+}
+
+/**
+ * 累積必殺量表：amount 以「集氣時間 1 秒」為基準，實際累積 amount ÷ 這顆陀螺的集氣時間。
+ * 本回合已經用過必殺就不再累積（每回合限用一次）。
+ */
+export function addCharge(t: TopState, amount: number): void {
+  if (t.specialUsed) return;
+  t.special = Math.min(1, t.special + amount / t.spec.special.charge);
+}
+
+/**
+ * 機動倍率：機動 10 分為 1，越低越小（下限 CONTROL_MIN_MOBILITY）。
+ * 用在推移與必殺技的突進：尖頭、針頭這類低機動的軸心推不太動、也衝不快，換軸時機動才有取捨的價值。
+ */
+export function mobility(t: TopState): number {
+  return CONTROL_MIN_MOBILITY + (1 - CONTROL_MIN_MOBILITY) * (Math.min(10, Math.max(1, t.spec.stats.dash)) / 10);
 }
 
 /** 取自己增益與對手減益的某個倍率相乘（沒設定視為 1） */
@@ -164,8 +192,8 @@ export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA):
     if (speed > 2.2) hit = { kind: 'splash', pos: { ...t.pos }, intensity: speed };
   }
 
-  // 推移輸入（冰面、減益時推不太動）
-  const ctrlK = CONTROL_ACCEL * mod(t, 'ctrl') * (0.35 + 0.65 * grip);
+  // 推移輸入（冰面、減益時推不太動；機動低的軸心，例如尖頭、針頭，也推不太動）
+  const ctrlK = CONTROL_ACCEL * mod(t, 'ctrl') * (0.35 + 0.65 * grip) * mobility(t);
   ax += t.control.x * ctrlK;
   az += t.control.z * ctrlK;
 
@@ -191,6 +219,9 @@ export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA):
   t.angle += t.spinDir * t.spin * dt;
   t.tilt = Math.min(1, Math.max(0, (WOBBLE_RATIO - nr) / (WOBBLE_RATIO - SPIN_FINISH_RATIO)));
   t.precession += (3 + 9 * t.tilt) * dt;
+
+  // 被動集氣：只要還在轉就慢慢累積
+  addCharge(t, dt / PASSIVE_FILL);
 
   for (const key of ['buff', 'hex'] as const) {
     const b = t[key];
@@ -331,21 +362,24 @@ export function resolveCollision(a: TopState, b: TopState, rng: Rng): ClashResul
       else a.burst = 0.97;
     }
   }
-  // 吸取轉速：每次撞擊吸走對手一部分轉速（左旋吸右旋時效果加倍）
+  // 吸取轉速：每次撞擊吸走對手一部分轉速（左旋吸右旋時效果加倍）。
+  // 依正面衝擊速度打折：左右旋貼身互磨時每一步都有微小接觸，不打折會疊加成大量吸轉
+  const stealK = Math.min(1, -vn / STEAL_FULL_IMPACT);
   for (const [me, opp] of [
     [a, b],
     [b, a],
   ] as const) {
     const steal = own(me, 'spinSteal');
     if (!steal) continue;
-    const k = steal * (me.spinDir !== opp.spinDir ? 2 : 1) * opp.spec.maxSpin;
+    const k = steal * (me.spinDir !== opp.spinDir ? 2 : 1) * opp.spec.maxSpin * stealK;
     const got = Math.min(opp.spin, k);
     opp.spin -= got;
     me.spin = Math.min(me.spec.maxSpin, me.spin + got * 0.7);
   }
-  const gain = SPECIAL_K * Math.max(0, intensity - 1);
-  a.special = Math.min(1, a.special + gain);
-  b.special = Math.min(1, b.special + gain);
+  // 撞擊集氣：雙方都累積，依正面衝擊速度（與旋轉方向無關）
+  const charge = CLASH_CHARGE * Math.min(CLASH_CHARGE_CAP, -vn);
+  addCharge(a, charge);
+  addCharge(b, charge);
 
   return {
     pos: { x: a.pos.x + n.x * a.spec.radius, z: a.pos.z + n.z * a.spec.radius },

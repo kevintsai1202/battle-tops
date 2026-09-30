@@ -57,6 +57,24 @@ describe('轉速衰減', () => {
   });
 });
 
+describe('推移', () => {
+  /** 在場地中央靜止、往 +x 推移一步後的速度；dash 為機動分數 */
+  const pushed = (dash: number) => {
+    const spec = { ...TOP_SPECS.wolf, stats: { ...TOP_SPECS.wolf.stats, dash } };
+    const t = createTop(0, spec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1, 1);
+    t.control = { x: 1, z: 0 };
+    integrateTop(t, 1 / 120);
+    return t.vel.x;
+  };
+
+  test('機動越高推得越動：尖頭、針頭這類低機動的軸心幾乎推不動（換軸時機動才有取捨的價值）', () => {
+    expect(pushed(10)).toBeGreaterThan(pushed(5));
+    expect(pushed(5)).toBeGreaterThan(pushed(1));
+    expect(pushed(1)).toBeGreaterThan(0);
+    expect(pushed(1) / pushed(10)).toBeLessThan(0.6);
+  });
+});
+
 /** 兩顆正面相撞的陀螺：a 在左往右、b 在右往左，彼此略微重疊 */
 function headOn(dirA: 1 | -1, dirB: 1 | -1) {
   const a = createTop(0, TOP_SPECS.wolf, { x: -0.3, z: 0 }, { x: 3, z: 0 }, 1, dirA);
@@ -130,6 +148,24 @@ describe('陀螺互撞', () => {
     resolveCollision(a, b, () => 0.5);
     expect(a.burst >= 1 && b.burst >= 1).toBe(false);
     expect(Math.max(a.burst, b.burst)).toBeGreaterThanOrEqual(1);
+  });
+
+  test('吸轉：輕輕貼著磨的接觸吸得比正面重擊少（避免每一步的貼身接觸疊加成大量吸轉）', () => {
+    /** 裝上吸轉增益的 a 以 speed 撞向 b，回傳 b 被吸走的轉速 */
+    const stolen = (speed: number) => {
+      const a = createTop(0, TOP_SPECS.ldrago, { x: -0.3, z: 0 }, { x: speed, z: 0 }, 1, -1);
+      const b = createTop(1, TOP_SPECS.wolf, { x: 0.3, z: 0 }, { x: -speed, z: 0 }, 1, 1);
+      a.buff = { from: 'ldrago', time: 2, mods: { spinSteal: 0.02 } };
+      const noSteal = createTop(1, TOP_SPECS.wolf, { x: 0.3, z: 0 }, { x: -speed, z: 0 }, 1, 1);
+      const plain = createTop(0, TOP_SPECS.ldrago, { x: -0.3, z: 0 }, { x: speed, z: 0 }, 1, -1);
+      resolveCollision(a, b, () => 0.5);
+      resolveCollision(plain, noSteal, () => 0.5);
+      return noSteal.spin - b.spin;
+    };
+    const graze = stolen(0.1);
+    const hard = stolen(3);
+    expect(graze).toBeGreaterThan(0);
+    expect(graze).toBeLessThan(hard * 0.1);
   });
 
   test('沒接觸時不處理', () => {

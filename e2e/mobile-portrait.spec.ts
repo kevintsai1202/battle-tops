@@ -20,7 +20,7 @@ test('直向手機：提示橫向遊玩、組隊與 HUD 不超出、場地視角
   await swipe(page, { x: 200, y: 250 }, { x: 170, y: 650 });
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   await expectInViewport(page, '.panel');
-  await expectInViewport(page, '#touch .special-btn');
+  await expectInViewport(page, '#touch-hint');
   // 全景鏡頭時 FOV 應被加大（16:9 設計值 50°）
   await page.waitForFunction(() => (window as any).__game.debug().director.mode === 'overview');
   await page.waitForTimeout(1500);

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { KEY_LAUNCH_CAP, keyLaunchRatio, MAX_AIM, measurePull, pullLaunchRatio, type PullSample } from '../src/sim/launcher';
+import { KEY_LAUNCH_CAP, keyLaunchRatio, MAX_AIM, measurePull, PULL_KEEP, pullLaunchRatio, trimPullSamples, type PullSample } from '../src/sim/launcher';
 
 /** 從 (x0, y0) 等速拉到 (x1, y1)，歷時 sec 秒，取樣 n 點 */
 function pull(x0: number, y0: number, x1: number, y1: number, sec: number, n = 20): PullSample[] {
@@ -68,5 +68,25 @@ describe('發射力道', () => {
   test('Space 簡易發射最高 85%', () => {
     expect(keyLaunchRatio(1)).toBe(KEY_LAUNCH_CAP);
     expect(keyLaunchRatio(0.6)).toBe(0.6);
+  });
+});
+
+describe('拉條取樣的保留範圍', () => {
+  test('只丟掉中間的舊取樣，起點一定保留：拉很慢（超過保留秒數）時長度仍從按下的位置算', () => {
+    const samples: PullSample[] = [];
+    for (let i = 0; i <= 30; i++) samples.push({ t: i * 0.1, x: 400, y: 200 + i * 10 });
+    trimPullSamples(samples, 3.0, PULL_KEEP);
+    expect(samples[0]).toEqual({ t: 0, x: 400, y: 200 });
+    expect(samples.every((s, i) => i === 0 || s.t >= 3.0 - PULL_KEEP)).toBe(true);
+    expect(measurePull(samples, SCALE).length).toBeCloseTo(measurePull([samples[0], samples[samples.length - 1]], SCALE).length, 9);
+  });
+
+  test('取樣不多時不動', () => {
+    const samples: PullSample[] = [
+      { t: 0, x: 0, y: 0 },
+      { t: 5, x: 0, y: 10 },
+    ];
+    trimPullSamples(samples, 10, PULL_KEEP);
+    expect(samples).toHaveLength(2);
   });
 });

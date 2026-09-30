@@ -1,91 +1,20 @@
 import { ARENA_IDS, ARENAS, type ArenaId } from '../sim/arena';
 import { DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
+import { equip, release, STOCK, type TeamLoadouts } from '../sim/parts';
 import { spinRatio } from '../sim/physics';
 import { currentPairing, type TeamMatch } from '../sim/team';
-import { TOP_IDS, TYPE_LABEL } from '../sim/tops';
-import type { BaseStats, FinishType, TopId, TopSpec, TopState } from '../sim/types';
+import { buildSpec, TOP_IDS, TYPE_LABEL } from '../sim/tops';
+import type { FinishType, TopId, TopSpec, TopState } from '../sim/types';
+import { $, chip, css, el, spinLabel, STAT_AXES, statScore } from './common';
+import { DetailView } from './detail';
+
+export { css } from './common';
 
 /** 終結方式的英文名稱（結果畫面用） */
 const FINISH_EN: Record<FinishType, string> = { spin: 'SPIN FINISH', over: 'OVER FINISH', burst: 'BURST FINISH' };
 
-/** 雷達圖與數值列的六項屬性（重量換算成 1～10 分顯示：30 g = 1、66 g = 10） */
-const STAT_AXES: { key: keyof BaseStats; label: string }[] = [
-  { key: 'attack', label: '攻擊' },
-  { key: 'defense', label: '防禦' },
-  { key: 'stamina', label: '持久' },
-  { key: 'weight', label: '重量' },
-  { key: 'burst', label: '爆裂抵抗' },
-  { key: 'dash', label: '機動' },
-];
-
 /** 場地選擇：五個場地加上「隨機」 */
 export type ArenaChoice = ArenaId | 'random';
-
-/** 屬性換成 0..10 的顯示分數 */
-function statScore(s: BaseStats, key: keyof BaseStats): number {
-  if (key === 'weight') return Math.max(1, Math.min(10, 1 + ((s.weight - 30) / 36) * 9));
-  return s[key];
-}
-
-const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
-
-/** 數字色碼轉 CSS */
-export function css(color: number): string {
-  return '#' + color.toString(16).padStart(6, '0');
-}
-
-/** 建立帶 class 與文字的元素 */
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text = ''): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-}
-
-/** 陣容小圖示：圓形底 + 紋章字，顏色取陀螺發光色 */
-function chip(sp: TopSpec): HTMLElement {
-  const c = el('i', 'chip', sp.emblem);
-  c.style.setProperty('--c', css(sp.glow));
-  c.title = sp.nameZh;
-  return c;
-}
-
-/** 旋轉方向的標示 */
-const spinLabel = (sp: TopSpec) => (sp.spinDir === 1 ? '右旋' : '左旋') + (sp.special.steps.some((s) => s.op === 'reverse') ? '（可切換）' : '');
-
-/**
- * 六角雷達圖（SVG）：六項基本屬性，外圈為 10 分。
- */
-function radar(sp: TopSpec): SVGSVGElement {
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '-70 -62 140 124');
-  svg.setAttribute('class', 'radar');
-  const pt = (i: number, v: number) => {
-    const a = -Math.PI / 2 + (i * Math.PI * 2) / STAT_AXES.length;
-    return [Math.cos(a) * v * 4.4, Math.sin(a) * v * 4.4];
-  };
-  for (const lv of [10, 5]) {
-    const g = document.createElementNS(NS, 'polygon');
-    g.setAttribute('points', STAT_AXES.map((_, i) => pt(i, lv).join(',')).join(' '));
-    g.setAttribute('class', 'grid');
-    svg.append(g);
-  }
-  const shape = document.createElementNS(NS, 'polygon');
-  shape.setAttribute('points', STAT_AXES.map((ax, i) => pt(i, statScore(sp.stats, ax.key)).join(',')).join(' '));
-  shape.setAttribute('class', 'val');
-  svg.append(shape);
-  STAT_AXES.forEach((ax, i) => {
-    const [x, y] = pt(i, 12.2);
-    const t = document.createElementNS(NS, 'text');
-    t.setAttribute('x', String(x));
-    t.setAttribute('y', String(y + 3));
-    t.setAttribute('text-anchor', 'middle');
-    t.textContent = ax.label.slice(0, 2);
-    svg.append(t);
-  });
-  return svg;
-}
 
 /** 陀螺卡片（延長賽三選一用）：順序徽章、名稱、類型、六項屬性條、必殺技名 */
 function buildCard(sp: TopSpec): HTMLButtonElement {
@@ -111,7 +40,7 @@ function buildCard(sp: TopSpec): HTMLButtonElement {
   return c;
 }
 
-/** 組隊畫面的陀螺小格：紋章、中文名、類型色條，左旋另外標示 */
+/** 組隊畫面的陀螺小格：3D 縮圖（還沒產生時顯示紋章，見 setTileThumb）、中文名、類型色條，左旋另外標示 */
 function buildTile(sp: TopSpec): HTMLButtonElement {
   const c = el('button', 'card tile');
   c.type = 'button';
@@ -119,29 +48,21 @@ function buildTile(sp: TopSpec): HTMLButtonElement {
   c.dataset.type = sp.type;
   c.style.setProperty('--c', css(sp.glow));
   c.title = `${sp.nameZh}（${TYPE_LABEL[sp.type]}）`;
-  c.append(el('span', 'badge'), el('i', 'emb', sp.emblem), el('span', 'nm', sp.nameZh), el('span', 'ty', TYPE_LABEL[sp.type].slice(0, 1)));
+  const img = el('img', 'thumb');
+  img.alt = '';
+  img.hidden = true;
+  const emb = el('i', 'emb', sp.emblem);
+  c.append(el('span', 'badge'), img, emb, el('span', 'nm', sp.nameZh), el('span', 'ty', TYPE_LABEL[sp.type].slice(0, 1)));
   if (sp.spinDir === -1) c.append(el('span', 'left', '左'));
   return c;
 }
 
-/** 組隊畫面右側的詳細資料：名稱、原型、雷達圖、數值、必殺技說明 */
-function fillDetail(root: HTMLElement, sp: TopSpec): void {
-  root.style.setProperty('--c', css(sp.glow));
-  const stats = el('ul', 'd-stats');
-  for (const ax of STAT_AXES) {
-    const li = el('li', '', ax.label);
-    li.append(el('b', '', ax.key === 'weight' ? `${sp.stats.weight} g` : String(sp.stats[ax.key])));
-    stats.append(li);
-  }
-  root.replaceChildren(
-    el('div', 'd-ja', sp.nameJa),
-    el('div', 'd-zh', sp.nameZh),
-    el('div', 'd-meta', `${TYPE_LABEL[sp.type]}・${spinLabel(sp)}${sp.origin ? `・原型：${sp.origin}` : '・原創'}`),
-    radar(sp),
-    stats,
-    el('div', 'd-sp', `必殺：${sp.special.nameJa}（${sp.special.nameZh}）`),
-    el('div', 'd-desc', sp.special.descZh),
-  );
+/** 小格換上 3D 縮圖（隱藏紋章字） */
+function setTileThumb(tile: HTMLElement, url: string): void {
+  const img = tile.querySelector('img') as HTMLImageElement;
+  img.src = url;
+  img.hidden = false;
+  (tile.querySelector('.emb') as HTMLElement).hidden = true;
 }
 
 /** 組隊畫面的參數 */
@@ -152,9 +73,12 @@ export interface TeamSelectOptions {
   arena: ArenaChoice;
   onDifficulty: (d: DifficultyId) => void;
   onArena: (a: ArenaChoice) => void;
-  /** 游標移動時呼叫（用來換 3D 預覽） */
-  onHover: (t: TopId) => void;
-  onConfirm: (team: TopId[]) => void;
+  /** 游標移動或換零件時呼叫（spec 已套用零件；用來換 3D 預覽與絕招示範） */
+  onHover: (spec: TopSpec) => void;
+  /** 要一張 3D 縮圖（dataURL）：有快取時立刻回呼，否則產生後回呼 */
+  thumb: (spec: TopSpec, cb: (url: string) => void) => void;
+  /** 出陣：隊伍（順序即出場順序）與換上的備用零件 */
+  onConfirm: (team: TopId[], loadouts: TeamLoadouts) => void;
 }
 
 /** 拉條畫面狀態（game 每幀傳進來） */
@@ -174,6 +98,8 @@ export interface CordView {
 export class Hud {
   private bannerTimer = 0;
   private selectKeys: ((e: KeyboardEvent) => void) | null = null;
+  /** 組隊畫面的詳細資料（含絕招示範舞台） */
+  private detail: DetailView | null = null;
 
   /**
    * 顯示標題畫面，點擊後呼叫 onStart。
@@ -196,7 +122,8 @@ export class Hud {
   /**
    * 組隊畫面：從全部陀螺挑三顆，點選的順序就是出場順序（小格右上角顯示 1、2、3）。
    * 點小格加入或取消；湊滿 3 顆後按「出陣！」。CPU 的三顆公開顯示，順序保密。
-   * 右側顯示游標所在陀螺的屬性雷達圖與必殺技說明。上方可切換難度與場地。
+   * 右側顯示游標所在陀螺的外觀與絕招示範、屬性雷達圖、零件選單與必殺技說明；隊伍中的陀螺可以換盤與軸，
+   * 雷達圖與數值立刻更新。備用零件每種一件，陀螺離開隊伍時它身上的備用零件自動歸還。上方可切換難度與場地。
    * 鍵盤：方向鍵移動、Space 選取／取消、Enter 選取（滿 3 顆時出陣）、Backspace 退回上一顆、
    * 1／2／3 切換難度、Q／E 切換場地。
    */
@@ -240,7 +167,24 @@ export class Hud {
     setArena(arena);
 
     const cards = $('.cards', root);
-    const detail = $('.detail', root);
+    /** 隊伍換上的備用零件 */
+    let loadouts: TeamLoadouts = {};
+    /** 套用零件後的規格 */
+    const specOf = (t: TopId) => buildSpec(t, loadouts[t] ?? STOCK);
+    const detail = new DetailView($('.detail', root), (slot, part) => {
+      const t = TOP_IDS[idx];
+      if (!picks.includes(t)) return;
+      try {
+        loadouts = equip(loadouts, t, o.specs[t].stock, slot, part);
+      } catch {
+        // 零件已被隊友使用（選單已停用該選項，正常不會發生）：維持原狀
+      }
+      const sp = specOf(t);
+      detail.show(sp, true, loadouts);
+      o.onHover(sp);
+      refreshThumb(idx);
+    });
+    this.detail = detail;
     // CPU 陣容：依名鑑順序顯示，不洩漏出場順序
     $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
     const go = $<HTMLButtonElement>('.go', root);
@@ -265,18 +209,31 @@ export class Hud {
       );
       go.disabled = picks.length !== 3;
     };
+    /** 更新某一格的 3D 縮圖（換零件後軸心的外形會變） */
+    const refreshThumb = (i: number) => {
+      const tile = els[i];
+      if (tile) o.thumb(specOf(TOP_IDS[i]), (url) => setTileThumb(tile, url));
+    };
     const setIdx = (i: number) => {
       idx = (i + TOP_IDS.length) % TOP_IDS.length;
-      o.onHover(TOP_IDS[idx]);
-      fillDetail(detail, o.specs[TOP_IDS[idx]]);
+      const t = TOP_IDS[idx];
+      const sp = specOf(t);
+      o.onHover(sp);
+      detail.show(sp, picks.includes(t), loadouts);
       refresh();
       els[idx]?.scrollIntoView({ block: 'nearest' });
     };
     const toggle = (i: number) => {
       const t = TOP_IDS[i];
       const n = picks.indexOf(t);
-      if (n >= 0) picks.splice(n, 1);
-      else if (picks.length < 3) picks.push(t);
+      if (n >= 0) {
+        picks.splice(n, 1);
+        // 離開隊伍：身上的備用零件歸還
+        if (loadouts[t]) {
+          loadouts = release(loadouts, t);
+          refreshThumb(i);
+        }
+      } else if (picks.length < 3) picks.push(t);
       setIdx(i);
     };
     const confirm = () => {
@@ -284,7 +241,9 @@ export class Hud {
       if (this.selectKeys) window.removeEventListener('keydown', this.selectKeys);
       this.selectKeys = null;
       root.hidden = true;
-      o.onConfirm([...picks]);
+      this.detail = null;
+      document.body.classList.remove('selecting');
+      o.onConfirm([...picks], { ...loadouts });
     };
     /** 目前一列有幾格（依實際排版計算，給上下鍵用） */
     const columns = () => {
@@ -296,6 +255,7 @@ export class Hud {
     cards.replaceChildren();
     TOP_IDS.forEach((id, i) => {
       const c = buildTile(o.specs[id]);
+      o.thumb(o.specs[id], (url) => setTileThumb(c, url));
       c.addEventListener('pointerenter', (e) => {
         if (e.pointerType === 'mouse') setIdx(i);
       });
@@ -312,6 +272,8 @@ export class Hud {
       confirm();
     };
     this.selectKeys = (e: KeyboardEvent) => {
+      // 零件選單有焦點時，方向鍵與 Enter 交給選單本身
+      if ((e.target as HTMLElement | null)?.tagName === 'SELECT') return;
       const k = e.key;
       if (k === 'ArrowLeft' || k === 'a') setIdx(idx - 1);
       else if (k === 'ArrowRight' || k === 'd') setIdx(idx + 1);
@@ -329,8 +291,12 @@ export class Hud {
         if (picks.length === 3) confirm();
         else toggle(idx);
       } else if (k === 'Backspace' && picks.length) {
-        picks.pop();
-        refresh();
+        const t = picks.pop()!;
+        if (loadouts[t]) {
+          loadouts = release(loadouts, t);
+          refreshThumb(TOP_IDS.indexOf(t));
+        }
+        setIdx(idx);
       } else if (k === '1' || k === '2' || k === '3') {
         setDiff(DIFFICULTY_IDS[Number(k) - 1]);
       } else if (k === 'q' || k === 'e') {
@@ -340,7 +306,19 @@ export class Hud {
     };
     window.addEventListener('keydown', this.selectKeys);
     root.hidden = false;
+    // 組隊中隱藏對戰操作說明（手機上會蓋住出陣按鈕）
+    document.body.classList.add('selecting');
     setIdx(0);
+  }
+
+  /** 組隊畫面絕招示範的畫布（組隊畫面沒開時為 null） */
+  stageCanvas(): HTMLCanvasElement | null {
+    return this.detail?.canvas ?? null;
+  }
+
+  /** 絕招示範放招時，在舞台上閃出招式名 */
+  stageFlash(text: string): void {
+    this.detail?.flash(text);
   }
 
   /** 延長賽：從自己的三顆挑一顆出戰（點一下即決定；鍵盤 ← → 移動、Enter 決定） */
