@@ -17,8 +17,8 @@ const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
 const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|Enter|Backspace|Esc|Q|E|M)\b/g;
 /** 檢查英文字的區塊：對戰中的大字、HUD、擬聲字、必殺 cut-in、發射台、延長賽、結果畫面 */
 const BATTLE_AREAS = ['banner', 'hud', 'fx-layer', 'cutin', 'launch', 'overtime', 'result'];
-/** 線上對戰用本機伺服器，不連正式伺服器 */
-const SERVER = 'ws://localhost:8787/ws';
+/** 線上對戰預設連本機伺服器；對線上網址跑時用環境變數 GAME_SERVER 指定（與 online.spec 相同） */
+const SERVER = process.env.GAME_SERVER ?? 'ws://localhost:8787/ws';
 
 type Dbg = {
   state: string;
