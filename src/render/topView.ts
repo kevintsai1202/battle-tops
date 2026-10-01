@@ -267,6 +267,8 @@ export class TopView {
   private fallAxis: THREE.Vector3 | null = null;
   /** 所在場地（貼地高度用） */
   private readonly arena: ArenaSpec;
+  /** 雙層戰鬥盤中央降下的程度（最近一次 update 傳入；零件掉落時的地面也用它） */
+  private level = 0;
   private readonly glow: THREE.Color;
 
   constructor(scene: THREE.Scene, spec: TopSpec, arena: ArenaSpec = ARENA) {
@@ -358,14 +360,17 @@ export class TopView {
     this.wobbleAxis.set(-normal.z, 0, normal.x).normalize();
   }
 
-  /** 依模擬狀態更新外觀；dt 為（已套用慢動作的）模擬時間 */
-  update(t: TopState, dt: number, time: number): void {
+  /** 依模擬狀態更新外觀；dt 為（已套用慢動作的）模擬時間；level 為雙層戰鬥盤中央降下的程度（陀螺貼著凹槽的地面） */
+  update(t: TopState, dt: number, time: number, level = 0): void {
     const R = this.arena.radius;
     const r = Math.hypot(t.pos.x, t.pos.z);
     const ratio = t.spin / t.spec.maxSpin;
-    let y = floorHeight(Math.min(r, R), this.arena);
+    this.level = level;
+    let y = floorHeight(Math.min(r, R), this.arena, level);
+    /** 從出場口飛出去（場外終結、極限終結） */
+    const ringOut = t.finish === 'over' || t.finish === 'xtreme';
 
-    if (t.finish === 'over' && r > R - t.spec.radius) {
+    if (ringOut && r > R - t.spec.radius) {
       // 飛出場外：先往上拋再落下
       const ft = t.finishTime;
       y += 0.9 * ft - 5 * ft * ft;
@@ -413,7 +418,7 @@ export class TopView {
     const speed = Math.hypot(t.vel.x, t.vel.z);
     this.trail.update(
       new THREE.Vector3(t.pos.x, y + 0.03, t.pos.z),
-      this.bursted || (t.finish === 'over' && r > R) ? 0 : Math.min(0.09, speed * 0.02) * (0.4 + ratio),
+      this.bursted || (ringOut && r > R) ? 0 : Math.min(0.09, speed * 0.02) * (0.4 + ratio),
     );
 
     this.updateDebris(dt);
@@ -441,7 +446,7 @@ export class TopView {
       d.vel.y -= 9.8 * dt;
       d.obj.position.addScaledVector(d.vel, dt);
       const r = Math.hypot(d.obj.position.x, d.obj.position.z);
-      const floor = r < this.arena.radius ? floorHeight(r, this.arena) + 0.03 : -1.15;
+      const floor = r < this.arena.radius ? floorHeight(r, this.arena, this.level) + 0.03 : -1.15;
       if (d.obj.position.y < floor) {
         d.obj.position.y = floor;
         d.vel.y = Math.abs(d.vel.y) * 0.35;

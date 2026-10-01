@@ -6,7 +6,7 @@ import { confirmArrange, pickTeam, pickTops } from './team.helpers';
  * 語言切換（日文版／全中文版）：
  * 1. 桌機：標題畫面切到中文（不會開始遊戲），重新整理後仍是中文；組隊兩步、發射、延長賽、對戰、終結、結果畫面全中文：
  *    整段過程畫面上出現過的文字（含一閃即逝的橫幅、擬聲字、必殺 cut-in）都沒有日文假名，對戰相關的字也沒有英文（按鍵名稱除外）；
- *    語音只載入 voice/zh/ 的 48 句中文音檔，播出的是中文語音。
+ *    語音只載入 voice/zh/ 的 49 句中文音檔，播出的是中文語音。
  * 2. 桌機：語音已經開始用之後（進過線上房間）在標題畫面切換，語音跟著換語言；切回日文後畫面還原成日文版並記住。
  * 3. 手機橫向、直向：切換鈕在畫面內、觸控切換；組隊兩步全中文且不超出畫面。
  */
@@ -129,7 +129,7 @@ test('桌機：切到中文並記住；組隊、發射、延長賽、對戰到�
   await page.locator('#title .lang-switch [data-lang="zh"]').click();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hant-TW');
   await expect(page.locator('#title h1')).toHaveText('戰鬥陀螺');
-  await expect(page.locator('#title .blink')).toHaveText('點擊開始（電腦對戰）');
+  await expect(page.locator('#title .to-cpu')).toHaveText('電腦對戰');
   await expect(page.locator('#title .to-online')).toHaveText('線上對戰（找朋友）');
   await expect(page).toHaveTitle('戰鬥陀螺');
   await expect(page.locator('#title')).toBeVisible();
@@ -144,7 +144,7 @@ test('桌機：切到中文並記住；組隊、發射、延長賽、對戰到�
   await clearTexts(page);
 
   // 組隊第 1 步
-  await page.locator('#title .blink').click();
+  await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select')).toBeVisible();
   await expect(page.locator('#select h2 > span')).toHaveText('組成隊伍！');
   await expect(page.locator('#select .difficulty button[data-id="easy"]')).toHaveText('簡單', { useInnerText: true });
@@ -215,11 +215,11 @@ test('桌機：切到中文並記住；組隊、發射、延長賽、對戰到�
   // 終結的大字是中文
   expect(texts.some(([id, t]) => id === 'banner' && /^(旋轉|場外|爆裂)終結！/.test(t))).toBe(true);
 
-  // 語音：只載入中文的 48 句，播出開場、倒數、發射、終結與勝負宣告
+  // 語音：只載入中文的 49 句，播出開場、倒數、發射、終結與勝負宣告
   await expect.poll(async () => (await dbg(page)).voice.played, { timeout: 10_000 }).toBeGreaterThanOrEqual(7);
   const d = await dbg(page);
-  expect(d.voice).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 48 });
-  expect(voiceFiles.filter((p) => p.includes('/voice/zh/')).length).toBe(48);
+  expect(d.voice).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 49 });
+  expect(voiceFiles.filter((p) => p.includes('/voice/zh/')).length).toBe(49);
   expect(voiceFiles.filter((p) => !p.includes('/voice/zh/'))).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -233,28 +233,28 @@ test('桌機：語音開始用之後在標題切換，語音跟著換；切回�
   await page.locator('#title .to-online').click();
   await expect(page.locator('#online')).toBeVisible();
   await expect(page.locator('#online h2 > span')).toHaveText('オンライン対戦');
-  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 48 });
+  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 49 });
   await page.locator('#online .ol-back').click();
   await expect(page.locator('#title')).toBeVisible();
 
   // 切到中文：語音換成中文並在背景載入
   await page.locator('#title .lang-switch [data-lang="zh"]').click();
-  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 48 });
+  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 49 });
   await page.locator('#title .to-online').click();
   await expect(page.locator('#online h2 > span')).toHaveText('線上對戰');
   await page.locator('#online .ol-back').click();
 
   // 切回日文：語音換回日文（已經載過，立刻可用），畫面恢復日文版
   await page.locator('#title .lang-switch [data-lang="ja"]').click();
-  expect((await dbg(page)).voice).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 48 });
+  expect((await dbg(page)).voice).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 49 });
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
   await expect(page.locator('#title h1')).toHaveText('BATTLE TOPS');
-  await expect(page.locator('#title .blink')).toHaveText('クリックしてスタート ／ 點擊開始（CPU 對戰）');
+  await expect(page.locator('#title .to-cpu')).toHaveText('CPU 対戦 ／ 電腦對戰');
 
   // 重新整理後仍是日文；組隊畫面是原本的日文版（難度下方附中文）
   await page.reload();
   await expect(page.locator('#title h1')).toHaveText('BATTLE TOPS');
-  await page.locator('#title .blink').click();
+  await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select h2 > span')).toHaveText('チームを組め！');
   await expect(page.locator('#select .difficulty button[data-id="easy"]')).toHaveText('かんたん簡單', { useInnerText: false });
   await expect(page.locator('#select .difficulty button[data-id="easy"] small')).toBeVisible();
@@ -283,7 +283,7 @@ test.describe('手機橫向', () => {
     await expectNoHorizontalScroll(page);
     await page.screenshot({ path: 'e2e/screenshots/96-lang-mobile-title.png' });
 
-    await page.locator('#title .blink').tap();
+    await page.locator('#title .to-cpu').tap();
     await expect(page.locator('#select')).toBeVisible();
     await expectNoKanaVisible(page, '手機組隊第 1 步');
     await expectInViewport(page, '#select .go');

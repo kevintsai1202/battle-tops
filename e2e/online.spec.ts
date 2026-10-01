@@ -141,10 +141,10 @@ test('線上對戰：兩個分頁建房、加入、組隊、對戰、斷線重�
   await a.screenshot({ path: 'e2e/screenshots/80-online-room.png' });
   step(`A 建房 ${code}`);
 
-  // B 開分享連結加入（點標題任意處就進線上、房號已帶入）
+  // B 開分享連結加入（按標題的「線上對戰」就進線上、房號已帶入）
   await b.goto(link);
   step('B 開好分享連結');
-  await b.locator('#title').click();
+  await b.locator('#title .to-online').click();
   await expect(b.locator('#online .ol-code')).toHaveValue(code);
   await b.locator('#online .ol-name input').fill('Bob');
   await b.locator('#online .ol-join-btn').click();
@@ -421,7 +421,9 @@ test('組隊第 2 步限時：沒按準備完成，時間到就用目前的順�
   await b.locator('#online .ol-join-btn').tap();
   step(`B 用房號加入 ${code}`);
 
-  // 第 1 步：雙方選三顆（B 用觸控）
+  // 第 1 步：雙方選三顆（B 用觸控）。手機模擬的 B 比較慢，加入訊息可能幾秒後才送到，先等雙方都進到組隊畫面
+  await expect(a.locator('#select')).toBeVisible({ timeout: 30_000 });
+  await expect(b.locator('#select')).toBeVisible({ timeout: 30_000 });
   await pickTops(a, ['blaze', 'turtle', 'gale']);
   await pickTops(b, ['wolf', 'orion', 'pegasus'], true);
 

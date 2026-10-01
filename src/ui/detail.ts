@@ -1,23 +1,18 @@
 import { lang, specialName, topName } from '../i18n';
-import { DISK_IDS, DRIVER_IDS, PARTS, spareHolder, type PartId, type PartSlot, type TeamLoadouts } from '../sim/parts';
+import { PARTS, type PartSlot } from '../sim/parts';
 import { TOP_SPECS, TYPE_LABEL } from '../sim/tops';
 import type { TopId, TopSpec } from '../sim/types';
 import { chargeLabel, css, el, radar, radarPoints, spinLabel, STAT_AXES } from './common';
-
-/** 欄位的中文名 */
-const SLOT_LABEL: Record<PartSlot, string> = { disk: '盤', driver: '軸' };
-
-/** 零件的顯示名稱（名稱＋簡碼） */
-const partName = (id: PartId) => `${PARTS[id].nameZh}（${PARTS[id].code}）`;
+import { SLOT_LABEL } from './partMenu';
 
 /**
  * 組隊畫面右側的詳細資料：
  * - 上方是透明的「舞台」窗，主場景的鏡頭會對準這裡播放外觀與絕招示範（見 game.ts 的 showcase）。
  * - 名稱（日文版是日文名＋中文名，中文版只有中文名）、類型、原型；雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
- * - 盤與軸的選單：隊伍中的陀螺才能換；備用零件每種一件，被隊友用掉的會標出來且不能選
- *   （組隊第 1 步只看介紹，建立時 parts: false 不顯示選單；換零件在第 2 步）。
+ * - 目前的盤與軸（opts.parts 為 false 時不顯示，例如組隊第 1 步）；換零件用各畫面的「盤」「軸」按鈕（ui/partMenu.ts）。
  * - 必殺技名稱、說明與集氣速度。
- * 元素只建立一次，之後就地更新：換零件時不會把正在操作的選單整個重建。
+ * 每一段的高度固定（名稱一行、原型說明兩行、必殺說明固定行數且內部捲動），切換陀螺時面板與裡面的版面都不會跳動。
+ * 元素只建立一次，之後就地更新。
  */
 export class DetailView {
   readonly root: HTMLElement;
@@ -30,15 +25,14 @@ export class DetailView {
   private readonly meta: HTMLElement;
   private readonly radar: SVGSVGElement;
   private readonly stats: HTMLUListElement;
-  private readonly selects: Record<PartSlot, HTMLSelectElement>;
-  private readonly partNote: HTMLElement;
+  private readonly parts: HTMLElement;
   private readonly sp: HTMLElement;
   private readonly charge: HTMLElement;
   private readonly desc: HTMLElement;
   private flashTimer = 0;
 
-  /** onChange：玩家在選單換零件（part 為 null 表示換回原廠）；opts.parts 為 false 時不顯示零件選單 */
-  constructor(root: HTMLElement, onChange?: (slot: PartSlot, part: PartId | null) => void, opts: { parts?: boolean } = {}) {
+  /** opts.parts 為 false 時不顯示目前的零件（組隊第 1 步只看原廠介紹） */
+  constructor(root: HTMLElement, opts: { parts?: boolean } = {}) {
     this.root = root;
     this.stage = el('div', 'd-stage');
     this.canvas = el('canvas', 'd-canvas');
@@ -49,34 +43,16 @@ export class DetailView {
     this.meta = el('div', 'd-meta');
     this.radar = radar(TOP_SPECS.blaze.stats);
     this.stats = el('ul', 'd-stats');
-    const parts = el('div', 'd-parts');
-    const mk = (slot: PartSlot) => {
-      const row = el('label', 'd-part');
-      const s = el('select', '');
-      s.dataset.slot = slot;
-      s.addEventListener('change', () => {
-        onChange?.(slot, s.value === '' ? null : s.value);
-        s.blur();
-      });
-      row.append(el('span', 'd-slot', SLOT_LABEL[slot]), s);
-      parts.append(row);
-      return s;
-    };
-    this.selects = { disk: mk('disk'), driver: mk('driver') };
-    this.partNote = el('div', 'd-note');
-    parts.append(this.partNote);
-    parts.hidden = opts.parts === false;
+    this.parts = el('div', 'd-parts');
+    this.parts.hidden = opts.parts === false;
     this.sp = el('div', 'd-sp');
     this.charge = el('div', 'd-charge');
     this.desc = el('div', 'd-desc');
-    root.replaceChildren(this.stage, this.ja, this.zh, this.meta, this.radar, this.stats, parts, this.sp, this.charge, this.desc);
+    root.replaceChildren(this.stage, this.ja, this.zh, this.meta, this.radar, this.stats, this.parts, this.sp, this.charge, this.desc);
   }
 
-  /**
-   * 顯示一顆陀螺（spec 為套用目前零件後的規格）。
-   * picked：是否在隊伍中（才能換零件）；loadouts：隊伍的備用零件狀態（判斷哪些零件被隊友用掉）。
-   */
-  show(spec: TopSpec, picked: boolean, loadouts: TeamLoadouts): void {
+  /** 顯示一顆陀螺（spec 為套用目前零件後的規格） */
+  show(spec: TopSpec): void {
     const stock = TOP_SPECS[spec.id];
     this.root.style.setProperty('--c', css(spec.glow));
     this.root.dataset.id = spec.id;
@@ -84,6 +60,7 @@ export class DetailView {
     this.zh.textContent = spec.nameZh;
     this.zh.hidden = lang() === 'zh';
     this.meta.textContent = `${TYPE_LABEL[spec.type]}・${spinLabel(spec)}${spec.origin ? `・原型：${spec.origin}` : '・原創'}`;
+    this.meta.title = this.meta.textContent;
 
     // 雷達圖：目前屬性；換過零件時疊上原廠輪廓
     const modified = spec !== stock;
@@ -105,31 +82,21 @@ export class DetailView {
       }),
     );
 
-    // 零件選單
-    for (const slot of ['disk', 'driver'] as PartSlot[]) {
-      const s = this.selects[slot];
-      const ids = slot === 'disk' ? DISK_IDS : DRIVER_IDS;
-      const opts = [new Option(`原廠 ${partName(stock.stock[slot])}`, '')];
-      for (const id of ids) {
-        if (id === stock.stock[slot]) continue;
-        const holder = spareHolder(loadouts, id);
-        const taken = holder !== null && holder !== spec.id;
-        const o = new Option(taken ? `${partName(id)}・裝在${TOP_SPECS[holder!].nameZh}` : partName(id), id);
-        o.disabled = taken;
-        opts.push(o);
-      }
-      s.replaceChildren(...opts);
-      s.value = loadouts[spec.id]?.[slot] ?? '';
-      s.disabled = !picked;
-      s.title = PARTS[spec.parts[slot]].descZh;
-    }
-    this.partNote.textContent = picked
-      ? `${PARTS[spec.parts.disk].descZh} ${PARTS[spec.parts.driver].descZh}`
-      : '加入隊伍後可以換盤和軸（備用零件每種只有一件，同隊不能重複）。';
+    // 目前的盤與軸（換過的標成發光色）
+    this.parts.replaceChildren(
+      ...(['disk', 'driver'] as PartSlot[]).map((slot) => {
+        const id = spec.parts[slot];
+        const changed = id !== stock.stock[slot];
+        const s = el('span', changed ? 'changed' : '', `${SLOT_LABEL[slot]}：${PARTS[id].nameZh}（${PARTS[id].code}）${changed ? '' : '・原廠'}`);
+        s.title = PARTS[id].descZh;
+        return s;
+      }),
+    );
 
     this.sp.textContent = lang() === 'zh' ? `必殺：${spec.special.nameZh}` : `必殺：${specialName(spec)}（${spec.special.nameZh}）`;
     this.charge.textContent = chargeLabel(spec);
     this.desc.textContent = spec.special.descZh;
+    this.desc.scrollTop = 0;
   }
 
   /** 舞台上閃出招式名（絕招示範放招時） */

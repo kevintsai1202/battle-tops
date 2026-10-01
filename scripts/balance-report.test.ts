@@ -19,7 +19,7 @@ test('平衡報表', { timeout: 1_800_000 }, () => {
   const arena = ARENAS[(env.ARENA ?? 'practice') as ArenaId];
   const games = Number(env.GAMES ?? 10);
   const rows: string[] = [];
-  const total: Record<string, number> = { spin: 0, over: 0, burst: 0, none: 0 };
+  const total: Record<string, number> = { spin: 0, over: 0, burst: 0, xtreme: 0, none: 0 };
   /** 每顆陀螺的 [勝, 場]（不含鏡像對戰） */
   const record = new Map<string, [number, number]>(TOP_IDS.map((id) => [id, [0, 0]]));
   /** 每顆陀螺的集氣紀錄：每回合集滿的時間（沒集滿不記）、放出必殺的回合數、回合數 */
@@ -28,7 +28,7 @@ test('平衡報表', { timeout: 1_800_000 }, () => {
   let count = 0;
   for (const a of TOP_IDS) {
     for (const b of TOP_IDS) {
-      const agg = { spin: 0, over: 0, burst: 0, none: 0, t: 0, winA: 0, draw: 0 };
+      const agg = { spin: 0, over: 0, burst: 0, xtreme: 0, none: 0, t: 0, winA: 0, draw: 0 };
       for (let seed = 1; seed <= games; seed++) {
         const rng = createRng(seed * 7 + 3);
         const sim = new BattleSim(TOP_SPECS[a], TOP_SPECS[b], { seed, launch: [0.8 + 0.2 * rng(), 0.8 + 0.2 * rng()], arena });
@@ -69,7 +69,7 @@ test('平衡報表', { timeout: 1_800_000 }, () => {
           record.get(loser)![1]++;
         }
       }
-      rows.push(`${a.padEnd(9)} vs ${b.padEnd(9)} t=${(agg.t / games).toFixed(1)}s winA=${agg.winA}/${games} draw=${agg.draw} spin=${agg.spin} over=${agg.over} burst=${agg.burst} none=${agg.none}`);
+      rows.push(`${a.padEnd(9)} vs ${b.padEnd(9)} t=${(agg.t / games).toFixed(1)}s winA=${agg.winA}/${games} draw=${agg.draw} spin=${agg.spin} over=${agg.over} burst=${agg.burst} xtreme=${agg.xtreme} none=${agg.none}`);
     }
   }
   const rate = [...record]

@@ -84,8 +84,29 @@ body.touch .tc {
   }
 }
 
-#title {
+/* 標題畫面：點按鈕才開始（不再點任意處開始，手機直向不會誤點到線上對戰） */
+#title .to-cpu {
+  margin-top: 4px;
+  padding: 12px 40px;
+  border: 2px solid #ffe16a;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffe16a, #ff8a1a);
+  color: #2a1200;
+  font-family: var(--display);
+  font-size: 24px;
   cursor: pointer;
+  box-shadow: 0 0 24px rgba(255, 170, 40, 0.65);
+  animation: title-pulse 1.6s ease-in-out infinite;
+}
+
+#title .to-cpu:hover {
+  filter: brightness(1.08);
+}
+
+@keyframes title-pulse {
+  50% {
+    box-shadow: 0 0 36px rgba(255, 190, 60, 0.95);
+  }
 }
 
 #title h1 {
@@ -128,6 +149,7 @@ body.touch .tc {
   }
 }
 
+#trial h2,
 #select h2,
 #arrange h2,
 #result h2 {
@@ -138,6 +160,7 @@ body.touch .tc {
   text-shadow: 0 0 18px rgba(255, 160, 60, 0.9), 0 4px 0 #000;
 }
 
+#trial h2 small,
 #select h2 small,
 #arrange h2 small {
   display: block;
@@ -147,7 +170,8 @@ body.touch .tc {
   text-shadow: none;
 }
 
-#select {
+#select,
+#trial {
   justify-content: flex-end;
   padding-bottom: 5vh;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 40%, rgba(0, 0, 0, 0.75));
@@ -880,12 +904,14 @@ body.touch .tc {
     font-size: 11px;
     bottom: 3px;
   }
+  #trial h2,
   #select h2,
   #result h2 {
     font-size: 26px;
     margin: 0;
   }
-  #select {
+  #select,
+  #trial {
     justify-content: center;
     padding: 10px 16px;
   }
@@ -1163,6 +1189,7 @@ body.touch .tc {
 
 /* 矮螢幕（橫向手機）：組隊畫面與陣容精簡 */
 @media (max-height: 520px) {
+  #trial h2 small,
   #select h2 small,
   #overtime h2 small {
     font-size: 11px;
@@ -1310,7 +1337,8 @@ body.touch .tc {
   align-items: stretch;
 }
 
-#select .cards {
+#select .cards,
+#trial .cards {
   grid-template-columns: repeat(10, minmax(0, 1fr));
   gap: 8px;
   max-height: 42vh;
@@ -1439,7 +1467,8 @@ body.touch .tc {
 
 /* 組隊畫面的標題縮小一點，名鑑與詳細資料才放得下（矮螢幕另有規則） */
 @media (min-height: 521px) {
-  #select h2 {
+  #select h2,
+  #trial h2 {
     font-size: clamp(28px, 4.6vw, 52px);
   }
 }
@@ -1513,6 +1542,21 @@ body.selecting #help {
   }
 }
 
+/*
+ * 詳細資料的每一段都固定高度（切換陀螺時面板與裡面的版面不跳動）：
+ * 名稱各一行（太長用省略號）、原型說明兩行、必殺名稱兩行、必殺說明固定四行（超過時在框內捲動）。
+ * 高度用 em 計算，各尺寸的字級縮放時一起縮放。
+ */
+.detail .d-ja,
+.detail .d-zh,
+.detail .d-charge {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+  height: 1.3em;
+}
+
 .detail .d-ja {
   grid-area: ja;
   font-family: var(--display);
@@ -1526,11 +1570,24 @@ body.selecting #help {
   font-size: 14px;
 }
 
+/* 中文版沒有中文副名：仍保留那一行的高度 */
+.detail .d-zh[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
 .detail .d-meta {
   grid-area: meta;
   font-size: 11px;
   opacity: 0.75;
   margin-bottom: 4px;
+  line-height: 1.35;
+  height: 2.7em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .detail .radar {
@@ -1602,54 +1659,30 @@ body.selecting #help {
   color: #ff7a6a;
 }
 
-/* 零件：盤與軸兩個選單並排，下面是目前零件的特性 */
+/* 目前的盤與軸（換零件用各畫面的「盤」「軸」按鈕）：一行，換過的用發光色 */
 .detail .d-parts {
   grid-area: parts;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 6px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.detail .d-part {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.detail .d-slot {
-  flex: none;
-  font-family: var(--display);
-  font-size: 12px;
-  color: var(--c);
-}
-
-.detail .d-part select {
-  flex: 1;
-  min-width: 0;
-  padding: 3px 4px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 6px;
-  background: #0c1330;
-  color: #fff;
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.detail .d-part select:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.detail .d-note {
-  grid-column: 1 / -1;
+  gap: 4px 10px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   font-size: 11px;
-  opacity: 0.75;
   line-height: 1.35;
+  height: calc(1.35em + 6px);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.detail .d-parts span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+.detail .d-parts .changed {
+  color: var(--c);
+  opacity: 1;
 }
 
 .detail .d-sp {
@@ -1658,6 +1691,13 @@ body.selecting #help {
   font-family: var(--display);
   font-size: 13px;
   color: #ffe35a;
+  line-height: 1.3;
+  height: 2.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .detail .d-charge {
@@ -1670,6 +1710,10 @@ body.selecting #help {
   grid-area: desc;
   font-size: 12px;
   opacity: 0.9;
+  line-height: 1.4;
+  height: 5.6em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .arena {
@@ -1698,11 +1742,14 @@ body.selecting #help {
   color: #001020;
 }
 
+/* 場地說明固定兩行高（切換場地時名鑑不會上下跳） */
 .arena-desc {
   margin: 4px 0 0;
   font-size: 12px;
   opacity: 0.85;
-  min-height: 1.2em;
+  line-height: 1.35;
+  height: 2.7em;
+  overflow: hidden;
 }
 
 /* 中等寬度：詳細資料縮窄、名鑑 5 欄 */
@@ -1710,7 +1757,8 @@ body.selecting #help {
   .select-main {
     grid-template-columns: minmax(0, 1fr) 290px;
   }
-  #select .cards {
+  #select .cards,
+  #trial .cards {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
@@ -1721,7 +1769,8 @@ body.selecting #help {
     grid-template-columns: minmax(0, 1fr) 270px;
     gap: 8px;
   }
-  #select .cards {
+  #select .cards,
+  #trial .cards {
     grid-template-columns: repeat(10, minmax(0, 1fr));
     gap: 5px;
     max-height: 48vh;
@@ -1779,11 +1828,7 @@ body.selecting #help {
     font-size: 11px;
     margin-top: 3px;
   }
-  .detail .d-part select {
-    font-size: 11px;
-    padding: 2px;
-  }
-  .detail .d-note,
+  .detail .d-parts,
   .detail .d-desc {
     font-size: 10px;
   }
@@ -1801,7 +1846,8 @@ body.selecting #help {
   .select-main {
     grid-template-columns: 1fr;
   }
-  #select .cards {
+  #select .cards,
+  #trial .cards {
     grid-template-columns: repeat(5, minmax(0, 1fr));
     max-height: 26vh;
   }
@@ -1917,7 +1963,7 @@ body.selecting #help {
 
 .ar-slot {
   display: grid;
-  grid-template-columns: auto 64px minmax(0, 1fr) auto;
+  grid-template-columns: auto 64px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
@@ -1987,6 +2033,192 @@ body.selecting #help {
   max-height: calc(100dvh - 260px);
 }
 
+/* 欄位裡的「盤」「軸」按鈕：上下排，顯示目前的零件；換過的發光 */
+.ar-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.part-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 210px;
+  min-height: 32px;
+  padding: 3px 10px 3px 4px;
+  border: 2px solid rgba(127, 240, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(20, 50, 90, 0.75);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.part-btn:hover:not(:disabled) {
+  background: rgba(30, 80, 140, 0.9);
+}
+
+.part-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.part-btn.changed {
+  border-color: #ffe35a;
+  background: rgba(80, 60, 10, 0.85);
+  box-shadow: 0 0 10px rgba(255, 210, 60, 0.6);
+}
+
+.part-btn .pb-slot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #7ff0ff;
+  color: #001020;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.part-btn.changed .pb-slot {
+  background: #ffe35a;
+}
+
+.part-btn .pb-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.part-btn .pb-code {
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.part-btn .pb-tag {
+  flex: none;
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.part-btn .pb-caret {
+  flex: none;
+  opacity: 0.8;
+}
+
+/* 零件清單（ui/partMenu.ts）：貼著按鈕出現，內容多時清單內捲動 */
+.part-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 2px solid #7ff0ff;
+  border-radius: 12px;
+  background: rgba(6, 10, 26, 0.97);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), 0 0 18px rgba(80, 200, 255, 0.35);
+  pointer-events: auto;
+  text-align: left;
+}
+
+.part-menu .pm-head {
+  padding: 0 4px 4px;
+  font-family: var(--display);
+  font-size: 13px;
+  color: #9fe7ff;
+}
+
+.part-menu .pm-opt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(20, 30, 60, 0.8);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.part-menu .pm-opt:hover:not(:disabled),
+.part-menu .pm-opt:focus-visible {
+  border-color: #7ff0ff;
+  background: rgba(30, 70, 120, 0.9);
+  outline: none;
+}
+
+.part-menu .pm-opt.current {
+  border-color: #ffe35a;
+}
+
+.part-menu .pm-opt:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.part-menu .pm-name {
+  font-weight: bold;
+}
+
+.part-menu .pm-tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 10px;
+  font-weight: normal;
+}
+
+.part-menu .pm-tag.on {
+  background: #ffe35a;
+  color: #201400;
+}
+
+.part-menu .pm-delta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.part-menu .pm-delta i {
+  padding: 0 4px;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 11px;
+}
+
+.part-menu .pm-delta .up {
+  background: rgba(60, 200, 100, 0.25);
+  color: #8aff9a;
+}
+
+.part-menu .pm-delta .down {
+  background: rgba(220, 70, 50, 0.25);
+  color: #ff9a8a;
+}
+
+.part-menu .pm-desc {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
 .ar-actions {
   display: flex;
   justify-content: center;
@@ -2053,9 +2285,28 @@ body.selecting #help {
     gap: 5px;
   }
   .ar-slot {
-    grid-template-columns: auto 40px minmax(0, 1fr) auto;
+    grid-template-columns: auto 40px minmax(0, 1fr) auto auto;
     gap: 8px;
     padding: 4px 8px;
+  }
+  .ar-parts {
+    flex-direction: row;
+  }
+  .part-btn {
+    width: 128px;
+    min-height: 30px;
+    padding: 2px 6px 2px 3px;
+    gap: 4px;
+    font-size: 12px;
+  }
+  .part-btn .pb-slot {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+  }
+  .part-btn .pb-code,
+  .part-btn .pb-tag {
+    display: none;
   }
   .ar-thumb {
     width: 40px;
@@ -2080,10 +2331,40 @@ body.selecting #help {
   }
 }
 
-/* 直向窄螢幕：欄位在上、詳細資料在下 */
+/* 直向窄螢幕：欄位在上、詳細資料在下；盤／軸按鈕換到欄位的第二行 */
 @media (max-width: 640px) {
   .ar-main {
     grid-template-columns: 1fr;
+  }
+  .ar-slot {
+    grid-template-columns: auto 44px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'n thumb name move'
+      'parts parts parts parts';
+    row-gap: 6px;
+  }
+  .ar-n {
+    grid-area: n;
+  }
+  .ar-thumb {
+    grid-area: thumb;
+    width: 44px;
+    height: 44px;
+  }
+  .ar-name {
+    grid-area: name;
+  }
+  .ar-move {
+    grid-area: move;
+    flex-direction: row;
+  }
+  .ar-parts {
+    grid-area: parts;
+    flex-direction: row;
+  }
+  .part-btn {
+    flex: 1;
+    width: auto;
   }
   #arrange .detail {
     max-height: 40vh;
@@ -2551,6 +2832,29 @@ html:lang(zh) {
 
 #title .to-tutorial:hover {
   background: rgba(90, 55, 10, 0.85);
+}
+
+/* 試驗模式：一對一比較陀螺與零件 */
+#title .to-trial {
+  margin-top: 6px;
+  padding: 10px 22px;
+  border: 2px solid #b48cff;
+  border-radius: 999px;
+  background: rgba(30, 14, 60, 0.7);
+  color: #e2d4ff;
+  font-family: var(--display);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(170, 120, 255, 0.4);
+}
+
+#title .to-trial:hover {
+  background: rgba(60, 30, 110, 0.85);
+}
+
+/* 觸控對戰的操作說明由畫面下方的觸控提示（#touch-hint）顯示，最底下這行收起（兩行內容一樣，手機上會疊在一起） */
+body.touch #help {
+  display: none;
 }
 
 /* 第一次玩的提示：一列小膠囊，不擋開始遊戲 */
@@ -3037,8 +3341,15 @@ body.tutoring #launch .hint {
   animation: tut-spin-down 3s ease-in infinite;
 }
 
-#tutorial .f-over .mini {
+#tutorial .f-over .mini,
+#tutorial .f-xtreme .mini {
   animation: tut-ring-out 3s ease-in infinite;
+}
+
+/* 極限終結：實體戰鬥盤中間的寬口（金色框） */
+#tutorial .f-xtreme .bowl {
+  border-color: #ffc21a;
+  box-shadow: 0 0 8px rgba(255, 194, 26, 0.5);
 }
 
 #tutorial .f-burst .mini {
@@ -3179,9 +3490,15 @@ body.tutoring #launch .hint {
     font-size: 13px;
   }
 
-  #title .to-tutorial {
+  #title .to-tutorial,
+  #title .to-trial {
     font-size: 15px;
     padding: 8px 16px;
+  }
+
+  #title .to-cpu {
+    font-size: 19px;
+    padding: 9px 30px;
   }
 
   #title .tut-offer {
@@ -3199,3 +3516,336 @@ body.tutoring #launch .hint {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ---------- 試驗模式（一對一比較陀螺與零件） ---------- */
+/* 左欄：上面是「你」與「電腦」兩張卡片（點一張選取，名鑑點到的陀螺換到那一邊），下面是名鑑 */
+.tr-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tr-sides {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tr-side {
+  --c: #fff;
+  display: grid;
+  grid-template-columns: auto 48px minmax(0, 1fr);
+  grid-template-areas:
+    'who thumb name'
+    'parts parts parts';
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(8, 12, 30, 0.85);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tr-side.on {
+  border-color: var(--c);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+.tr-side .tr-who {
+  grid-area: who;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-family: var(--display);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tr-side[data-side='player'] .tr-who {
+  background: rgba(127, 240, 255, 0.25);
+  color: #bff6ff;
+}
+
+.tr-side[data-side='cpu'] .tr-who {
+  background: rgba(255, 90, 90, 0.25);
+  color: #ffc0c0;
+}
+
+.tr-side .ar-thumb {
+  grid-area: thumb;
+  width: 48px;
+  height: 48px;
+}
+
+.tr-side .tr-name {
+  grid-area: name;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: bold;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tr-side .tr-name small {
+  display: block;
+  font-size: 11px;
+  font-weight: normal;
+  opacity: 0.75;
+}
+
+.tr-side .ar-parts {
+  grid-area: parts;
+  flex-direction: row;
+}
+
+.tr-side .part-btn {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/* 試驗模式的名鑑比組隊畫面矮一點（上面多了兩張卡片） */
+#trial .cards {
+  max-height: 32vh;
+}
+
+.tr-actions,
+.tr-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 14px;
+}
+
+.tr-actions button,
+.tr-result-actions button,
+.tr-auto-cancel {
+  padding: 8px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-family: var(--display);
+  font-size: 17px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tr-actions .tr-go,
+.tr-result-actions .tr-retry {
+  background: linear-gradient(180deg, #ffe16a, #ff8a1a);
+  color: #1a0a00;
+  box-shadow: 0 0 20px rgba(255, 150, 40, 0.8);
+}
+
+.tr-actions .tr-auto,
+.tr-result-actions .tr-auto-run {
+  background: rgba(60, 30, 110, 0.9);
+  border: 2px solid #b48cff;
+  color: #e2d4ff;
+}
+
+.tr-result-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 結果畫面：這一戰的數據表、累計戰績、自動對打 */
+#trial-result {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.85));
+}
+
+#trial-result .tr-headline {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(28px, 5vw, 52px);
+  text-shadow: 0 0 18px rgba(255, 160, 60, 0.9), 0 4px 0 #000;
+}
+
+#trial-result .tr-matchup {
+  margin: 0;
+  max-width: min(760px, 100%);
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.tr-stats {
+  border-collapse: collapse;
+  min-width: min(460px, 100%);
+  font-size: 14px;
+  background: rgba(8, 12, 30, 0.85);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tr-stats th,
+.tr-stats td {
+  padding: 4px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tr-stats tr:first-child th {
+  color: #9fe7ff;
+  font-family: var(--display);
+  font-weight: 400;
+}
+
+.tr-stats th {
+  text-align: left;
+  opacity: 0.85;
+  font-weight: normal;
+}
+
+.tr-record p,
+.tr-auto-box p {
+  margin: 2px 0;
+}
+
+.tr-sum {
+  font-size: 15px;
+}
+
+.tr-rate {
+  font-family: var(--display);
+  font-size: 26px;
+  color: #ffe35a;
+}
+
+.tr-none {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+.tr-finishes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.tr-finishes li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tr-finishes .w {
+  color: #8aff9a;
+  font-weight: normal;
+}
+
+.tr-finishes .l {
+  color: #ff9a8a;
+  font-weight: normal;
+}
+
+.tr-auto-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: min(460px, 100%);
+  padding: 8px 14px;
+  border: 2px solid #b48cff;
+  border-radius: 12px;
+  background: rgba(30, 14, 60, 0.85);
+}
+
+.tr-auto-box[hidden] {
+  display: none;
+}
+
+.tr-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.tr-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #7ff0ff, #b48cff);
+}
+
+.tr-auto-cancel {
+  padding: 4px 16px;
+  font-size: 13px;
+}
+
+/* 矮螢幕（橫向手機）：卡片與按鈕變小，名鑑矮一點 */
+@media (max-height: 520px) {
+  #trial h2 {
+    font-size: 22px;
+    margin-bottom: 0;
+  }
+  #trial h2 small {
+    display: none;
+  }
+  #trial {
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .tr-side {
+    grid-template-columns: auto 34px minmax(0, 1fr) auto;
+    grid-template-areas: 'who thumb name parts';
+    padding: 3px 6px;
+  }
+  .tr-side .ar-thumb {
+    width: 34px;
+    height: 34px;
+  }
+  .tr-side .tr-name {
+    font-size: 12px;
+  }
+  .tr-side .tr-name small {
+    display: none;
+  }
+  .tr-sides {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  #trial .cards {
+    max-height: 30vh;
+  }
+  .tr-actions button,
+  .tr-result-actions button {
+    padding: 5px 14px;
+    font-size: 14px;
+  }
+  #trial-result {
+    gap: 6px;
+  }
+  .tr-stats {
+    font-size: 12px;
+  }
+  .tr-stats th,
+  .tr-stats td {
+    padding: 2px 10px;
+  }
+}
+
+/* 直向窄螢幕：兩張卡片上下排 */
+@media (max-width: 640px) {
+  .tr-sides {
+    grid-template-columns: 1fr;
+  }
+  #trial .cards {
+    max-height: 22vh;
+  }
+}
+

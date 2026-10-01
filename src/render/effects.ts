@@ -54,6 +54,8 @@ export class Effects {
   sparksEmitted = 0;
   /** 目前場地（火花落地、特效貼地用） */
   arena: ArenaSpec = ARENA;
+  /** 雙層戰鬥盤中央降下的程度（遊戲每幀設定；火花落地、撞擊點貼著凹槽的地面） */
+  level = 0;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -99,7 +101,7 @@ export class Effects {
   /** 從 sim 座標取得撞擊點的世界座標（離地一點點） */
   worldAt(p: V2, lift = 0.3): THREE.Vector3 {
     const r = Math.min(Math.hypot(p.x, p.z), this.arena.radius);
-    return new THREE.Vector3(p.x, floorHeight(r, this.arena) + lift, p.z);
+    return new THREE.Vector3(p.x, floorHeight(r, this.arena, this.level) + lift, p.z);
   }
 
   /** 發射 count 顆火花：主方向 dir 附近隨機散開 */
@@ -292,7 +294,7 @@ export class Effects {
       this.sp[k + 1] += this.sv[k + 1] * fxDt;
       this.sp[k + 2] += this.sv[k + 2] * fxDt;
       const r = Math.hypot(this.sp[k], this.sp[k + 2]);
-      const floor = r < this.arena.radius ? floorHeight(r, this.arena) : -1.2;
+      const floor = r < this.arena.radius ? floorHeight(r, this.arena, this.level) : -1.2;
       if (this.sp[k + 1] < floor) {
         this.sp[k + 1] = floor;
         this.sv[k + 1] = Math.abs(this.sv[k + 1]) * 0.4;

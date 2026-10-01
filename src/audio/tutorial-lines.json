@@ -7,7 +7,7 @@
     "tut_pick": { "speaker": "guide", "text": "[happy] 歡迎來到戰鬥陀螺！我們先來組隊：跟著手指點選三顆陀螺，點的順序就是出場順序。想選別的陀螺也可以喔！" },
     "tut_next": { "speaker": "guide", "text": "[happy] 選好三顆了！按「下一步」。" },
     "tut_order": { "speaker": "guide", "text": "[happy] 這裡可以調整出場順序。按陀螺旁邊的上下箭頭，把它往前或往後調一戰。" },
-    "tut_parts": { "speaker": "guide", "text": "[happy] 點一顆陀螺，在右邊換上不同的盤或軸，雷達圖會立刻跟著變化。" },
+    "tut_parts": { "speaker": "guide", "text": "[happy] 每顆陀螺下面都有「盤」和「軸」兩個按鈕，點一下就能換上不同的零件，雷達圖會立刻跟著變化。" },
     "tut_ready": { "speaker": "guide", "text": "[excited] 都準備好了！按「出陣」進入對戰。" },
     "tut_launch_kb": { "speaker": "guide", "text": "[excited] 先看一次示範：用滑鼠在畫面上按住往下拉，等外圈縮到和內圈一樣大的瞬間放手！往左或往右拉，可以瞄準方向。接下來換你試試看！" },
     "tut_launch_tc": { "speaker": "guide", "text": "[excited] 先看一次示範：手指在畫面上按住往下滑，等外圈縮到和內圈一樣大的瞬間放手！往左或往右滑，可以瞄準方向。接下來換你試試看！" },
@@ -19,7 +19,7 @@
     "tut_special_kb": { "speaker": "guide", "text": "[excited] 必殺量表集滿了！按空白鍵，發動必殺技！" },
     "tut_special_tc": { "speaker": "guide", "text": "[excited] 必殺量表集滿了！點右下角發光的必殺按鈕，發動必殺技！三根手指同時點一下畫面也可以。" },
     "tut_finish": { "speaker": "guide", "text": "[excited] 最後是分出勝負！朝箭頭的方向撞過去，把對手撞出場外、撞到爆裂，或是讓它停止轉動，都能終結對手。" },
-    "tut_points": { "speaker": "guide", "text": "[happy] 旋轉終結，也就是對手停轉，得一分；場外終結和爆裂終結，各得兩分。" },
+    "tut_points": { "speaker": "guide", "text": "[happy] 旋轉終結，也就是對手停轉，得一分；場外終結和爆裂終結，各得兩分。在標準戰鬥盤和雙層戰鬥盤，把對手撞進中間的寬口是極限終結，得三分！" },
     "tut_match": { "speaker": "guide", "text": "[happy] 正式比賽是三對三，三戰總分高的一方獲勝，平手就打延長賽。教學完成，上場吧！" },
     "tut_restart": { "speaker": "guide", "text": "[happy] 被終結了！沒關係，我們重來一次。" }
   }

@@ -17,6 +17,7 @@
     "spin_finish": { "speaker": "announcer", "text": "[excited] 旋轉終結！" },
     "over_finish": { "speaker": "announcer", "text": "[shouting][excited] 場外終結！！" },
     "burst_finish": { "speaker": "announcer", "text": "[shouting][excited] 爆裂終結！！" },
+    "xtreme_finish": { "speaker": "announcer", "text": "[shouting][excited] 極限終結！！！" },
     "battle_1": { "speaker": "announcer", "text": "[excited] 第一戰，準備！" },
     "battle_2": { "speaker": "announcer", "text": "[excited] 第二戰，準備！" },
     "battle_final": { "speaker": "announcer", "text": "[shouting][excited] 最終決戰！！" },

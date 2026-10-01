@@ -17,6 +17,9 @@ export function statScore(s: BaseStats, key: keyof BaseStats): number {
   return s[key];
 }
 
+/** 轉速換成畫面上顯示的 RPM（HUD 與試驗模式的數據共用） */
+export const rpmOf = (t: { spin: number }) => Math.round(t.spin * 9.55 * 2.4);
+
 /** 取第一個符合選擇器的元素 */
 export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { floorHeight, ventPhase, type ArenaSpec } from '../sim/arena';
+import { floorHeight, ventPhase, type ArenaSpec, type Pocket } from '../sim/arena';
 import { floorTexture, glowTexture, rippleTexture } from './textures';
 
 /** 場地中需要每幀更新、切換場地時要釋放的物件 */
@@ -7,9 +7,10 @@ export interface Stadium {
   group: THREE.Group;
   /**
    * 每幀更新：出場口閃爍、觀眾席閃光燈、場地機關動畫。
-   * time 為牆鐘秒數，simTime 為對戰模擬時間（熔岩噴發的預兆要跟模擬同步）。
+   * time 為牆鐘秒數，simTime 為對戰模擬時間（熔岩噴發的預兆要跟模擬同步）；
+   * lift 為雙層戰鬥盤中央的升降狀態（level 0 = 升起、1 = 降下；warn 為下降前的預兆，由 liftPhase 依模擬時間算出）。
    */
-  update(time: number, excitement: number, simTime: number): void;
+  update(time: number, excitement: number, simTime: number, lift?: { level: number; warn: number }): void;
   /** 從場景移除並釋放幾何與材質 */
   dispose(): void;
 }
@@ -73,15 +74,46 @@ function conformDisc(cx: number, cz: number, rad: number, arena: ArenaSpec, lift
   return m;
 }
 
-/** 碗形地板的旋轉剖面（r 從 r0 到 r1） */
-function bowlProfile(arena: ArenaSpec, r0: number, r1: number, lift = 0): THREE.Vector2[] {
+/** 碗形地板的旋轉剖面（r 從 r0 到 r1，分 n 段；level 為雙層戰鬥盤中央降下的程度） */
+function bowlProfile(arena: ArenaSpec, r0: number, r1: number, lift = 0, n = 48, level = 0): THREE.Vector2[] {
   const out: THREE.Vector2[] = [];
-  for (let i = 0; i <= 48; i++) {
-    const r = r0 + ((r1 - r0) * i) / 48;
-    out.push(new THREE.Vector2(r, floorHeight(r, arena) + lift));
+  for (let i = 0; i <= n; i++) {
+    const r = r0 + ((r1 - r0) * i) / n;
+    out.push(new THREE.Vector2(r, floorHeight(r, arena, level) + lift));
   }
   return out;
 }
+
+/** 把旋轉體（地板、內圈軌道）的每個頂點貼回 level 狀態下的地面高度（雙層戰鬥盤升降時呼叫） */
+function conformLathe(geo: THREE.BufferGeometry, arena: ArenaSpec, level: number, lift: number): void {
+  const p = geo.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) p.setY(i, floorHeight(Math.hypot(p.getX(i), p.getZ(i)), arena, level) + lift);
+  p.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+/** 平放在地上的文字牌（出場區的名稱）：canvas 畫字，做成貼圖 */
+function labelPlane(text: string, color: string, w: number, h: number): THREE.Mesh {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const g = canvas.getContext('2d')!;
+  g.font = 'bold 72px "Dela Gothic One", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.shadowColor = color;
+  g.shadowBlur = 18;
+  g.fillStyle = color;
+  g.fillText(text, 256, 68);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2;
+  return m;
+}
+
+/** 出場區的顏色：中間寬口的 Xtreme 區是金色，其他出場口是紅色 */
+const pocketColor = (p: Pocket) => (p.kind === 'xtreme' ? 0xffc21a : 0xff2a3a);
 
 /** 飄動的粒子（火山的火星、冰川的雪）：回傳物件與每幀更新函式 */
 function drifting(count: number, color: number, size: number, rise: boolean): { obj: THREE.Points; step: (dt: number) => void } {
@@ -138,7 +170,7 @@ export function buildLights(scene: THREE.Scene, lowPower = false): StadiumLights
     setTheme(a: ArenaSpec) {
       rimA.color.setHex(a.theme.accent);
       rimB.color.setHex(a.theme.neon);
-      hemi.color.setHex(a.id === 'volcano' ? 0xff7744 : a.id === 'glacier' ? 0x99ccff : a.id === 'stadium' ? 0xffcc88 : 0x5577ff);
+      hemi.color.setHex(a.id === 'volcano' ? 0xff7744 : a.id === 'glacier' ? 0x99ccff : a.id === 'stadium' ? 0xffcc88 : a.id === 'double' ? 0x88aaff : 0x5577ff);
     },
   };
 }
@@ -157,11 +189,13 @@ export function buildStadium(scene: THREE.Scene, arena: ArenaSpec): Stadium {
   const tickers: ((time: number, simTime: number, dt: number) => void)[] = [];
   let lastTime = 0;
 
-  // 碗形地板：以地面高度剖面繞 Y 軸旋轉
-  const style = arena.id === 'volcano' ? 'lava' : arena.id === 'glacier' ? 'ice' : arena.id === 'stadium' ? 'gear' : 'grid';
+  // 碗形地板：以地面高度剖面繞 Y 軸旋轉（實體戰鬥盤的龍捲脊、升降凹槽比較細，剖面分得密一點）
+  const physical = arena.frame === 'square';
+  const style = arena.id === 'volcano' ? 'lava' : arena.id === 'glacier' ? 'ice' : physical ? 'gear' : 'grid';
   const icy = arena.id === 'glacier';
+  const bowlGeo = new THREE.LatheGeometry(bowlProfile(arena, 0, R, 0, physical ? 120 : 48), 96);
   const bowl = new THREE.Mesh(
-    new THREE.LatheGeometry(bowlProfile(arena, 0, R), 96),
+    bowlGeo,
     new THREE.MeshStandardMaterial({
       color: th.floor,
       metalness: icy ? 0.9 : 0.55,
@@ -185,41 +219,109 @@ export function buildStadium(scene: THREE.Scene, arena: ArenaSpec): Stadium {
     opacity: icy ? 0.7 : 0.92,
   });
   const neon = new THREE.MeshBasicMaterial({ color: th.neon });
-  const pockets = [...arena.pockets].map((p) => ((p % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)).sort((a, b) => a - b);
-  const w = arena.pocketHalfWidth;
+  /** 出場口（中心角正規化到 0..2π、依角度排序），牆面是相鄰兩個出場口之間的弧 */
+  const TAU = Math.PI * 2;
+  const pockets = arena.pockets.map((p) => ({ ...p, at: ((p.at % TAU) + TAU) % TAU })).sort((a, b) => a.at - b.at);
   for (let i = 0; i < pockets.length; i++) {
-    const from = pockets[i] + w;
-    let to = pockets[(i + 1) % pockets.length] - w;
-    if (to < from) to += Math.PI * 2;
+    const from = pockets[i].at + pockets[i].half;
+    const next = pockets[(i + 1) % pockets.length];
+    let to = next.at - next.half;
+    if (to < from) to += TAU;
     group.add(new THREE.Mesh(arcWall(R + 0.02, rimY - 0.05, rimY + 0.32, from, to, 48), wallMat));
     group.add(arcTube(R + 0.02, rimY + 0.33, from, to, 0.025, neon));
   }
 
-  // 出場口：紅色警示光條，會隨比賽激烈程度閃爍
+  // 出場口：警示光條（Xtreme 區金色、其他紅色），會隨比賽激烈程度閃爍
   const pocketMats: THREE.MeshBasicMaterial[] = [];
   for (const p of pockets) {
-    const m = new THREE.MeshBasicMaterial({ color: 0xff2a3a, transparent: true, opacity: 0.8 });
+    const m = new THREE.MeshBasicMaterial({ color: pocketColor(p), transparent: true, opacity: 0.8 });
     pocketMats.push(m);
-    group.add(arcTube(R + 0.08, rimY + 0.02, p - w, p + w, 0.035, m));
-    const pit = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    pit.rotation.x = -Math.PI / 2;
-    pit.position.copy(polar(R + 0.8, p, rimY - 0.6));
-    group.add(pit);
+    group.add(arcTube(R + 0.08, rimY + 0.02, p.at - p.half, p.at + p.half, 0.035, m));
+    if (!physical) {
+      const pit = new THREE.Mesh(new THREE.CircleGeometry(0.7, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+      pit.rotation.x = -Math.PI / 2;
+      pit.position.copy(polar(R + 0.8, p.at, rimY - 0.6));
+      group.add(pit);
+    }
   }
 
-  // 外圍平台
-  const deck = new THREE.Mesh(
-    new THREE.RingGeometry(R + 0.3, R + 2.4, 96, 1),
-    new THREE.MeshStandardMaterial({ color: 0x10152a, metalness: 0.7, roughness: 0.45 }),
-  );
-  deck.rotation.x = -Math.PI / 2;
-  deck.position.y = rimY - 0.25;
-  deck.receiveShadow = true;
-  group.add(deck);
-  const deckGlow = new THREE.Mesh(new THREE.RingGeometry(R + 2.35, R + 2.45, 96, 1), new THREE.MeshBasicMaterial({ color: th.accent }));
-  deckGlow.rotation.x = -Math.PI / 2;
-  deckGlow.position.y = rimY - 0.24;
-  group.add(deckGlow);
+  const deckY = rimY - 0.25;
+  const deckMat = new THREE.MeshStandardMaterial({ color: 0x10152a, metalness: 0.7, roughness: 0.45 });
+  if (!physical) {
+    // 外圍平台（圓形）
+    const deck = new THREE.Mesh(new THREE.RingGeometry(R + 0.3, R + 2.4, 96, 1), deckMat);
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.y = deckY;
+    deck.receiveShadow = true;
+    group.add(deck);
+    const deckGlow = new THREE.Mesh(new THREE.RingGeometry(R + 2.35, R + 2.45, 96, 1), new THREE.MeshBasicMaterial({ color: th.accent }));
+    deckGlow.rotation.x = -Math.PI / 2;
+    deckGlow.position.y = rimY - 0.24;
+    group.add(deckGlow);
+  } else {
+    // 實體戰鬥盤的方形外框（純外觀，模擬裡的牆仍是圓的）：方形平台挖出戰鬥區的圓洞、四邊的矮牆與牆頂霓虹，
+    // 出場口那一邊（-z）在每個出場口外面畫出場區（Xtreme 區金色、Over 區紅色，平放區名）
+    const S = R + 1.35;
+    const shape = new THREE.Shape();
+    shape.moveTo(-S, -S);
+    shape.lineTo(S, -S);
+    shape.lineTo(S, S);
+    shape.lineTo(-S, S);
+    shape.closePath();
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, R + 0.3, 0, TAU, true);
+    shape.holes.push(hole);
+    const deck = new THREE.Mesh(new THREE.ShapeGeometry(shape, 64), deckMat);
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.y = deckY;
+    deck.receiveShadow = true;
+    group.add(deck);
+    const frameMat = new THREE.MeshStandardMaterial({ color: th.wall, metalness: 0.6, roughness: 0.25, transparent: true, opacity: 0.55 });
+    const frameNeon = new THREE.MeshBasicMaterial({ color: th.accent });
+    for (const [x, z, sx, sz] of [
+      [0, -S, 2 * S + 0.12, 0.12],
+      [0, S, 2 * S + 0.12, 0.12],
+      [-S, 0, 0.12, 2 * S],
+      [S, 0, 0.12, 2 * S],
+    ]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.55, sz), frameMat);
+      wall.position.set(x, deckY + 0.27, z);
+      group.add(wall);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.03, sz + 0.02), frameNeon);
+      top.position.set(x, deckY + 0.56, z);
+      group.add(top);
+    }
+    for (const p of pockets) {
+      const xt = p.kind === 'xtreme';
+      const color = pocketColor(p);
+      const dist = R + 0.85;
+      const zone = new THREE.Group();
+      const w = xt ? 2.3 : 1.45;
+      const d = 0.95;
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0x020308, transparent: true, opacity: 0.92 }));
+      floor.rotation.x = -Math.PI / 2;
+      zone.add(floor);
+      const edgeMat = new THREE.MeshBasicMaterial({ color });
+      for (const [x, z, sx, sz] of [
+        [0, -d / 2, w, 0.04],
+        [-w / 2, 0, 0.04, d],
+        [w / 2, 0, 0.04, d],
+      ]) {
+        const e = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.03, sz), edgeMat);
+        e.position.set(x, 0.015, z);
+        zone.add(e);
+      }
+      const label = labelPlane(xt ? 'XTREME' : 'OVER', xt ? '#ffd23a' : '#ff4a5a', w * 0.8, w * 0.2);
+      label.position.y = 0.02;
+      // 字頭朝外；朝向玩家這一側（-x，CPU 模式的鏡頭在玩家身後）的出場區把字轉 180°，從玩家的視角才不會倒過來
+      if (Math.cos(p.at) < -0.1) label.rotation.z = Math.PI;
+      zone.add(label);
+      // 區塊的 -z 方向朝外：轉到出場口的方向
+      zone.position.copy(polar(dist, p.at, deckY + 0.012));
+      zone.rotation.y = -p.at - Math.PI / 2;
+      group.add(zone);
+    }
+  }
 
   // 地面
   const ground = new THREE.Mesh(
@@ -288,19 +390,44 @@ export function buildStadium(scene: THREE.Scene, arena: ArenaSpec): Stadium {
 
   // ---------------- 場地機關 ----------------
 
-  // 標準戰鬥盤：外圈極限軌道（齒軌發光帶），激烈時流動加快
-  if (arena.rail) {
-    const railTex = floorTexture(th.accent, th.neon, 'rail');
+  // 實體戰鬥盤：外圈極限軌道（齒軌發光帶），流動表示加速方向；雙層戰鬥盤的內圈軌道貼著凹槽壁，中央降下時才亮
+  /** 隨中央升降要重新貼地的旋轉體（地板、內圈軌道）與它離地的高度 */
+  const conform: { geo: THREE.BufferGeometry; lift: number }[] = arena.lift ? [{ geo: bowlGeo, lift: 0 }] : [];
+  /** 內圈軌道的材質：亮度跟著中央降下的程度 */
+  const loweredRails: THREE.MeshBasicMaterial[] = [];
+  for (const rl of arena.rails) {
+    const railTex = floorTexture(rl.lowered ? th.neon : th.accent, th.neon, 'rail');
     railTex.wrapS = THREE.RepeatWrapping;
-    railTex.repeat.set(6, 1);
-    const rail = new THREE.Mesh(
-      new THREE.LatheGeometry(bowlProfile(arena, arena.rail.from, R - 0.01, 0.006), 128),
-      new THREE.MeshBasicMaterial({ map: railTex, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-    );
-    group.add(rail);
+    railTex.repeat.set(rl.lowered ? 3 : 6, 1);
+    const to = rl.lowered && arena.lift ? arena.lift.r : R - 0.01;
+    const geo = new THREE.LatheGeometry(bowlProfile(arena, rl.from, to, 0.006, rl.lowered ? 12 : 48), 128);
+    const mat = new THREE.MeshBasicMaterial({ map: railTex, transparent: true, opacity: rl.lowered ? 0 : 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    group.add(new THREE.Mesh(geo, mat));
+    if (rl.lowered) {
+      loweredRails.push(mat);
+      conform.push({ geo, lift: 0.006 });
+    }
     tickers.push((time) => {
-      railTex.offset.x = -time * 0.15;
+      railTex.offset.x = -time * (rl.lowered ? 0.25 : 0.15);
     });
+  }
+
+  // 實體戰鬥盤的兩層：內圈平台邊緣的龍捲脊畫一圈細光環
+  if (arena.ridge) {
+    const ridgeMat = new THREE.MeshBasicMaterial({ color: th.neon, transparent: true, opacity: 0.55 });
+    group.add(arcTube(arena.ridge.r, floorHeight(arena.ridge.r, arena) + 0.012, 0, TAU, 0.012, ridgeMat));
+  }
+
+  // 雙層戰鬥盤：升降平台的邊緣光環（跟著平台降下；下降前的預兆變紅閃爍）與凹槽外緣的固定光環
+  let liftRing: THREE.Mesh | null = null;
+  let liftRingMat: THREE.MeshBasicMaterial | null = null;
+  let lastLevel = 0;
+  if (arena.lift) {
+    const lf = arena.lift;
+    liftRingMat = new THREE.MeshBasicMaterial({ color: th.neon, transparent: true, opacity: 0.8 });
+    liftRing = arcTube(lf.r - lf.edge, floorHeight(lf.r - lf.edge, arena) + 0.01, 0, TAU, 0.018, liftRingMat);
+    group.add(liftRing);
+    group.add(arcTube(lf.r, floorHeight(lf.r, arena) + 0.01, 0, TAU, 0.014, new THREE.MeshBasicMaterial({ color: th.accent, transparent: true, opacity: 0.7 })));
   }
 
   // 火山：熔岩噴口（平常暗紅脈動，預兆時越來越亮，噴發時白熱）與上升的火星
@@ -388,9 +515,21 @@ export function buildStadium(scene: THREE.Scene, arena: ArenaSpec): Stadium {
 
   return {
     group,
-    update(time: number, excitement: number, simTime: number) {
+    update(time: number, excitement: number, simTime: number, lift = { level: 0, warn: 0 }) {
       const dt = Math.min(0.1, Math.max(0, time - lastTime));
       lastTime = time;
+      if (arena.lift) {
+        // 中央升降：地板與內圈軌道貼回目前的高度（只在升降途中重算）、平台邊緣光環跟著降下
+        if (lift.level !== lastLevel) {
+          lastLevel = lift.level;
+          for (const c of conform) conformLathe(c.geo, arena, lift.level, c.lift);
+          liftRing!.position.y = -arena.lift.depth * lift.level;
+        }
+        for (const m of loweredRails) m.opacity = 0.85 * lift.level;
+        const blink = lift.warn > 0 ? 0.5 + 0.5 * Math.sin(time * (10 + lift.warn * 14)) : 0;
+        liftRingMat!.color.setHex(th.neon).lerp(new THREE.Color(0xff2a3a), lift.warn > 0 ? 0.4 + 0.6 * blink : 0);
+        liftRingMat!.opacity = 0.8 + 0.2 * blink;
+      }
       for (const m of pocketMats) m.opacity = 0.45 + 0.45 * (0.5 + 0.5 * Math.sin(time * (4 + excitement * 10)));
       // 閃光燈：激烈時閃得更頻繁
       const rate = 0.004 + excitement * 0.05;

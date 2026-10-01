@@ -382,5 +382,13 @@
     "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
     "hash": "4656a9712f2bebd0",
     "seconds": 2.901
+  },
+  "xtreme_finish": {
+    "file": "xtreme_finish.mp3",
+    "text": "[shouting][excited] エクストリーム・フィニッシュ！！！",
+    "speaker": "announcer",
+    "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
+    "hash": "69c2f4b6a96f5efa",
+    "seconds": 1.4
   }
 }

@@ -36,6 +36,8 @@ export class CameraRig {
   private side = 1;
   /** 目前場地（鏡頭焦點貼地用） */
   arena: ArenaSpec = ARENA;
+  /** 雙層戰鬥盤中央降下的程度（遊戲每幀設定；鏡頭焦點貼著凹槽的地面） */
+  level = 0;
   /** 自己的座位：發射鏡頭從自己陀螺的背後拍（1 號座位在右側，鏡頭繞場地中心轉 180°） */
   seat: 0 | 1 = 0;
 
@@ -83,7 +85,7 @@ export class CameraRig {
       this.orbit = Math.atan2(targetPos.z, targetPos.x);
     } else if (mode === 'closeup') {
       // 撞擊特寫：貼近撞擊點側面低角度，邊環繞邊推近，開頭快速變焦
-      const f = worldOf(this.arena, director.focus, 0.22);
+      const f = worldOf(this.arena, director.focus, 0.22, this.level);
       const n = director.normal;
       const p = director.progress;
       const sideDir = new THREE.Vector3(-n.z * this.side, 0, n.x * this.side);
@@ -96,7 +98,7 @@ export class CameraRig {
       targetRoll = 0.2 * this.side * (1 - p * 0.5);
     } else if (mode === 'finish') {
       // 終結鏡頭：繞著終結點慢慢轉
-      const f = worldOf(this.arena, director.focus, 0.2);
+      const f = worldOf(this.arena, director.focus, 0.2, this.level);
       const ang = director.modeTime * 0.45 + this.side;
       targetPos.set(f.x + Math.cos(ang) * 2.6, f.y + 1.3, f.z + Math.sin(ang) * 2.6);
       targetLook.copy(f);
@@ -147,6 +149,6 @@ export class CameraRig {
 }
 
 /** sim 座標轉世界座標（貼著碗面，再往上 lift） */
-function worldOf(arena: ArenaSpec, p: V2, lift: number): THREE.Vector3 {
-  return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), arena.radius), arena) + lift, p.z);
+function worldOf(arena: ArenaSpec, p: V2, lift: number, level = 0): THREE.Vector3 {
+  return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), arena.radius), arena, level) + lift, p.z);
 }

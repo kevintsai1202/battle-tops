@@ -123,7 +123,7 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.goto('./?seed=7');
   await page.screenshot({ path: 'e2e/screenshots/10-title.png' });
 
-  await page.locator('#title').click();
+  await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.debug().voice.mode !== 'none', null, { timeout: 30_000 });
   // 組隊：名鑑前三顆（烈焰龍 → 鐵壁龜 → 疾風鳳），小格右上角依序顯示 1、2、3

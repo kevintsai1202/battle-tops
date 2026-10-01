@@ -1,20 +1,22 @@
 import { emblemOf, lang, LANGS, setLang, specialName, topName, tr, type Lang } from '../i18n';
 import { ARENA_IDS, ARENAS, type ArenaId } from '../sim/arena';
-import { DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
-import { equip, STOCK, type TeamLoadouts } from '../sim/parts';
+import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
+import { equip, PARTS, STOCK, type PartId, type PartSlot, type TeamLoadouts } from '../sim/parts';
 import { spinRatio } from '../sim/physics';
 import { currentPairing, type Pairing, type TeamMatch } from '../sim/team';
-import { buildSpec, TOP_IDS, TYPE_LABEL } from '../sim/tops';
+import { buildSpec, TOP_IDS, TOP_SPECS, TYPE_LABEL } from '../sim/tops';
+import type { DuelSummary, TrialConfig, TrialRecord, TrialSide } from '../sim/trial';
 import type { FinishType, TopId, TopSpec, TopState } from '../sim/types';
-import { $, chip, css, el, spinLabel, STAT_AXES, statScore } from './common';
+import { $, chip, css, el, rpmOf, spinLabel, STAT_AXES, statScore } from './common';
 import { DetailView } from './detail';
+import { partButton, partMenu } from './partMenu';
 
 export { css } from './common';
 
 /** 終結方式的名稱（結果畫面用；日文版英文、中文版中文） */
 const finishName = (f: FinishType) => tr(`finish.${f}`);
 
-/** 場地選擇：五個場地加上「隨機」 */
+/** 場地選擇：六個場地加上「隨機」 */
 export type ArenaChoice = ArenaId | 'random';
 
 /** 陀螺卡片（延長賽三選一用）：順序徽章、名稱（日文版另附中文名）、類型、六項屬性條、必殺技名 */
@@ -56,6 +58,51 @@ function buildTile(sp: TopSpec): HTMLButtonElement {
   c.append(el('span', 'badge'), img, emb, el('span', 'nm', sp.nameZh), el('span', 'ty', TYPE_LABEL[sp.type].slice(0, 1)));
   if (sp.spinDir === -1) c.append(el('span', 'left', '左'));
   return c;
+}
+
+/**
+ * 綁定一個畫面上的難度與場地選擇列（組隊畫面與試驗模式共用）：點按鈕切換、標出目前的選擇、更新場地說明。
+ * withRandom 決定場地有沒有「隨機」；lockArena 為 true 時場地按鈕停用（線上的客人）。
+ * 回傳的 setArena(id, false) 只更新畫面不回報（線上收到伺服器通知時用）。
+ */
+function bindModeRow(
+  root: HTMLElement,
+  o: { difficulty: DifficultyId; arena: ArenaChoice; onDifficulty: (d: DifficultyId) => void; onArena: (a: ArenaChoice) => void; withRandom: boolean; lockArena?: boolean },
+): { setDiff: (d: DifficultyId) => void; setArena: (id: ArenaChoice, notify?: boolean) => void; choices: ArenaChoice[]; arena: () => ArenaChoice } {
+  const diffBtns = [...root.querySelectorAll<HTMLButtonElement>('.difficulty button')];
+  const setDiff = (d: DifficultyId) => {
+    diffBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === d));
+    o.onDifficulty(d);
+  };
+  diffBtns.forEach((b) => {
+    b.onclick = () => {
+      setDiff(b.dataset.id as DifficultyId);
+      b.blur();
+    };
+    b.classList.toggle('on', b.dataset.id === o.difficulty);
+  });
+  const choices: ArenaChoice[] = o.withRandom ? [...ARENA_IDS, 'random'] : [...ARENA_IDS];
+  let arena = o.arena;
+  const arenaBtns = choices.map((id) => {
+    const b = el('button', '', id === 'random' ? '隨機' : ARENAS[id].nameZh);
+    b.type = 'button';
+    b.dataset.id = id;
+    b.disabled = !!o.lockArena;
+    b.onclick = () => {
+      setArena(id);
+      b.blur();
+    };
+    return b;
+  });
+  $('.arena', root).replaceChildren(...arenaBtns);
+  const setArena = (id: ArenaChoice, notify = true) => {
+    arena = id;
+    arenaBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+    $('.arena-desc', root).textContent = id === 'random' ? '開打時從六個場地隨機抽一個。' : ARENAS[id].descZh;
+    if (notify) o.onArena(id);
+  };
+  setArena(arena);
+  return { setDiff, setArena, choices, arena: () => arena };
 }
 
 /** 小格換上 3D 縮圖（隱藏紋章字） */
@@ -113,6 +160,67 @@ export interface ArrangeOptions {
   onHover: (spec: TopSpec) => void;
   /** 要一張 3D 縮圖（dataURL） */
   thumb: (spec: TopSpec, cb: (url: string) => void) => void;
+}
+
+/** 試驗模式設定畫面的參數 */
+export interface TrialSelectOptions {
+  specs: Record<TopId, TopSpec>;
+  /** 一開始的設定（上次試驗的設定） */
+  config: TrialConfig;
+  onDifficulty: (d: DifficultyId) => void;
+  onArena: (a: ArenaId) => void;
+  /** 詳細資料換成某一顆時（spec 已套用零件；換 3D 示範用） */
+  onHover: (spec: TopSpec) => void;
+  thumb: (spec: TopSpec, cb: (url: string) => void) => void;
+  /** 開始試驗（實際對戰一場） */
+  onStart: (cfg: TrialConfig) => void;
+  /** 電腦自動對打 100 場 */
+  onAuto: (cfg: TrialConfig) => void;
+  onBack: () => void;
+}
+
+/** 試驗模式一戰的數據（索引 0 = 你、1 = 電腦） */
+export interface TrialBattleStats {
+  winner: 0 | 1 | null;
+  finish: FinishType | null;
+  /** 模擬秒數 */
+  time: number;
+  rpm: [number, number];
+  /** 爆裂值 0..1 */
+  burst: [number, number];
+  /** 發射力道 0..1 */
+  launch: [number, number];
+  specials: [boolean, boolean];
+  clashes: number;
+  bigClashes: number;
+}
+
+/** 試驗模式結果畫面的參數 */
+export interface TrialResultOptions {
+  player: TopSpec;
+  cpu: TopSpec;
+  arenaName: string;
+  difficulty: DifficultyId;
+  /** 這一戰的數據；null 表示只看自動對打（從設定畫面直接按自動對打） */
+  battle: TrialBattleStats | null;
+  record: TrialRecord;
+  onRetry: () => void;
+  onChange: () => void;
+  onAuto: () => void;
+  onCancelAuto: () => void;
+  onTitle: () => void;
+}
+
+/** 標題畫面的模式選單（各按鈕按下時呼叫；沒給的按鈕隱藏） */
+export interface TitleMenuOptions {
+  /** 電腦對戰（3 對 3） */
+  onCpu: () => void;
+  /** 試驗模式（一對一比較陀螺與零件） */
+  onTrial?: () => void;
+  /** 線上對戰 */
+  onOnline?: () => void;
+  /** 操作教學 */
+  tutorial?: TitleTutorialOptions;
 }
 
 /** 標題畫面的操作教學入口 */
@@ -182,6 +290,8 @@ export class Hud {
   private detail: DetailView | null = null;
   /** 線上組隊時更新場地與對手狀態用（組隊畫面開著時才有） */
   private selectOnline: { setArena: (a: ArenaChoice) => void } | null = null;
+  /** 試驗模式設定畫面的鍵盤處理 */
+  private trialKeys: ((e: KeyboardEvent) => void) | null = null;
   /** 線上房間畫面正在連線（按鈕停用中） */
   private onlineBusy = false;
   /** 第 2 步：倒數的定時器、鍵盤操作、鎖定（準備完成或時間到）的函式（畫面開著時才有） */
@@ -192,50 +302,54 @@ export class Hud {
   private roomsKey = '';
 
   /**
-   * 顯示標題畫面，點擊後呼叫 onStart。
+   * 標題畫面：模式選單（電腦對戰／試驗模式／線上對戰／操作教學），點按鈕才開始；按 Enter 等於電腦對戰。
    * 用 click 而不是 pointerdown：觸控時瀏覽器在 pointerdown 之後才補送 click，
    * 若在 pointerdown 就切到組隊畫面，這個 click 會落在剛出現的陀螺小格上，誤選一顆。
    * 右上角的語言按鈕切換日文版／全中文版（記住選擇），不會開始遊戲。
-   * tutorial：「操作教學」按鈕；offer 為 true 時顯示「第一次玩？建議先看操作教學」的提示（開始教學／不用了），
-   * 提示不擋開始遊戲（點標題其他地方照常開打）。
+   * tutorial.offer 為 true 時顯示「第一次玩？建議先看操作教學」的提示（開始教學／不用了）。
    */
-  showTitle(onStart: () => void, onOnline?: () => void, tutorial?: TitleTutorialOptions): void {
+  showTitle(o: TitleMenuOptions): void {
     const title = $('#title');
+    const cpu = $<HTMLButtonElement>('.to-cpu', title);
+    const trial = $<HTMLButtonElement>('.to-trial', title);
     const online = $<HTMLButtonElement>('.to-online', title);
     const tutBtn = $<HTMLButtonElement>('.to-tutorial', title);
     const offer = $('.tut-offer', title);
+    const tutorial = o.tutorial;
     title.hidden = false;
-    online.hidden = !onOnline;
+    trial.hidden = !o.onTrial;
+    online.hidden = !o.onOnline;
     tutBtn.hidden = !tutorial;
     offer.hidden = !tutorial?.offer;
-    /** 標題上的按鈕：攔住事件，不要讓「點任意處開始」也觸發 */
-    const own = (b: HTMLButtonElement, fn: () => void) => {
-      b.onclick = (e) => {
-        e.stopPropagation();
-        fn();
+    const langBtns = [...title.querySelectorAll<HTMLButtonElement>('.lang-switch button')];
+    /** 收起標題、拿掉所有按鈕與鍵盤的處理 */
+    const stop = () => {
+      window.removeEventListener('keydown', onKey);
+      for (const b of [cpu, trial, online, tutBtn, ...offer.querySelectorAll('button'), ...langBtns]) (b as HTMLButtonElement).onclick = null;
+      title.hidden = true;
+    };
+    /** 按鈕按下：收起標題再進入該模式 */
+    const go = (b: HTMLButtonElement, fn?: () => void) => {
+      b.onclick = () => {
+        stop();
+        fn?.();
       };
     };
+    go(cpu, o.onCpu);
+    go(trial, o.onTrial);
+    go(online, o.onOnline);
     if (tutorial) {
-      own(tutBtn, () => {
-        stop();
-        tutorial.onStart();
-      });
-      own($<HTMLButtonElement>('.tut-offer-go', offer), () => {
-        stop();
-        tutorial.onStart();
-      });
-      own($<HTMLButtonElement>('.tut-offer-no', offer), () => {
+      go(tutBtn, tutorial.onStart);
+      go($<HTMLButtonElement>('.tut-offer-go', offer), tutorial.onStart);
+      $<HTMLButtonElement>('.tut-offer-no', offer).onclick = () => {
         offer.hidden = true;
         tutorial.onDismiss();
-      });
+      };
     }
-    const langBtns = [...title.querySelectorAll<HTMLButtonElement>('.lang-switch button')];
     /** 標出目前的語言 */
     const markLang = () => langBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang())));
     langBtns.forEach((b) => {
-      b.onclick = (e) => {
-        // 攔住事件：不要讓標題的「點任意處開始」也觸發
-        e.stopPropagation();
+      b.onclick = () => {
         const l = b.dataset.lang as Lang;
         if (LANGS.includes(l)) setLang(l);
         markLang();
@@ -243,26 +357,14 @@ export class Hud {
       };
     });
     markLang();
-    const stop = () => {
-      title.removeEventListener('click', go);
-      window.removeEventListener('keydown', go);
-      online.onclick = null;
-      tutBtn.onclick = null;
-      langBtns.forEach((b) => (b.onclick = null));
-      title.hidden = true;
-    };
-    const go = () => {
+    /** Enter（焦點不在其他按鈕上時）＝電腦對戰 */
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || (e.target as HTMLElement | null)?.tagName === 'BUTTON') return;
+      e.preventDefault();
       stop();
-      onStart();
+      o.onCpu();
     };
-    // 線上對戰按鈕：攔住事件，不要讓標題的「點任意處開始 CPU 對戰」也觸發
-    online.onclick = (e) => {
-      e.stopPropagation();
-      stop();
-      onOnline?.();
-    };
-    title.addEventListener('click', go);
-    window.addEventListener('keydown', go);
+    window.addEventListener('keydown', onKey);
   }
 
   /** 線上房間畫面：輸入名稱，建立房間或用房號加入 */
@@ -360,7 +462,8 @@ export class Hud {
       const who = el('span', 'rr-host');
       who.textContent = waiting ? r.host : `${r.host} vs ${r.guest ?? ''}`;
       const meta = el('span', 'rr-meta');
-      const arena = r.arena === 'random' ? '隨機場地' : ARENAS[r.arena].nameZh;
+      // 不認得的場地（伺服器比網頁新、加了新場地）照樣列出，不讓整個列表壞掉
+      const arena = r.arena === 'random' ? '隨機場地' : (ARENAS[r.arena]?.nameZh ?? '新場地');
       meta.textContent = `${arena}・${waiting ? waitedLabel(r.waited) : '對戰中'}`;
       const go = el('span', 'rr-go');
       go.textContent = waiting ? '加入 ▶' : '—';
@@ -399,58 +502,17 @@ export class Hud {
     // 線上：沒有難度；客人不能選場地
     $('.difficulty', root).hidden = !!online;
     root.classList.toggle('online', !!online);
-    // 難度切換
-    const diffBtns = [...root.querySelectorAll<HTMLButtonElement>('.difficulty button')];
-    const setDiff = (d: DifficultyId) => {
-      diffBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === d));
-      o.onDifficulty(d);
-    };
-    diffBtns.forEach((b) => {
-      b.onclick = () => {
-        setDiff(b.dataset.id as DifficultyId);
-        b.blur();
-      };
-    });
-    diffBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === o.difficulty));
-
-    // 場地切換（含隨機）
-    const arenaRow = $('.arena', root);
-    const arenaChoices: ArenaChoice[] = [...ARENA_IDS, 'random'];
-    let arena = o.arena;
-    const arenaBtns = arenaChoices.map((id) => {
-      const b = el('button', '', id === 'random' ? '隨機' : ARENAS[id].nameZh);
-      b.type = 'button';
-      b.dataset.id = id;
-      b.disabled = !!online && !online.host;
-      b.onclick = () => {
-        setArena(id);
-        b.blur();
-      };
-      return b;
-    });
-    arenaRow.replaceChildren(...arenaBtns);
-    const setArena = (id: ArenaChoice) => {
-      arena = id;
-      arenaBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === id));
-      $('.arena-desc', root).textContent = id === 'random' ? '開打時從五個場地隨機抽一個。' : ARENAS[id].descZh;
-      o.onArena(id);
-    };
-    setArena(arena);
+    // 難度與場地（含隨機）
+    const mode = bindModeRow(root, { ...o, withRandom: true, lockArena: !!online && !online.host });
+    const { setDiff, setArena } = mode;
+    const arenaChoices = mode.choices;
     // 線上：伺服器通知場地變化時只更新畫面（不再回報）
-    this.selectOnline = online
-      ? {
-          setArena: (id: ArenaChoice) => {
-            arena = id;
-            arenaBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === id));
-            $('.arena-desc', root).textContent = id === 'random' ? '開打時從五個場地隨機抽一個。' : ARENAS[id].descZh;
-          },
-        }
-      : null;
+    this.selectOnline = online ? { setArena: (id: ArenaChoice) => setArena(id, false) } : null;
 
     const cards = $('.cards', root);
     /** 第 1 步只看原廠規格的介紹與絕招示範；換零件在第 2 步 */
     const specOf = (t: TopId) => o.specs[t];
-    const detail = new DetailView($('.detail', root), undefined, { parts: false });
+    const detail = new DetailView($('.detail', root), { parts: false });
     this.detail = detail;
     // CPU 陣容：依名鑑順序顯示，不洩漏出場順序；線上時改成對手狀態
     $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
@@ -483,7 +545,7 @@ export class Hud {
       const t = TOP_IDS[idx];
       const sp = specOf(t);
       o.onHover(sp);
-      detail.show(sp, picks.includes(t), {});
+      detail.show(sp);
       refresh();
       els[idx]?.scrollIntoView({ block: 'nearest' });
     };
@@ -555,7 +617,7 @@ export class Hud {
       } else if ((k === '1' || k === '2' || k === '3') && !online) {
         setDiff(DIFFICULTY_IDS[Number(k) - 1]);
       } else if ((k === 'q' || k === 'e') && (!online || online.host)) {
-        const i = arenaChoices.indexOf(arena) + (k === 'e' ? 1 : -1);
+        const i = arenaChoices.indexOf(mode.arena()) + (k === 'e' ? 1 : -1);
         setArena(arenaChoices[(i + arenaChoices.length) % arenaChoices.length]);
       }
     };
@@ -593,17 +655,28 @@ export class Hud {
     ready.textContent = o.readyLabel;
     ready.disabled = false;
 
-    const detail = new DetailView($('.ar-detail', root), (slot, part) => {
+    const detail = new DetailView($('.ar-detail', root));
+    this.detail = detail;
+    /** 第 i 個欄位換零件（part 為 null = 換回原廠） */
+    const setPart = (i: number, slot: PartSlot, part: PartId | null) => {
       if (locked) return;
-      const t = order[sel];
+      const t = order[i];
       try {
         loadouts = equip(loadouts, t, o.specs[t].stock, slot, part);
       } catch {
-        // 零件已被隊友使用（選單已停用該選項，正常不會發生）：維持原狀
+        // 零件已被隊友使用（清單已停用該選項，正常不會發生）：維持原狀
       }
+      sel = i;
       changed();
-    });
-    this.detail = detail;
+    };
+    /** 打開第 i 個欄位的零件清單（先選取那一欄，右側換成那一顆） */
+    const openParts = (i: number, slot: PartSlot, anchor?: HTMLElement) => {
+      if (locked) return;
+      if (sel !== i) select(i);
+      const btn = anchor?.isConnected ? anchor : slots.querySelector<HTMLElement>(`.ar-slot:nth-child(${i + 1}) .part-btn[data-slot="${slot}"]`);
+      if (!btn) return;
+      partMenu.open({ anchor: btn, top: order[i], slot, loadouts, onPick: (part) => setPart(i, slot, part) });
+    };
 
     const slots = $('.ar-slots', root);
     /** 重畫三個出場欄位與右側的詳細資料 */
@@ -617,7 +690,12 @@ export class Hud {
           const thumb = el('span', 'ar-thumb');
           o.thumb(sp, (url) => (thumb.style.backgroundImage = `url(${url})`));
           const name = el('span', 'ar-name', sp.nameZh);
-          name.append(el('small', '', `${TYPE_LABEL[sp.type]}${loadouts[t] ? '・換了零件' : ''}`));
+          name.append(el('small', '', TYPE_LABEL[sp.type]));
+          // 盤與軸的按鈕：直接顯示目前的零件，點下展開零件清單
+          const parts = el('span', 'ar-parts');
+          parts.append(
+            ...(['disk', 'driver'] as PartSlot[]).map((slot) => partButton(t, slot, loadouts, (b) => openParts(i, slot, b), locked)),
+          );
           const mv = el('span', 'ar-move');
           const up = el('button', 'ar-up', '▲');
           const down = el('button', 'ar-down', '▼');
@@ -636,13 +714,13 @@ export class Hud {
             move(i, 1);
           };
           mv.append(up, down);
-          li.append(el('span', 'ar-n', `第 ${i + 1} 戰`), thumb, name, mv);
+          li.append(el('span', 'ar-n', `第 ${i + 1} 戰`), thumb, name, parts, mv);
           li.onclick = () => select(i);
           return li;
         }),
       );
       const sp = specOf(order[sel]);
-      detail.show(sp, !locked, loadouts);
+      detail.show(sp);
       o.onHover(sp);
     };
     const select = (i: number) => {
@@ -664,6 +742,7 @@ export class Hud {
     /** 鎖定：準備完成或時間到之後不能再改 */
     const lock = (status: string) => {
       locked = true;
+      partMenu.close();
       ready.disabled = true;
       back.disabled = true;
       $('.ar-status', root).textContent = status;
@@ -700,8 +779,8 @@ export class Hud {
     }
 
     this.arrangeKeys = (e: KeyboardEvent) => {
-      // 零件選單有焦點時，方向鍵與 Enter 交給選單本身
-      if ((e.target as HTMLElement | null)?.tagName === 'SELECT') return;
+      // 零件清單開著時，方向鍵與 Enter 交給清單本身
+      if (partMenu.isOpen) return;
       const k = e.key.toLowerCase();
       if (k === 'arrowup' || k === 'w') {
         e.preventDefault();
@@ -711,7 +790,13 @@ export class Hud {
         e.preventDefault();
         if (e.shiftKey) move(sel, 1);
         else select(sel + 1);
+      } else if (k === 'q' || k === 'e') {
+        // Q／E：打開選到那一顆的盤／軸清單
+        e.preventDefault();
+        openParts(sel, k === 'q' ? 'disk' : 'driver');
       } else if (k === 'enter') {
+        // 焦點在零件按鈕上時，Enter 是打開清單（按鈕自己處理）
+        if ((e.target as HTMLElement | null)?.classList.contains('part-btn')) return;
         e.preventDefault();
         confirm();
       } else if ((k === 'backspace' || k === 'escape') && o.onBack) {
@@ -735,8 +820,9 @@ export class Hud {
     $('#arrange .ar-opp-note').textContent = text;
   }
 
-  /** 收起第 2 步：停止倒數、拿掉鍵盤操作 */
+  /** 收起第 2 步：停止倒數、拿掉鍵盤操作、收起零件清單 */
   hideArrange(): void {
+    partMenu.close();
     window.clearInterval(this.arrangeTimer);
     this.arrangeTimer = 0;
     if (this.arrangeKeys) window.removeEventListener('keydown', this.arrangeKeys);
@@ -779,6 +865,338 @@ export class Hud {
   stageFlash(text: string): void {
     this.detail?.flash(text);
   }
+
+  /**
+   * 試驗模式的設定畫面：上方選難度與場地（沒有隨機），左邊是「你」與「電腦」兩張卡片（點一張選取）和名鑑，
+   * 名鑑點到的陀螺換到選取的那一邊（換陀螺時零件回到原廠）；兩張卡片各有盤／軸按鈕；右邊是選取那一邊的詳細資料。
+   * 下方：回標題、開始試驗、電腦自動對打 100 場。
+   */
+  showTrial(o: TrialSelectOptions): void {
+    const root = $('#trial');
+    /** 目前的設定、選取的那一邊、名鑑游標 */
+    const cfg: TrialConfig = structuredClone(o.config);
+    let active: 'player' | 'cpu' = 'player';
+    let idx = Math.max(0, TOP_IDS.indexOf(cfg.player.top));
+    const specOf = (s: TrialSide) => buildSpec(s.top, s.loadout);
+    const mode = bindModeRow(root, {
+      difficulty: cfg.difficulty,
+      arena: cfg.arena,
+      withRandom: false,
+      onDifficulty: (d) => {
+        cfg.difficulty = d;
+        o.onDifficulty(d);
+      },
+      onArena: (a) => {
+        cfg.arena = a as ArenaId;
+        o.onArena(a as ArenaId);
+      },
+    });
+    const detail = new DetailView($('.detail', root));
+    this.detail = detail;
+    const sides = $('.tr-sides', root);
+    const cards = $('.cards', root);
+    const els: HTMLButtonElement[] = [];
+
+    /** 重畫兩張卡片、名鑑上的標記與詳細資料 */
+    const render = () => {
+      sides.replaceChildren(
+        ...(['player', 'cpu'] as const).map((who) => {
+          const s = cfg[who];
+          const sp = specOf(s);
+          const card = el('div', `tr-side${who === active ? ' on' : ''}`);
+          card.dataset.side = who;
+          card.setAttribute('role', 'button');
+          card.tabIndex = 0;
+          card.style.setProperty('--c', css(sp.glow));
+          const thumb = el('span', 'ar-thumb');
+          o.thumb(TOP_SPECS[s.top], (url) => (thumb.style.backgroundImage = `url(${url})`));
+          const name = el('span', 'tr-name', sp.nameZh);
+          name.append(el('small', '', TYPE_LABEL[sp.type]));
+          const parts = el('span', 'ar-parts');
+          const lo: TeamLoadouts = { [s.top]: s.loadout };
+          parts.append(
+            ...(['disk', 'driver'] as PartSlot[]).map((slot) =>
+              partButton(s.top, slot, lo, (b) => {
+                setActive(who);
+                partMenu.open({
+                  anchor: b.isConnected ? b : $(`.tr-side[data-side="${who}"] .part-btn[data-slot="${slot}"]`, root),
+                  top: s.top,
+                  slot,
+                  loadouts: lo,
+                  onPick: (part) => {
+                    cfg[who] = { top: s.top, loadout: { ...cfg[who].loadout, [slot]: part } };
+                    render();
+                  },
+                });
+              }),
+            ),
+          );
+          card.append(el('span', 'tr-who', who === 'player' ? tr('you') : '電腦'), thumb, name, parts);
+          card.onclick = () => setActive(who);
+          card.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              setActive(who);
+            }
+          };
+          return card;
+        }),
+      );
+      els.forEach((e, k) => {
+        const t = TOP_IDS[k];
+        e.classList.toggle('on', k === idx);
+        e.classList.toggle('picked', t === cfg.player.top || t === cfg.cpu.top);
+        $('.badge', e).textContent = [t === cfg.player.top ? '你' : '', t === cfg.cpu.top ? '電' : ''].filter(Boolean).join('');
+      });
+      const sp = specOf(cfg[active]);
+      detail.show(sp);
+      o.onHover(sp);
+    };
+    const setActive = (who: 'player' | 'cpu') => {
+      if (active === who) return;
+      active = who;
+      idx = TOP_IDS.indexOf(cfg[who].top);
+      render();
+    };
+    /** 把名鑑第 i 格換到選取的那一邊（零件回到原廠） */
+    const assign = (i: number) => {
+      idx = i;
+      cfg[active] = { top: TOP_IDS[i], loadout: { ...STOCK } };
+      partMenu.close();
+      render();
+    };
+    const setIdx = (i: number) => {
+      idx = (i + TOP_IDS.length) % TOP_IDS.length;
+      render();
+      els[idx]?.scrollIntoView({ block: 'nearest' });
+    };
+    const columns = () => {
+      const top = els[0]?.offsetTop ?? 0;
+      const n = els.findIndex((e) => e.offsetTop !== top);
+      return n > 0 ? n : els.length;
+    };
+    cards.replaceChildren();
+    TOP_IDS.forEach((id, i) => {
+      const c = buildTile(o.specs[id]);
+      o.thumb(o.specs[id], (url) => setTileThumb(c, url));
+      // 滑鼠移過去先看那一顆（原廠），移開回到選取那一邊
+      c.addEventListener('pointerenter', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        detail.show(o.specs[id]);
+        o.onHover(o.specs[id]);
+      });
+      c.addEventListener('pointerleave', (e) => {
+        if (e.pointerType === 'mouse') render();
+      });
+      c.addEventListener('click', () => {
+        assign(i);
+        c.blur();
+      });
+      els.push(c);
+      cards.append(c);
+    });
+    const close = () => {
+      this.hideTrial();
+    };
+    $<HTMLButtonElement>('.tr-back', root).onclick = () => {
+      close();
+      o.onBack();
+    };
+    $<HTMLButtonElement>('.tr-go', root).onclick = () => {
+      close();
+      o.onStart(structuredClone(cfg));
+    };
+    $<HTMLButtonElement>('.tr-auto', root).onclick = () => {
+      close();
+      o.onAuto(structuredClone(cfg));
+    };
+    this.trialKeys = (e: KeyboardEvent) => {
+      if (partMenu.isOpen) return;
+      const k = e.key;
+      const onButton = (e.target as HTMLElement | null)?.tagName === 'BUTTON';
+      if (k === 'ArrowLeft' || k === 'a') setIdx(idx - 1);
+      else if (k === 'ArrowRight' || k === 'd') setIdx(idx + 1);
+      else if (k === 'ArrowUp' || k === 'w') {
+        e.preventDefault();
+        setIdx(idx - columns());
+      } else if (k === 'ArrowDown' || k === 's') {
+        e.preventDefault();
+        setIdx(idx + columns());
+      } else if (k === ' ' && !onButton) {
+        e.preventDefault();
+        assign(idx);
+      } else if (k === 'x' || k === 'X') {
+        setActive(active === 'player' ? 'cpu' : 'player');
+      } else if (k === 'Enter' && !onButton) {
+        e.preventDefault();
+        close();
+        o.onStart(structuredClone(cfg));
+      } else if (k === 'Escape') {
+        close();
+        o.onBack();
+      } else if (k === '1' || k === '2' || k === '3') {
+        mode.setDiff(DIFFICULTY_IDS[Number(k) - 1]);
+      } else if (k === 'q' || k === 'e') {
+        const i = mode.choices.indexOf(mode.arena()) + (k === 'e' ? 1 : -1);
+        mode.setArena(mode.choices[(i + mode.choices.length) % mode.choices.length]);
+      }
+    };
+    window.addEventListener('keydown', this.trialKeys);
+    root.hidden = false;
+    document.body.classList.add('selecting');
+    render();
+  }
+
+  /** 收起試驗模式的設定畫面 */
+  hideTrial(): void {
+    partMenu.close();
+    if (this.trialKeys) window.removeEventListener('keydown', this.trialKeys);
+    this.trialKeys = null;
+    const root = $('#trial');
+    if (!root.hidden) {
+      root.hidden = true;
+      this.detail = null;
+      document.body.classList.remove('selecting');
+    }
+  }
+
+  /** 對戰 HUD 的賽況列（試驗模式）：「試驗・場地」與雙方的陀螺；比分顯示這組設定的累計勝敗 */
+  setTrialInfo(player: TopSpec, cpu: TopSpec, arenaName: string): void {
+    $('#hud .info').textContent = `試驗・${arenaName}`;
+    const c0 = chip(player);
+    const c1 = chip(cpu);
+    c0.classList.add('cur');
+    c1.classList.add('cur');
+    $('#hud .lineup .t0').replaceChildren(c0);
+    $('#hud .lineup .t1').replaceChildren(c1);
+  }
+
+  /**
+   * 試驗模式的結果畫面：這一戰的數據（battle 為 null 時只看自動對打）、這組設定的累計戰績、
+   * 電腦自動對打的進度與結果（setTrialAuto 更新）；按鈕：同設定再戰、換設定、自動對打 100 場、回標題。
+   */
+  showTrialResult(o: TrialResultOptions): void {
+    const root = $('#trial-result');
+    const b = o.battle;
+    const withParts = (sp: TopSpec) => {
+      const stock = TOP_SPECS[sp.id];
+      const changed = (['disk', 'driver'] as PartSlot[]).filter((s) => sp.parts[s] !== stock.stock[s]).map((s) => PARTS[sp.parts[s]].nameZh);
+      return `${sp.nameZh}（${changed.length ? changed.join('＋') : '原廠'}）`;
+    };
+    $('.tr-headline', root).textContent = !b ? '電腦自動對打' : b.winner === null ? '平手' : b.winner === 0 ? tr('result.win') : tr('result.lose');
+    $('.tr-matchup', root).textContent = `${tr('you')}：${withParts(o.player)} ${tr('vs')} 電腦：${withParts(o.cpu)}＠${o.arenaName}・${DIFFICULTIES[o.difficulty].labelZh}`;
+    const table = $('.tr-stats', root);
+    table.hidden = !b;
+    if (b) {
+      /** 一列數據：給兩個值就是「你／電腦」各一格，只給一個值就橫跨兩格（雙方共用的數據） */
+      const row = (label: string, a: string, c?: string) => {
+        const tr0 = el('tr', '');
+        const td = el('td', '', a);
+        if (c === undefined) td.colSpan = 2;
+        tr0.append(el('th', '', label), td);
+        if (c !== undefined) tr0.append(el('td', '', c));
+        return tr0;
+      };
+      const head = el('tr', '');
+      head.append(el('th', '', ''), el('th', '', tr('you')), el('th', '', '電腦'));
+      const pct = (v: number) => `${Math.round(v * 100)}%`;
+      table.replaceChildren(
+        head,
+        row('終結方式', b.finish ? `${finishName(b.finish)}（${b.winner === null ? '平手' : b.winner === 0 ? `${tr('you')} 獲勝` : '電腦獲勝'}）` : '—'),
+        row('對戰時間', `${b.time.toFixed(1)} 秒`),
+        row('剩餘轉速', `${b.rpm[0]} RPM`, `${b.rpm[1]} RPM`),
+        row('爆裂值', pct(b.burst[0]), pct(b.burst[1])),
+        row('發射力道', pct(b.launch[0]), pct(b.launch[1])),
+        row('必殺', b.specials[0] ? '有放出' : '沒放', b.specials[1] ? '有放出' : '沒放'),
+        row('撞擊', `${b.clashes} 次（重擊 ${b.bigClashes} 次）`),
+      );
+    }
+    this.renderTrialRecord(o.record);
+    $('.tr-auto-box', root).hidden = true;
+    const btn = (sel: string, fn: () => void) => {
+      $<HTMLButtonElement>(sel, root).onclick = (e) => {
+        (e.currentTarget as HTMLButtonElement).blur();
+        fn();
+      };
+    };
+    btn('.tr-retry', o.onRetry);
+    btn('.tr-change', o.onChange);
+    btn('.tr-auto-run', o.onAuto);
+    btn('.tr-title', o.onTitle);
+    btn('.tr-auto-cancel', o.onCancelAuto);
+    root.hidden = false;
+    document.body.classList.add('selecting');
+  }
+
+  /** 結果畫面的累計戰績（這一組設定） */
+  private renderTrialRecord(r: TrialRecord): void {
+    const box = $('#trial-result .tr-record');
+    if (!r.games) {
+      box.replaceChildren(el('p', 'tr-none', '這組設定還沒有實際對戰紀錄。'));
+      return;
+    }
+    const rate = r.wins + r.losses ? Math.round((r.wins / (r.wins + r.losses)) * 100) : 0;
+    box.replaceChildren(
+      el('p', 'tr-sum', `這組設定累計 ${r.games} 戰：${r.wins} 勝 ${r.losses} 敗 ${r.draws} 平（勝率 ${rate}%）`),
+      this.finishTable(r.finishes),
+    );
+  }
+
+  /** 終結方式的小表：每一種「你終結對手／被對手終結」的次數（都是 0 的不列） */
+  private finishTable(f: TrialRecord['finishes']): HTMLElement {
+    const ul = el('ul', 'tr-finishes');
+    for (const [k, [w, l]] of Object.entries(f) as [FinishType, [number, number]][]) {
+      if (!w && !l) continue;
+      const li = el('li', '', finishName(k));
+      li.append(el('b', 'w', `你 ${w}`), el('b', 'l', `電腦 ${l}`));
+      ul.append(li);
+    }
+    return ul;
+  }
+
+  /**
+   * 試驗模式自動對打的顯示：progress 為進行中（0..1）；summary 為打完的結果；兩者皆無則收起。
+   * 進行中時其他按鈕停用（只能停止）。
+   */
+  setTrialAuto(state: { progress: number; summary?: DuelSummary } | null): void {
+    const root = $('#trial-result');
+    const box = $('.tr-auto-box', root);
+    const running = !!state && !state.summary;
+    for (const b of root.querySelectorAll<HTMLButtonElement>('.tr-result-actions button')) b.disabled = running;
+    $('.tr-auto-cancel', root).hidden = !running;
+    if (!state) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    $<HTMLElement>('.tr-progress i', root).style.width = `${Math.round(state.progress * 100)}%`;
+    const s = state.summary;
+    $('.tr-auto-title', root).textContent = s
+      ? `電腦自動對打 ${s.games} 場（雙方都由電腦操作，座位各半）`
+      : `電腦自動對打中… ${Math.round(state.progress * 100)}%`;
+    const res = $('.tr-auto-result', root);
+    if (!s) {
+      res.replaceChildren();
+      return;
+    }
+    const rate = s.wins + s.losses ? Math.round((s.wins / (s.wins + s.losses)) * 100) : 0;
+    res.replaceChildren(
+      el('p', 'tr-rate', `你的陀螺勝率 ${rate}%`),
+      el('p', 'tr-sum', `${s.wins} 勝 ${s.losses} 敗 ${s.draws} 平・平均 ${s.avgTime.toFixed(1)} 秒`),
+      this.finishTable(s.finishes),
+    );
+  }
+
+  /** 收起試驗模式的結果畫面 */
+  hideTrialResult(): void {
+    const root = $('#trial-result');
+    if (!root.hidden) {
+      root.hidden = true;
+      document.body.classList.remove('selecting');
+    }
+  }
+
 
   /** 延長賽：從自己的三顆挑一顆出戰（點一下即決定；鍵盤 ← → 移動、Enter 決定） */
   showOvertimePick(team: TopSpec[], onHover: (t: TopId) => void, onPick: (t: TopId) => void): void {
@@ -872,7 +1290,7 @@ export class Hud {
     tops.forEach((t, i) => {
       const p = $(`.panel[data-side="${i}"]`, hud);
       const r = t.alive ? spinRatio(t) : 0;
-      $('.val', p).textContent = String(Math.round(t.spin * 9.55 * 2.4));
+      $('.val', p).textContent = String(rpmOf(t));
       $('.spin i', p).style.width = `${r * 100}%`;
       $('.burst i', p).style.width = `${Math.min(1, t.burst) * 100}%`;
       $('.burst', p).classList.toggle('danger', t.burst > 0.7 && t.alive);

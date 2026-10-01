@@ -44,6 +44,21 @@ describe('BattleSim', () => {
     expect(sim.drainEvents().some((e) => e.type === 'finish')).toBe(true);
   });
 
+  test('撞進標準戰鬥盤中間的寬口判定極限終結（Xtreme Finish），陀螺和場外終結一樣繼續飛出去', () => {
+    const arena = ARENAS.stadium;
+    const p = arena.pockets.find((k) => k.kind === 'xtreme')!;
+    const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.wolf, { seed: 1, launch: [0.9, 0.9], arena });
+    const t = sim.tops[1];
+    const d = { x: Math.cos(p.at), z: Math.sin(p.at) };
+    const edge = arena.radius - t.spec.radius + 0.01;
+    t.pos = { x: d.x * edge, z: d.z * edge };
+    t.vel = { x: d.x * 6, z: d.z * 6 };
+    sim.step(STEP);
+    expect(sim.result).toMatchObject({ finish: 'xtreme', loser: 1, winner: 0 });
+    for (let i = 0; i < 30; i++) sim.step(STEP);
+    expect(Math.hypot(t.pos.x, t.pos.z)).toBeGreaterThan(arena.radius + 0.5);
+  });
+
   test('爆裂量表滿了判定爆裂（Burst Finish）', () => {
     const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.wolf, { seed: 1, launch: [0.9, 0.9] });
     sim.tops[0].burst = 1;
@@ -206,7 +221,12 @@ describe('CPU 對打耐久測試（平衡性）', () => {
         pairs.push([a, TOP_IDS[(i + 3) % TOP_IDS.length], seed]);
       }
     });
-    runAll(pairs, ARENAS[arenaId]);
+    const finishes = runAll(pairs, ARENAS[arenaId]);
+    // 實體戰鬥盤（出場口集中一邊）：兩角的場外終結與中間寬口的極限終結都要打得出來
+    if (arenaId === 'stadium' || arenaId === 'double') {
+      expect(finishes.get('over') ?? 0, `${arenaId} 場外終結`).toBeGreaterThan(0);
+      expect(finishes.get('xtreme') ?? 0, `${arenaId} 極限終結`).toBeGreaterThan(0);
+    }
   });
 });
 

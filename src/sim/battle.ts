@@ -1,4 +1,4 @@
-import { ARENA, ARENAS, inCircle, ventPhase, type ArenaId, type ArenaSpec } from './arena';
+import { ARENA, ARENAS, inCircle, liftPhase, ventPhase, type ArenaId, type ArenaSpec } from './arena';
 import { applyAura, createTop, eruptPush, integrateTop, mobility, resolveCollision, resolvePillars, resolveRim, SPIN_FINISH_RATIO } from './physics';
 import type { StockParts } from './parts';
 import { createRng, range, type SeededRng } from './rng';
@@ -126,6 +126,11 @@ export class BattleSim {
     this.events = [];
   }
 
+  /** 雙層戰鬥盤中央降下的程度（0 = 升起、1 = 降下；依模擬時間算出，其他場地為 0） */
+  get level(): number {
+    return this.arena.lift ? liftPhase(this.arena.lift, this.time).level : 0;
+  }
+
   /** 從快照建立一場模擬（線上對戰的客戶端與測試用） */
   static fromSnapshot(s: SimSnapshot): BattleSim {
     const [a, b] = s.tops.map((t) => buildSpec(t.specId, t.parts));
@@ -176,10 +181,11 @@ export class BattleSim {
   step(dt: number): void {
     this.time += dt;
     const [a, b] = this.tops;
+    const level = this.level;
 
     for (const t of this.tops) {
       if (t.alive) {
-        const hit = integrateTop(t, dt, this.arena);
+        const hit = integrateTop(t, dt, this.arena, level);
         if (hit?.kind === 'splash' && this.time - this.lastSplash[t.id] > SPLASH_GAP) {
           this.lastSplash[t.id] = this.time;
           this.events.push({ type: 'hazard', kind: 'splash', pos: hit.pos, intensity: hit.intensity });
@@ -205,8 +211,9 @@ export class BattleSim {
       const pillar = resolvePillars(t, this.arena);
       if (pillar && pillar.hit > 1) this.events.push({ type: 'hazard', kind: 'pillar', pos: pillar.pos, intensity: pillar.hit });
       const rim = resolveRim(t, this.arena);
-      if (rim.ringOut) {
-        this.finishTop(t, 'over');
+      if (rim.out) {
+        // 從哪一種出場口飛出：兩角是場外終結、實體戰鬥盤中間的寬口是極限終結
+        this.finishTop(t, rim.out);
         finished.push(t);
         continue;
       }
@@ -271,7 +278,7 @@ export class BattleSim {
   /** 被終結的陀螺：出場的繼續飛出去，其他的滑行減速 */
   private advanceFinished(t: TopState, dt: number): void {
     t.finishTime += dt;
-    const damp = t.finish === 'over' ? 0.4 : 3;
+    const damp = t.finish === 'over' || t.finish === 'xtreme' ? 0.4 : 3;
     const k = Math.max(0, 1 - damp * dt);
     t.vel.x *= k;
     t.vel.z *= k;

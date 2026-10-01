@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ARENA } from '../src/sim/arena';
+import { ARENA, ARENAS } from '../src/sim/arena';
 import { createTop, integrateTop, resolveCollision, resolveRim } from '../src/sim/physics';
 import { createRng } from '../src/sim/rng';
 import { TOP_SPECS } from '../src/sim/tops';
@@ -176,29 +176,37 @@ describe('陀螺互撞', () => {
 });
 
 describe('場地邊緣與出場口', () => {
-  const wallAngle = ARENA.pockets[0] + Math.PI / 3; // 兩個出場口正中間，一定是牆
+  const wallAngle = ARENA.pockets[0].at + Math.PI / 3; // 兩個出場口正中間，一定是牆
   const edge = ARENA.radius - TOP_SPECS.wolf.radius + 0.02;
 
   test('一般牆面：高速撞牆會反彈回場內，不出場', () => {
     const dir = { x: Math.cos(wallAngle), z: Math.sin(wallAngle) };
     const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
     const r = resolveRim(t);
-    expect(r.ringOut).toBe(false);
+    expect(r.out).toBeNull();
     expect(t.vel.x * dir.x + t.vel.z * dir.z).toBeLessThan(0);
     expect(len(t.pos.x, t.pos.z)).toBeLessThanOrEqual(ARENA.radius - t.spec.radius + 1e-6);
   });
 
-  test('出場口：高速往外衝會出場', () => {
-    const a = ARENA.pockets[0];
+  test('出場口：高速往外衝會出場（回傳出場口的種類）', () => {
+    const a = ARENA.pockets[0].at;
     const dir = { x: Math.cos(a), z: Math.sin(a) };
     const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
-    expect(resolveRim(t).ringOut).toBe(true);
+    expect(resolveRim(t).out).toBe('over');
+  });
+
+  test('標準戰鬥盤：撞進中間寬口是極限終結（xtreme），撞進兩角是場外終結（over）', () => {
+    for (const p of ARENAS.stadium.pockets) {
+      const dir = { x: Math.cos(p.at), z: Math.sin(p.at) };
+      const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 8, z: dir.z * 8 }, 1, 1);
+      expect(resolveRim(t, ARENAS.stadium).out).toBe(p.kind);
+    }
   });
 
   test('出場口：低速滑過去不會出場', () => {
-    const a = ARENA.pockets[0];
+    const a = ARENA.pockets[0].at;
     const dir = { x: Math.cos(a), z: Math.sin(a) };
     const t = createTop(0, TOP_SPECS.wolf, { x: dir.x * edge, z: dir.z * edge }, { x: dir.x * 1, z: dir.z * 1 }, 1, 1);
-    expect(resolveRim(t).ringOut).toBe(false);
+    expect(resolveRim(t).out).toBeNull();
   });
 });

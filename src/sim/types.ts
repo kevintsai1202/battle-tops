@@ -9,8 +9,8 @@ export type TopType = 'attack' | 'defense' | 'stamina' | 'balance';
 /** 陀螺代號（TOP_SPECS 的鍵，例如 'blaze'） */
 export type TopId = string;
 
-/** 終結方式：停轉、出場、爆裂 */
-export type FinishType = 'spin' | 'over' | 'burst';
+/** 終結方式：停轉、場外（出場口）、爆裂、極限（實體戰鬥盤中間的寬口） */
+export type FinishType = 'spin' | 'over' | 'burst' | 'xtreme';
 
 /**
  * 陀螺的基本屬性（參考官方包裝的能力評分）。除了重量以外都是 1～10 分。

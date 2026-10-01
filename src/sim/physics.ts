@@ -1,4 +1,4 @@
-import { ARENA, floorSlope, inCircle, inPocket, type ArenaSpec } from './arena';
+import { activeRail, ARENA, floorSlope, inCircle, pocketAt, type ArenaSpec, type PocketKind } from './arena';
 import type { Rng } from './rng';
 import type { BuffMods, TopSpec, TopState, V2 } from './types';
 
@@ -127,8 +127,9 @@ export interface TerrainHit {
  * 推進一顆陀螺 dt 秒：地面坡度（碗形／火山錐）、軸心驅動力帶它繞場、
  * 場地地面性質（冰面打滑、積水阻力與水流、極限軌道加速、熔岩灼燒）、摩擦、玩家推移、轉速衰減與晃動。
  * 只處理單顆陀螺，不含碰撞、牆與熔岩噴發（噴發由 BattleSim 依時間觸發）；回傳濺水事件。
+ * level 為雙層戰鬥盤中央降下的程度（0..1，由 BattleSim 依時間算出；其他場地為 0）：影響地面坡度與內圈軌道。
  */
-export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA): TerrainHit | null {
+export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA, level = 0): TerrainHit | null {
   const r = Math.hypot(t.pos.x, t.pos.z);
   const ratio = spinRatio(t);
   const grip = arena.gripMul;
@@ -138,7 +139,7 @@ export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA):
 
   // 坡度：沿地面往低處的重力分量（碗形往中心；火山錐附近往外）
   if (r > 1e-6) {
-    const slope = floorSlope(r, arena);
+    const slope = floorSlope(r, arena, level);
     const a = (arena.gravity * slope) / Math.sqrt(1 + slope * slope);
     ax -= (t.pos.x / r) * a;
     az -= (t.pos.z / r) * a;
@@ -151,7 +152,8 @@ export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA):
 
   // 地形判定
   const inWater = arena.water !== null && r < arena.water.r;
-  const onRail = arena.rail !== null && r > arena.rail.from;
+  const rail = activeRail(r, arena, level);
+  const onRail = rail !== null;
   const lava = arena.vents.find((v) => inCircle(t.pos, v.x, v.z, v.r)) ?? null;
   t.terrain = lava ? 'lava' : inWater ? 'water' : onRail ? 'rail' : 'ground';
 
@@ -174,11 +176,11 @@ export function integrateTop(t: TopState, dt: number, arena: ArenaSpec = ARENA):
   }
 
   // 極限軌道（X Dash）：沿切線（依旋轉方向）加速並往內甩出，機動力高的陀螺吃到更多。
-  // 只往切線加速的話陀螺會一直貼著外圈繞、打不到對手，所以加上往內的分量。
-  if (onRail && r > 1e-6) {
-    const k = arena.rail!.accel * ratio * (0.3 + 0.7 * Math.min(1, t.spec.stats.dash / 10));
-    ax += ((-t.pos.z / r) * t.spinDir * 0.75 - (t.pos.x / r) * 0.65) * k;
-    az += ((t.pos.x / r) * t.spinDir * 0.75 - (t.pos.z / r) * 0.65) * k;
+  // 只往切線加速的話陀螺會一直貼著外圈繞、打不到對手，所以加上往內的分量（各軌道的比例不同）。
+  if (rail && r > 1e-6) {
+    const k = rail.accel * ratio * (0.3 + 0.7 * Math.min(1, t.spec.stats.dash / 10));
+    ax += ((-t.pos.z / r) * t.spinDir * rail.tangent - (t.pos.x / r) * rail.inward) * k;
+    az += ((t.pos.x / r) * t.spinDir * rail.tangent - (t.pos.z / r) * rail.inward) * k;
   }
 
   // 積水：阻力把速度拉向水流速度（逆時針繞中心），水越深（越靠中心）阻力越大
@@ -389,9 +391,9 @@ export function resolveCollision(a: TopState, b: TopState, rng: Rng): ClashResul
   };
 }
 
-/** 場地邊緣的處理結果：ringOut 表示從出場口飛出；hit 為撞牆時的徑向速度 */
+/** 場地邊緣的處理結果：out 為從哪一種出場口飛出（沒出場為 null）；hit 為撞牆時的徑向速度 */
 export interface RimResult {
-  ringOut: boolean;
+  out: PocketKind | null;
   hit: number;
 }
 
@@ -402,13 +404,12 @@ export interface RimResult {
 export function resolveRim(t: TopState, arena: ArenaSpec = ARENA): RimResult {
   const r = Math.hypot(t.pos.x, t.pos.z);
   const limit = arena.radius - t.spec.radius;
-  if (r <= limit) return { ringOut: false, hit: 0 };
+  if (r <= limit) return { out: null, hit: 0 };
 
   const dir: V2 = { x: t.pos.x / r, z: t.pos.z / r };
   const vr = t.vel.x * dir.x + t.vel.z * dir.z;
-  if (vr > arena.overSpeed && inPocket(Math.atan2(t.pos.z, t.pos.x), arena)) {
-    return { ringOut: true, hit: vr };
-  }
+  const pocket = vr > arena.overSpeed ? pocketAt(Math.atan2(t.pos.z, t.pos.x), arena) : null;
+  if (pocket) return { out: pocket.kind, hit: vr };
 
   t.pos.x = dir.x * limit;
   t.pos.z = dir.z * limit;
@@ -421,7 +422,7 @@ export function resolveRim(t: TopState, arena: ArenaSpec = ARENA): RimResult {
     t.vel.z += dir.x * kick;
     t.spin = Math.max(0, t.spin - t.spec.maxSpin * 0.008 * vr);
   }
-  return { ringOut: false, hit: Math.max(0, vr) };
+  return { out: null, hit: Math.max(0, vr) };
 }
 
 /**

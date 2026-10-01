@@ -83,6 +83,10 @@ async function expectGuideOn(page: Page, selector: string): Promise<void> {
  * 大畫面上的主手指（游標）。指引的容器是 0×0 的定位點，Playwright 會把它當成看不見，
  * 所以看不看得見要檢查裡面的手指本身（容器隱藏時手指也跟著隱藏）。
  */
+/** 換零件那一步：選到那一顆欄位上的「軸」按鈕、零件清單裡第一件還沒裝上的零件 */
+const DRIVER_BTN = '#arrange .ar-slot.on .part-btn[data-slot="driver"]';
+const MENU_OPT = '#part-menu .pm-opt:not(.current):not(:disabled)';
+
 const hand = (page: Page, kind?: string) => page.locator(`#tutorial .tut-guide${kind ? `[data-kind="${kind}"]` : ''} .tut-hand:not(.extra)`);
 
 /** 兩個元素不重疊（大鍵帽不被教學面板蓋住） */
@@ -133,11 +137,15 @@ test('桌機：從標題進入操作教學，跟著大畫面上的游標與鍵�
   await expectGuideOn(page, '#arrange .ar-slot:nth-child(2) .ar-up');
   await expectPanelClear(page, '#arrange .ar-slot:nth-child(2) .ar-up');
   await page.locator('#arrange .ar-slot:nth-child(2) .ar-up').click();
+  // 換零件：先指選到那一顆欄位上的「軸」按鈕；清單打開後改指清單裡第一件還沒裝上的零件
   await expectStep(page, 'parts', '換盤與軸', 'tut_parts');
-  await expectGuideOn(page, '#arrange .ar-detail select[data-slot="driver"]');
-  await expectPanelClear(page, '#arrange .ar-detail select[data-slot="driver"]');
+  await expectGuideOn(page, DRIVER_BTN);
+  await expectPanelClear(page, DRIVER_BTN);
   await page.screenshot({ path: 'e2e/screenshots/a1-tutorial-parts.png' });
-  await page.locator('#arrange .detail select[data-slot="driver"]').selectOption('bearing');
+  await page.locator(DRIVER_BTN).click();
+  await expectGuideOn(page, MENU_OPT);
+  await page.screenshot({ path: 'e2e/screenshots/a1b-tutorial-parts-menu.png' });
+  await page.locator(MENU_OPT).first().click();
   await expectStep(page, 'ready', '出陣', 'tut_ready');
   await expectGuideOn(page, '#arrange .ar-ready');
   await expectPanelClear(page, '#arrange .ar-ready');
@@ -165,7 +173,19 @@ test('桌機：從標題進入操作教學，跟著大畫面上的游標與鍵�
   // 第一次只按 Space（沒有拉條）→ 要求重來，重來的那一次不再示範
   await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 90_000 });
   await page.keyboard.press('Space');
-  await expect(page.locator('#tutorial .tut-toast')).toContainText('沒有拉條');
+  // 診斷用：按下 Space 之後每秒印一次狀態（焦點所在、影格數、遊戲狀態），之後失敗時可以對照
+  for (let i = 0; i < 3; i++) {
+    const st = await page.evaluate(() => {
+      const g = (window as any).__game;
+      const d = g.debug();
+      const a = document.activeElement as HTMLElement | null;
+      return { state: d.state, frames: d.frames, clock: Math.round(d.clock * 10) / 10, focus: a ? `${a.tagName}.${a.className}` : null, step: d.tutorial?.step };
+    });
+    console.log(`Space 後 ${i} 秒：${JSON.stringify(st)}`);
+    if (st.state !== 'launch') break;
+    await page.waitForTimeout(1000);
+  }
+  await expect(page.locator('#tutorial .tut-toast')).toContainText('沒有拉條', { timeout: 15_000 });
   await expect.poll(async () => (await dbg(page)).voice.guideLast).toBe('tut_retry');
   await expect.poll(async () => (await dbg(page)).state, { timeout: 30_000 }).toBe('launch');
   expect(await step(page)).toBe('launch');
@@ -203,7 +223,7 @@ test('桌機：從標題進入操作教學，跟著大畫面上的游標與鍵�
   await page.screenshot({ path: 'e2e/screenshots/a3c-tutorial-finish-arrow.png' });
   // 對手轉速降到兩成後要等它停轉（headless 軟體渲染慢，留寬一點）
   await expectStep(page, 'points', '終結方式與得分', 'tut_points', 240_000);
-  await expect(page.locator('#tutorial .demo-finishes .fin')).toHaveCount(3);
+  await expect(page.locator('#tutorial .demo-finishes .fin')).toHaveCount(4);
   await expect(page.locator('#tutorial .tut-next')).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/a4-tutorial-points.png' });
   await page.locator('#tutorial .tut-next').click();
@@ -232,7 +252,7 @@ test('第一次玩：標題有提示但不擋開打；選「不用了」之後�
   await page.reload();
   await expect(page.locator('#title .tut-offer')).toBeHidden();
   // 點標題照常開打，不會進教學
-  await page.locator('#title .blink').click();
+  await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select')).toBeVisible();
   await expect(page.locator('#tutorial')).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -272,12 +292,14 @@ test.describe('手機橫向', () => {
     await expectPanelClear(page, '#arrange .ar-slot:nth-child(2) .ar-up');
     await page.screenshot({ path: 'e2e/screenshots/a6b-tutorial-mobile-order.png' });
     await page.locator('#arrange .ar-slot:nth-child(2) .ar-up').tap();
-    // 換零件：軸的選單在可以捲動的詳細資料裡，會先捲到看得見的地方
+    // 換零件：大手指指著欄位上的「軸」按鈕，點開清單後指著清單裡的零件
     await expectStep(page, 'parts', '換盤與軸', 'tut_parts');
-    await expectGuideOn(page, '#arrange .ar-detail select[data-slot="driver"]');
-    await expectInViewport(page, '#arrange .ar-detail select[data-slot="driver"]');
+    await expectGuideOn(page, DRIVER_BTN);
+    await expectInViewport(page, DRIVER_BTN);
     await page.screenshot({ path: 'e2e/screenshots/a6c-tutorial-mobile-parts.png' });
-    await page.locator('#arrange .detail select[data-slot="driver"]').selectOption('rubber');
+    await page.locator(DRIVER_BTN).tap();
+    await expectGuideOn(page, MENU_OPT);
+    await page.locator(MENU_OPT).first().tap();
     await expectStep(page, 'ready', '出陣', 'tut_ready');
     await expectGuideOn(page, '#arrange .ar-ready');
     await page.locator('#arrange .ar-ready').tap();

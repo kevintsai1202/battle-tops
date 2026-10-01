@@ -4,7 +4,7 @@
 #   ./scripts/balance-all.ps1 -Games 10 -Arenas volcano,glacier
 param(
   [int]$Games = 6,
-  [string[]]$Arenas = @('practice', 'stadium', 'volcano', 'glacier', 'flooded')
+  [string[]]$Arenas = @('practice', 'stadium', 'double', 'volcano', 'glacier', 'flooded')
 )
 
 Set-Location (Join-Path $PSScriptRoot '..')

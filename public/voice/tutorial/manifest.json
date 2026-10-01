@@ -25,11 +25,11 @@
   },
   "tut_parts": {
     "file": "tut_parts.mp3",
-    "text": "[happy] 點一顆陀螺，在右邊換上不同的盤或軸，雷達圖會立刻跟著變化。",
+    "text": "[happy] 每顆陀螺下面都有「盤」和「軸」兩個按鈕，點一下就能換上不同的零件，雷達圖會立刻跟著變化。",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "051251615fbbd15f",
-    "seconds": 5.623
+    "hash": "85294e37d7e33eec",
+    "seconds": 8.214
   },
   "tut_ready": {
     "file": "tut_ready.mp3",
@@ -121,11 +121,11 @@
   },
   "tut_points": {
     "file": "tut_points.mp3",
-    "text": "[happy] 旋轉終結，也就是對手停轉，得一分；場外終結和爆裂終結，各得兩分。",
+    "text": "[happy] 旋轉終結，也就是對手停轉，得一分；場外終結和爆裂終結，各得兩分。在標準戰鬥盤和雙層戰鬥盤，把對手撞進中間的寬口是極限終結，得三分！",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "b8040e5a35e7612e",
-    "seconds": 6.973
+    "hash": "32da5f6b708a85b7",
+    "seconds": 13.765
   },
   "tut_match": {
     "file": "tut_match.mp3",

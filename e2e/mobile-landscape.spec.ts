@@ -13,7 +13,7 @@ test('橫向手機：觸控組隊、拉條發射、三指必殺、滑動推移�
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto('./?seed=21');
-  await page.tap('#title');
+  await page.locator('#title .to-cpu').tap();
   await expect(page.locator('#select')).toBeVisible();
   expect((await dbg(page)).touchMode).toBe(true);
   await expect(page.locator('#select .tc')).toBeVisible();

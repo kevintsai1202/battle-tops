@@ -44,6 +44,8 @@ export interface TutorialCtx {
   /** 第 2 步調換過出場順序、換過零件 */
   orderChanged: boolean;
   partChanged: boolean;
+  /** 零件清單開著（換零件那一步：清單打開後改指清單裡的零件） */
+  partMenu: boolean;
   /** 最近一次發射有沒有拉條（按 Space 或只點一下為 false） */
   pulled: boolean;
   /** 對戰中推移的累計秒數 */
@@ -68,7 +70,7 @@ export interface StepDef {
   text: Record<TutorialInput, string>;
   /** 大畫面上的指引 */
   guide: Record<TutorialInput, GuideKind>;
-  /** 面板裡的說明圖（只有計分那一步：三種終結的小動畫） */
+  /** 面板裡的說明圖（只有計分那一步：四種終結的小動畫） */
   illustration?: 'finishes';
   /** 要用聚光圈框住、手指指著的元素（CSS 選擇器）；依狀態決定時給函式（見 targetOf） */
   target?: string | ((ctx: TutorialCtx) => string | undefined);
@@ -120,7 +122,10 @@ export const STEPS: StepDef[] = [
   step('pick', 'team', '組隊：選三顆陀螺', 'tut_pick', 'tap', (c) => c.picked.length >= 3, { target: nextRecommended }),
   step('next', 'team', '組隊：下一步', 'tut_next', 'tap', (c) => c.state === 'arrange', { target: '#select .go' }),
   step('order', 'team', '調整出場順序', 'tut_order', 'tap', (c) => c.orderChanged, { target: '#arrange .ar-slot:nth-child(2) .ar-up' }),
-  step('parts', 'team', '換盤與軸', 'tut_parts', 'tap', (c) => c.partChanged, { target: '#arrange .ar-detail select[data-slot="driver"]' }),
+  step('parts', 'team', '換盤與軸', 'tut_parts', 'tap', (c) => c.partChanged, {
+    // 先指選到那一顆的「軸」按鈕；清單打開後指第一件還沒裝上的零件
+    target: (c) => (c.partMenu ? '#part-menu .pm-opt:not(.current):not(:disabled)' : '#arrange .ar-slot.on .part-btn[data-slot="driver"]'),
+  }),
   step('ready', 'team', '出陣', 'tut_ready', 'tap', (c) => c.state === 'launch', { target: '#arrange .ar-ready' }),
   step('launch', 'launch', '拉發射台', { kb: 'tut_launch_kb', tc: 'tut_launch_tc' }, 'drag', (c) => c.state === 'battle' && c.pulled),
   step('push', 'control', '推移陀螺', { kb: 'tut_push_kb', tc: 'tut_push_tc' }, { kb: 'keysMove', tc: 'swipe' }, (c, b) => c.pushTime - b.pushTime >= PUSH_GOAL),
@@ -136,7 +141,7 @@ export const STEPS: StepDef[] = [
 
 /** 空白狀態（還沒開始） */
 export function emptyCtx(): TutorialCtx {
-  return { state: '', input: 'kb', picked: [], orderChanged: false, partChanged: false, pulled: false, pushTime: 0, dashes: 0, specials: 0, finished: false, next: false };
+  return { state: '', input: 'kb', picked: [], orderChanged: false, partChanged: false, partMenu: false, pulled: false, pushTime: 0, dashes: 0, specials: 0, finished: false, next: false };
 }
 
 /** update 的結果：前進到下一步、發射沒拉條要重來、全部完成 */

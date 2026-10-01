@@ -13,7 +13,7 @@ import type { FinishType, SimEvent, TopId, V2 } from '../sim/types';
  *   只有模擬相關的陣列依座位（0 號在左）排序，並附上收件人這一戰的座位。
  */
 
-/** 場地選擇：五個場地加上「隨機」（開打時抽） */
+/** 場地選擇：六個場地加上「隨機」（開打時抽） */
 export type ArenaChoice = ArenaId | 'random';
 
 /** 一顆陀螺的規格參照：代號與目前裝的零件（接收端用 buildSpec 重建） */
@@ -28,8 +28,9 @@ export const MAX_MESSAGE = 2048;
 /**
  * 協定版本：進房類訊息（create／join／quick／resume）都要帶，伺服器只接受相同版本。
  * 2：組隊分成「選三顆」與「順序與零件（限時）」兩步（picks／arrange／ready）。舊版網頁沒帶版本，伺服器回「請重新整理」。
+ * 3：新增雙層戰鬥盤（arena: 'double'）與極限終結（finish: 'xtreme'），標準戰鬥盤改成實體比賽盤的出場口；舊版網頁看不懂，一樣要重新整理。
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** 房號使用的字元：去掉容易混淆的 I、O、0、1 */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

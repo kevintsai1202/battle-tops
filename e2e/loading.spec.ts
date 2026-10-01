@@ -11,7 +11,7 @@ test('語音檔下載很慢時，點擊開始後選角畫面立刻出現', async
     await route.continue();
   });
   await page.goto('./?seed=9');
-  await page.locator('#title').click();
+  await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select')).toBeVisible({ timeout: 2000 });
   // 語音最後仍會載入完成
   await page.waitForFunction(() => !!(window as any).__game && (window as any).__game.debug().voice.mode === 'fish-files', null, { timeout: 30_000 });

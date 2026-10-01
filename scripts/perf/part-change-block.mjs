@@ -17,7 +17,9 @@ async function round() {
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   await page.goto(`${base}?seed=31`);
-  await page.locator('#title').click();
+  // 標題：新版是按鈕選單（.to-cpu），舊版點任意處開始
+  if (await page.locator('#title .to-cpu').count()) await page.locator('#title .to-cpu').click();
+  else await page.locator('#title').click();
   for (const id of ['pegasus', 'blaze', 'turtle']) await page.locator(`#select .card[data-id="${id}"]`).click();
   await page.locator('#select .go').click();
   await page.locator('#arrange').waitFor();
@@ -25,7 +27,13 @@ async function round() {
   await page.waitForTimeout(4000);
   const times = [];
   for (const d of DRIVERS) {
-    await page.locator('#arrange .detail select[data-slot="driver"]').selectOption(d);
+    // 換軸：新版用欄位上的「軸」按鈕＋零件清單，舊版用詳細資料裡的下拉選單
+    if (await page.locator('#arrange .part-btn').count()) {
+      await page.locator('#arrange .ar-slot.on .part-btn[data-slot="driver"]').click();
+      await page.locator(`#part-menu .pm-opt[data-part="${d}"]`).click();
+    } else {
+      await page.locator('#arrange .detail select[data-slot="driver"]').selectOption(d);
+    }
     const t0 = Date.now();
     await page.evaluate(() => 0);
     times.push(Date.now() - t0);

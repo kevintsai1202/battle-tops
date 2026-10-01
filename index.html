@@ -60,7 +60,7 @@
         <div class="band"><div class="who"></div><div class="move"></div></div>
       </div>
 
-      <!-- 標題畫面；右上角切換語言（日文版／全中文版，記住選擇），文字由 src/i18n.ts 依 data-i18n 換掉 -->
+      <!-- 標題畫面：模式選單（電腦對戰／試驗模式／線上對戰／操作教學，點按鈕才開始）；右上角切換語言（日文版／全中文版，記住選擇），文字由 src/i18n.ts 依 data-i18n 換掉 -->
       <section id="title" class="screen">
         <div class="lang-switch" role="group" aria-label="語言">
           <button type="button" data-lang="ja">日本語</button>
@@ -68,8 +68,9 @@
         </div>
         <h1 data-i18n="title.logo">BATTLE TOPS</h1>
         <p class="en" data-i18n="title.sub">爆転バトル ・ 戰鬥陀螺</p>
-        <p class="blink" data-i18n="title.start">クリックしてスタート ／ 點擊開始（CPU 對戰）</p>
+        <button type="button" class="to-cpu" data-i18n="title.start">CPU 対戦 ／ 電腦對戰</button>
         <div class="title-actions">
+          <button type="button" class="to-trial" data-i18n="title.trial">トライアル ／ 試驗模式</button>
           <button type="button" class="to-online" data-i18n="title.online">オンライン対戦 ／ 線上對戰（找朋友）</button>
           <button type="button" class="to-tutorial" data-i18n="title.tutorial">チュートリアル ／ 操作教學</button>
         </div>
@@ -105,7 +106,7 @@
 
       <!-- 組隊第 2 步：出場順序與零件（線上限時，雙方都準備完成才開戰） -->
       <section id="arrange" class="screen" hidden>
-        <h2><span data-i18n="arrange.title">出場順と部品</span><small>第 2 步：調整出場順序與零件，第 1 戰先上場（<span class="kb">↑↓ 選擇、Shift＋↑↓ 調換順序、Enter 確定</span><span class="tc">點一顆換零件，▲▼ 調換順序</span>）</small></h2>
+        <h2><span data-i18n="arrange.title">出場順と部品</span><small>第 2 步：調整出場順序與零件，第 1 戰先上場（<span class="kb">↑↓ 選擇、Shift＋↑↓ 調換順序、Q／E 換盤／軸、Enter 確定</span><span class="tc">點「盤」「軸」換零件，▲▼ 調換順序</span>）</small></h2>
         <div class="ar-head">
           <div class="ar-opp"><span class="ar-opp-label"></span><span class="chips"></span><small class="ar-opp-note"></small></div>
           <span class="ar-arena"></span>
@@ -122,6 +123,53 @@
             <p class="ar-status"></p>
           </div>
           <div class="detail ar-detail"></div>
+        </div>
+      </section>
+
+      <!-- 試驗模式：一對一，自己挑你和電腦的陀螺與零件（比較搭配的效果）；選場地與難度，可以直接開打或讓電腦自動對打 100 場 -->
+      <section id="trial" class="screen" hidden>
+        <h2><span data-i18n="trial.title">トライアル</span><small>試驗模式：一對一，自己挑雙方的陀螺與零件，比較搭配的效果（<span class="kb">點「你」或「電腦」再點名鑑換陀螺；方向鍵移動、Space 換上、X 切換你／電腦、Enter 開始、1／2／3 難度、Q／E 場地</span><span class="tc">點「你」或「電腦」，再點名鑑換陀螺</span>）</small></h2>
+        <div class="select-row">
+          <div class="difficulty" role="group" aria-label="難易度">
+            <button type="button" data-id="easy"><span data-i18n="diff.easy">かんたん</span><small class="ja-only">簡單</small></button>
+            <button type="button" data-id="normal"><span data-i18n="diff.normal">ふつう</span><small class="ja-only">普通</small></button>
+            <button type="button" data-id="hard"><span data-i18n="diff.hard">むずかしい</span><small class="ja-only">困難</small></button>
+          </div>
+          <div class="arena" role="group" aria-label="場地"></div>
+        </div>
+        <p class="arena-desc"></p>
+        <div class="select-main">
+          <div class="tr-left">
+            <!-- 兩邊的陀螺：點一邊選取（名鑑點到的陀螺換到這一邊），各有盤／軸按鈕 -->
+            <div class="tr-sides"></div>
+            <div class="cards"></div>
+          </div>
+          <div class="detail"></div>
+        </div>
+        <div class="tr-actions">
+          <button type="button" class="tr-back">◀ 回標題</button>
+          <button type="button" class="tr-go">開始試驗 ▶</button>
+          <button type="button" class="tr-auto">電腦自動對打 100 場</button>
+        </div>
+      </section>
+
+      <!-- 試驗模式的結果：這一戰的數據、同一組設定的累計戰績、電腦自動對打的勝率 -->
+      <section id="trial-result" class="screen" hidden>
+        <h2 class="tr-headline"></h2>
+        <p class="tr-matchup"></p>
+        <table class="tr-stats"></table>
+        <div class="tr-record"></div>
+        <div class="tr-auto-box" hidden>
+          <p class="tr-auto-title"></p>
+          <div class="tr-progress"><i></i></div>
+          <div class="tr-auto-result"></div>
+          <button type="button" class="tr-auto-cancel">停止</button>
+        </div>
+        <div class="tr-result-actions">
+          <button type="button" class="tr-retry">同設定再戰</button>
+          <button type="button" class="tr-change">換設定</button>
+          <button type="button" class="tr-auto-run">電腦自動對打 100 場</button>
+          <button type="button" class="tr-title">回標題</button>
         </div>
       </section>
 

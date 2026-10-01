@@ -9,7 +9,7 @@ import { GameRenderer } from '../render/postfx';
 import { Showcase } from '../render/showcase';
 import { buildLights, buildStadium, type Stadium, type StadiumLights } from '../render/stadium';
 import { TopView } from '../render/topView';
-import { ARENA_IDS, ARENAS, floorHeight, type ArenaId, type ArenaSpec } from '../sim/arena';
+import { ARENA_IDS, ARENAS, floorHeight, liftPhase, type ArenaId, type ArenaSpec } from '../sim/arena';
 import { BattleSim } from '../sim/battle';
 import { cpuThink } from '../sim/cpu';
 import { createTop, spinRatio } from '../sim/physics';
@@ -19,10 +19,13 @@ import { keyLaunchRatio, measurePull, pullLaunchRatio, pullQuality, trimPullSamp
 import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
 import { STOCK, type TeamLoadouts } from '../sim/parts';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type Pairing, type TeamMatch } from '../sim/team';
+import { addTrialResult, AutoDuel, emptyTrialRecord, trialKey, type DuelSummary, type TrialConfig, type TrialRecord } from '../sim/trial';
 import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
-import { css, Hud, type ArenaChoice, type CordView } from '../ui/hud';
+import { css, Hud, type ArenaChoice, type CordView, type TrialBattleStats } from '../ui/hud';
+import { rpmOf } from '../ui/common';
 import { SwipeControls, type StickVector } from '../ui/touch';
+import { partMenu } from '../ui/partMenu';
 import { TutorialOverlay, type GuideFrame, type ScreenPoint } from '../ui/tutorial';
 import { PULL_MIN, shouldOfferTutorial, STEPS, targetOf, TUTORIAL_KEY, TutorialFlow, type TutorialCtx, type TutorialEvent, type TutorialInput } from '../tutorial/flow';
 import type { NetStatus } from '../net/client';
@@ -31,7 +34,7 @@ import type { ServerMessage } from '../net/protocol';
 import { loadName, OnlineSession, saveName, type Msg } from './online';
 
 /** 遊戲階段（online：線上房間畫面；waiting：線上等待對手組隊或挑延長賽） */
-export type GameState = 'title' | 'select' | 'arrange' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result' | 'online' | 'waiting';
+export type GameState = 'title' | 'select' | 'arrange' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result' | 'online' | 'waiting' | 'trial' | 'trialResult';
 
 /** 模擬固定步長 */
 const STEP = 1 / 120;
@@ -57,6 +60,7 @@ const FINISH_TEXT: Record<FinishType, { banner: TextKey; voice: VoiceId }> = {
   spin: { banner: 'banner.spin', voice: 'spin_finish' },
   over: { banner: 'banner.over', voice: 'over_finish' },
   burst: { banner: 'banner.burst', voice: 'burst_finish' },
+  xtreme: { banner: 'banner.xtreme', voice: 'xtreme_finish' },
 };
 
 /** 發射評價的文字（依語言）：力道比例越高評價越好 */
@@ -230,6 +234,24 @@ export class Game {
     demoTime: number;
     demoShown: boolean;
   } | null = null;
+  /**
+   * 試驗模式（一對一比較陀螺與零件）進行中的一組設定：cfg 設定、key（同一組設定的代號）、
+   * clashes／bigClashes 這一戰開始時的撞擊次數（算這一戰的數據）、end 終結當下雙方的轉速與爆裂值；不在試驗中為 null。
+   */
+  private trial: {
+    cfg: TrialConfig;
+    key: string;
+    clashes: number;
+    bigClashes: number;
+    end: { rpm: [number, number]; burst: [number, number] } | null;
+  } | null = null;
+  /** 上一次試驗的設定（回到試驗畫面時沿用） */
+  private trialCfg: TrialConfig | null = null;
+  /** 各組設定的累計戰績（key → 戰績；重新整理頁面才清掉） */
+  private readonly trialRecords = new Map<string, TrialRecord>();
+  /** 進行中的電腦自動對打（每幀分批推進）與最近一次的結果（e2e 觀察用） */
+  private trialAuto: AutoDuel | null = null;
+  lastAutoDuel: DuelSummary | null = null;
   /** 這則快照裡伺服器判定為重擊（觸發特寫）的撞擊位置 */
   private bigClashPos: V2[] = [];
 
@@ -318,8 +340,12 @@ export class Game {
     return this.voice.load();
   }
 
-  /** 目前總分 [玩家, CPU] */
+  /** 目前總分 [玩家, CPU]；試驗模式為這組設定的累計 [勝, 敗] */
   get score(): [number, number] {
+    if (this.trial) {
+      const r = this.trialRecords.get(this.trial.key);
+      return r ? [r.wins, r.losses] : [0, 0];
+    }
     return this.match?.score ?? [0, 0];
   }
 
@@ -473,6 +499,136 @@ export class Game {
     this.preview = { view: new TopView(this.gfx.scene, spec, this.arena), state };
   }
 
+  // ---------------- 試驗模式 ----------------
+
+  /** 試驗模式的設定畫面：一對一，自己挑雙方的陀螺與零件、場地（沒有隨機）與難度 */
+  private enterTrial(): void {
+    this.me = 0;
+    this.rig.seat = 0;
+    this.oppLabel = tr('cpu');
+    this.trial = null;
+    this.trialAuto = null;
+    this.setState('trial');
+    this.hud.hideHud();
+    this.hud.clearBanner();
+    this.hud.hideTrialResult();
+    this.clearArena();
+    this.audio?.setMusic(this.musicOn, false);
+    const cfg: TrialConfig = this.trialCfg ?? {
+      player: { top: 'blaze', loadout: { ...STOCK } },
+      cpu: { top: 'turtle', loadout: { ...STOCK } },
+      arena: this.arenaChoice === 'random' ? 'practice' : this.arenaChoice,
+      difficulty: this.difficulty.id,
+    };
+    this.setArena(ARENAS[cfg.arena]);
+    this.hud.showTrial({
+      specs: TOP_SPECS,
+      config: cfg,
+      onDifficulty: (d) => this.setDifficulty(d),
+      onArena: (a) => this.setArena(ARENAS[a]),
+      onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
+      thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
+      onStart: (c) => {
+        this.closeShowcase();
+        this.startTrial(c);
+      },
+      onAuto: (c) => {
+        this.closeShowcase();
+        this.trialCfg = c;
+        this.setDifficulty(c.difficulty);
+        this.showTrialScreen(null);
+        this.startAutoDuel(c);
+      },
+      onBack: () => {
+        this.closeShowcase();
+        this.toTitle();
+      },
+    });
+  }
+
+  /** 開始試驗的一戰（單戰，不計 3 對 3 的比分）：同一組設定沿用累計戰績 */
+  private startTrial(cfg: TrialConfig): void {
+    this.trialCfg = cfg;
+    this.trial = { cfg, key: trialKey(cfg), clashes: 0, bigClashes: 0, end: null };
+    this.trialAuto = null;
+    this.hud.hideTrialResult();
+    this.setDifficulty(cfg.difficulty);
+    this.setArena(ARENAS[cfg.arena]);
+    this.match = null;
+    this.round = 0;
+    this.lastBattle = 0;
+    this.playerSpec = buildSpec(cfg.player.top, cfg.player.loadout);
+    this.cpuSpec = buildSpec(cfg.cpu.top, cfg.cpu.loadout);
+    const record = this.trialRecords.get(this.trial.key);
+    this.openRound({
+      title: tr('banner.trial'),
+      replay: false,
+      line: record?.games ? 'round_ready' : 'battle_1',
+      score: record ? [record.wins, record.losses] : [0, 0],
+      info: () => this.hud.setTrialInfo(this.playerSpec, this.cpuSpec, this.arena.nameZh),
+    });
+    this.trial.clashes = this.counters.clashes;
+    this.trial.bigClashes = this.counters.bigClashes;
+  }
+
+  /** 試驗的一戰打完：記上這組設定的累計戰績，顯示這一戰的數據 */
+  private finishTrialRound(): void {
+    const t = this.trial!;
+    const sim = this.sim;
+    const res = sim?.result ?? null;
+    this.counters.rounds++;
+    if (res) this.trialRecords.set(t.key, addTrialResult(this.trialRecords.get(t.key) ?? emptyTrialRecord(), res));
+    this.hud.clearBanner();
+    this.hud.hideHud();
+    this.audio?.setMusic(this.musicOn, false);
+    let battle: TrialBattleStats | null = null;
+    if (sim) {
+      const [p, c] = sim.tops;
+      const end = t.end ?? { rpm: [rpmOf(p), rpmOf(c)], burst: [Math.min(1, p.burst), Math.min(1, c.burst)] };
+      battle = {
+        winner: res?.winner === 0 || res?.winner === 1 ? res.winner : null,
+        finish: res?.finish ?? null,
+        time: sim.time,
+        rpm: end.rpm,
+        burst: end.burst,
+        launch: [this.lastLaunch.ratio, this.lastLaunch.cpu],
+        specials: [p.specialUsed, c.specialUsed],
+        clashes: this.counters.clashes - t.clashes,
+        bigClashes: this.counters.bigClashes - t.bigClashes,
+      };
+    }
+    this.showTrialScreen(battle);
+  }
+
+  /** 試驗模式的結果畫面（battle 為 null 時只看自動對打） */
+  private showTrialScreen(battle: TrialBattleStats | null): void {
+    const cfg = this.trialCfg!;
+    this.setState('trialResult');
+    this.hud.showTrialResult({
+      player: buildSpec(cfg.player.top, cfg.player.loadout),
+      cpu: buildSpec(cfg.cpu.top, cfg.cpu.loadout),
+      arenaName: ARENAS[cfg.arena].nameZh,
+      difficulty: cfg.difficulty,
+      battle,
+      record: this.trialRecords.get(trialKey(cfg)) ?? emptyTrialRecord(),
+      onRetry: () => this.startTrial(cfg),
+      onChange: () => this.enterTrial(),
+      onAuto: () => this.startAutoDuel(cfg),
+      onCancelAuto: () => {
+        this.trialAuto = null;
+        this.hud.setTrialAuto(null);
+      },
+      onTitle: () => this.toTitle(),
+    });
+  }
+
+  /** 電腦自動對打 100 場（每幀分批推進，見 frame） */
+  private startAutoDuel(cfg: TrialConfig): void {
+    this.trialAuto = new AutoDuel(cfg, 100, Math.floor(this.rng() * 1e9));
+    this.hud.setTrialAuto({ progress: 0 });
+  }
+
+
   // ---------------- 比賽流程 ----------------
 
   /** 開始一場 3 對 3：隨機場地在這時抽出，整場（含延長賽）都用同一個場地 */
@@ -517,6 +673,16 @@ export class Game {
    */
   private beginRound(pair: Pairing, replay: boolean, current?: Pairing): void {
     const m = this.match!;
+    const title = pair.overtime ? tr('banner.overtime') : pair.battle === 3 ? tr('banner.final') : tr('banner.battle', { n: pair.battle });
+    const line: VoiceId = replay ? 'round_ready' : pair.overtime || pair.battle === 3 ? 'battle_final' : pair.battle === 1 ? 'battle_1' : 'battle_2';
+    this.openRound({ title, replay, line, score: m.score, info: () => this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh, current) });
+  }
+
+  /**
+   * 一戰開場的共用部分（3 對 3、線上、試驗模式）：清場、HUD、大字與主播介紹，進入倒數發射。
+   * title 大字標題、line 主播介紹的台詞、score HUD 比分、info 填 HUD 賽況列。
+   */
+  private openRound(o: { title: string; replay: boolean; line: VoiceId; score: [number, number]; info: () => void }): void {
     this.clearArena();
     this.round++;
     this.director.reset();
@@ -526,21 +692,20 @@ export class Game {
     this.roundFlags = { hurt: false, taunt: false };
     this.audio?.setMusic(this.musicOn, true);
     this.hud.showHud(this.playerSpec, this.cpuSpec, this.oppLabel);
-    this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh, current);
+    o.info();
     this.hud.updateHud(
       [createTop(0, this.playerSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1), createTop(1, this.cpuSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1)],
-      m.score,
+      o.score,
     );
     this.pull = null;
     this.pullResult = null;
     this.setState('launch');
-    const title = pair.overtime ? tr('banner.overtime') : pair.battle === 3 ? tr('banner.final') : tr('banner.battle', { n: pair.battle });
-    this.hud.banner(title, `${topName(this.playerSpec)}  ${tr('vs')}  ${topName(this.cpuSpec)}${replay ? tr('banner.replay') : ''}
+    this.hud.banner(o.title, `${topName(this.playerSpec)}  ${tr('vs')}  ${topName(this.cpuSpec)}${o.replay ? tr('banner.replay') : ''}
 ＠${this.arena.nameZh}`, {
       small: true,
       seconds: 0,
     });
-    const line: VoiceId = replay ? 'round_ready' : pair.overtime || pair.battle === 3 ? 'battle_final' : pair.battle === 1 ? 'battle_1' : 'battle_2';
+    const line = o.line;
     const spoke = this.voice?.play(line, 2) ?? false;
     // 主播講完才開始倒數，避免「スリー」／「三」蓋掉開場介紹
     this.launchLead = Math.max(1.4, (spoke ? this.voice!.duration(line) : 0) + 0.4);
@@ -712,7 +877,7 @@ export class Game {
 
   // ---------------- 線上對戰 ----------------
 
-  /** 標題畫面：點任意處開始 CPU 對戰，或按「線上對戰」；從分享連結（?room=）進來時直接進線上房間 */
+  /** 標題畫面：模式選單（電腦對戰／試驗模式／線上對戰／操作教學）；從分享連結（?room=）進來時，按線上對戰直接進那個房間 */
   private toTitle(): void {
     // 從教學中途回到標題（結束教學、或其他流程）：收起教學畫面並還原難度
     if (this.tut) {
@@ -722,6 +887,10 @@ export class Game {
     }
     this.setState('title');
     this.clearArena();
+    this.trial = null;
+    this.trialAuto = null;
+    this.hud.hideTrial();
+    this.hud.hideTrialResult();
     this.hud.hideTeamSelect();
     this.hud.hideArrange();
     this.hud.hideHud();
@@ -733,22 +902,25 @@ export class Game {
     document.body.classList.remove('selecting');
     this.audio?.setMusic(this.musicOn, false);
     const room = new URLSearchParams(location.search).get('room') ?? '';
-    this.hud.showTitle(
-      () => {
+    this.hud.showTitle({
+      onCpu: () => {
         void this.boot();
-        if (room) this.enterOnline(room);
-        else this.enterSelect();
+        this.enterSelect();
       },
-      () => {
+      onTrial: () => {
+        void this.boot();
+        this.enterTrial();
+      },
+      onOnline: () => {
         void this.boot();
         this.enterOnline(room);
       },
-      {
+      tutorial: {
         offer: shouldOfferTutorial(readTutorialFlag()),
         onStart: () => this.startTutorial(),
         onDismiss: () => writeTutorialFlag('dismissed'),
       },
-    );
+    });
   }
 
   // ---------------- 操作教學 ----------------
@@ -933,7 +1105,8 @@ export class Game {
       input: this.tutorialInput(),
       picked: [...document.querySelectorAll<HTMLElement>('#select .card.picked')].map((e) => e.dataset.id ?? ''),
       orderChanged: this.state === 'arrange' && t.firstOrder !== null && this.arrangeOrderKey() !== t.firstOrder,
-      partChanged: [...document.querySelectorAll('#arrange .ar-slot small')].some((e) => e.textContent?.includes('換了零件')),
+      partChanged: document.querySelector('#arrange .part-btn.changed') !== null,
+      partMenu: partMenu.isOpen,
       pulled: (this.lastLaunch.pull?.length ?? 0) >= PULL_MIN,
       pushTime: t.pushTime,
       dashes: this.counters.dashes,
@@ -1508,6 +1681,21 @@ export class Game {
       this.hud.showNetOverlay(`${this.oppLabel} 連線中斷`, `等待重新連線… ${left} 秒後判對手棄權`);
     }
 
+    // 試驗模式的電腦自動對打：每幀最多算約 12 毫秒（至少一場），畫面不會卡住；打完顯示結果
+    if (this.trialAuto) {
+      const duel = this.trialAuto;
+      const t0 = performance.now();
+      do duel.runNext();
+      while (!duel.done && performance.now() - t0 < 12);
+      if (duel.done) {
+        this.lastAutoDuel = duel.summary;
+        this.trialAuto = null;
+        this.hud.setTrialAuto({ progress: 1, summary: this.lastAutoDuel });
+      } else {
+        this.hud.setTrialAuto({ progress: duel.progress });
+      }
+    }
+
     // 特寫結束：時間恢復的音效
     if (this.lastDirectorMode === 'closeup' && this.director.mode !== 'closeup') this.audio?.slowmoOut();
     this.lastDirectorMode = this.director.mode;
@@ -1524,9 +1712,12 @@ export class Game {
       this.pickOvertime(this.match!.player[Math.floor(this.rng() * 3)]);
     }
 
-    // 畫面更新
+    // 畫面更新（雙層戰鬥盤：陀螺、特效、鏡頭都貼著中央升降後的地面）
     const tops = this.sim?.tops ?? [];
-    this.views.forEach((v, i) => tops[i] && v.update(this.renderState(tops[i], i as 0 | 1), simDt, this.clock));
+    const lift = this.liftState();
+    this.effects.level = lift.level;
+    this.rig.level = lift.level;
+    this.views.forEach((v, i) => tops[i] && v.update(this.renderState(tops[i], i as 0 | 1), simDt, this.clock, lift.level));
     this.showcase?.update(wallDt);
     if (this.preview) {
       this.preview.state.angle += 260 * wallDt;
@@ -1537,7 +1728,7 @@ export class Game {
     const shot: Shot =
       this.state === 'title' || this.state === 'online'
         ? 'title'
-        : this.state === 'select' || this.state === 'arrange' || this.state === 'overtime' || this.state === 'waiting'
+        : this.state === 'select' || this.state === 'arrange' || this.state === 'overtime' || this.state === 'waiting' || this.state === 'trial' || this.state === 'trialResult'
           ? 'select'
           : this.state === 'launch'
             ? 'launch'
@@ -1545,7 +1736,7 @@ export class Game {
     this.rig.update(shot, this.director, tops, wallDt);
 
     const excitement = this.audio?.update(wallDt) ?? 0;
-    this.stadium.update(this.clock, excitement, this.sim?.time ?? this.clock);
+    this.stadium.update(this.clock, excitement, this.sim?.time ?? this.clock, lift);
     if (this.audio) {
       this.audio.setListener(this.gfx.camera);
       this.audio.setTimeScale(ts);
@@ -1681,6 +1872,10 @@ export class Game {
         }
         this.counters.finishes++;
         this.lastFinish = e.finish;
+        if (this.trial) {
+          const [p, c] = sim.tops;
+          this.trial.end = { rpm: [rpmOf(p), rpmOf(c)], burst: [Math.min(1, p.burst), Math.min(1, c.burst)] };
+        }
         const loser = sim.tops[e.loser];
         if (!this.online) this.director.notifyFinish(e.pos);
         this.effects.finish(e.pos, loser.spec.glow);
@@ -1709,6 +1904,10 @@ export class Game {
 
   /** 回合結束後：記錄這一戰，決定下一戰、延長賽或比賽結果 */
   private afterRound(): void {
+    if (this.trial) {
+      this.finishTrialRound();
+      return;
+    }
     const m = this.match!;
     const res = this.sim?.result;
     this.counters.rounds++;
@@ -1781,9 +1980,14 @@ export class Game {
     return this.me === 0 ? tops : [tops[1], tops[0]];
   }
 
+  /** 雙層戰鬥盤中央的升降狀態（依對戰的模擬時間；沒在對戰、或場地沒有升降平台時為升起） */
+  private liftState(): { level: number; warn: number } {
+    return this.sim && this.arena.lift ? liftPhase(this.arena.lift, this.sim.time) : { level: 0, warn: 0 };
+  }
+
   /** sim 座標轉世界座標 */
   private world(p: V2, lift: number): THREE.Vector3 {
-    return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), this.arena.radius), this.arena) + lift, p.z);
+    return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), this.arena.radius), this.arena, this.liftState().level) + lift, p.z);
   }
 
   /** sim 座標轉螢幕像素座標 */
@@ -1899,6 +2103,13 @@ export class Game {
       lastFinish: this.lastFinish,
       arena: this.arena.id,
       arenaChoice: this.arenaChoice,
+      /** 雙層戰鬥盤中央的升降狀態 */
+      lift: this.liftState(),
+      /** 試驗模式：目前這組設定與累計戰績、自動對打的進度（沒在跑為 null）與最近一次的結果 */
+      trial: this.trial ? { key: this.trial.key, record: this.trialRecords.get(this.trial.key) ?? null } : null,
+      trialCfg: this.trialCfg,
+      trialAuto: this.trialAuto ? this.trialAuto.progress : null,
+      lastAutoDuel: this.lastAutoDuel,
       pulling: this.pull !== null,
       me: this.me,
       tops: this.sim?.tops.map((t) => ({ id: t.spec.id, type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control, special: t.special, specialUsed: t.specialUsed })) ?? [],

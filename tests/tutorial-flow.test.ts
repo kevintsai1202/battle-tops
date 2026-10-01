@@ -141,7 +141,9 @@ describe('大畫面指引的目標', () => {
     const at = (id: string) => targetOf(STEPS.find((s) => s.id === id)!, ctx());
     expect(at('next')).toBe('#select .go');
     expect(at('order')).toBe('#arrange .ar-slot:nth-child(2) .ar-up');
-    expect(at('parts')).toBe('#arrange .ar-detail select[data-slot="driver"]');
+    expect(at('parts')).toBe('#arrange .ar-slot.on .part-btn[data-slot="driver"]');
+    // 零件清單打開後改指清單裡第一件還沒裝上的零件
+    expect(targetOf(STEPS.find((s) => s.id === 'parts')!, ctx({ partMenu: true }))).toBe('#part-menu .pm-opt:not(.current):not(:disabled)');
     expect(at('ready')).toBe('#arrange .ar-ready');
     expect(at('launch')).toBeUndefined();
   });

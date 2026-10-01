@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'vitest';
 import { createRng } from '../src/sim/rng';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime } from '../src/sim/team';
-import type { TopId } from '../src/sim/types';
+import type { FinishType, TopId } from '../src/sim/types';
 
 const P: TopId[] = ['attack', 'defense', 'stamina'];
 const C: TopId[] = ['balance', 'stamina', 'attack'];
 
 /** 玩家（0）贏一戰 */
-const pWin = (finish: 'spin' | 'over' | 'burst' = 'spin') => ({ finish, loser: 1, winner: 0 as const });
+const pWin = (finish: FinishType = 'spin') => ({ finish, loser: 1, winner: 0 as const });
 /** CPU（1）贏一戰 */
-const cWin = (finish: 'spin' | 'over' | 'burst' = 'spin') => ({ finish, loser: 0, winner: 1 as const });
+const cWin = (finish: FinishType = 'spin') => ({ finish, loser: 0, winner: 1 as const });
 const draw = { finish: 'spin' as const, loser: 0, winner: null };
 
 describe('建立 3 對 3 對戰', () => {
@@ -38,6 +38,13 @@ describe('計分與平手', () => {
       [2, 0],
       [0, 1],
     ]);
+  });
+
+  test('極限終結（撞進標準戰鬥盤中間的寬口）得 3 分', () => {
+    const m = createMatch(P, C);
+    recordResult(m, pWin('xtreme'));
+    expect(m.score).toEqual([3, 0]);
+    expect(m.results[0]).toMatchObject({ finish: 'xtreme', points: [3, 0] });
   });
 
   test('同時倒下（平手）不計分，同一組重打', () => {

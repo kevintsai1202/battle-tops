@@ -43,7 +43,7 @@ test('展示模式：3 對 3 打完整一場，結果畫面列出每一戰', asy
 
 test('延長賽：總分平手時從自己的隊伍挑一顆出戰', async ({ page }) => {
   await page.goto('./?seed=33');
-  await page.locator('#title').click();
+  await page.locator('#title .to-cpu').click();
   await pickTeam(page, ['wolf', 'blaze', 'turtle']);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
 

@@ -87,7 +87,7 @@ export interface TutorialUiHandlers {
  *   推移、衝刺時在自己的陀螺旁邊示範滑動與快甩（觸控）或顯示要按的大鍵帽（電腦）；必殺時手指點必殺按鈕（觸控）或顯示空白鍵（電腦）；
  *   終結時從自己的陀螺畫箭頭指向對手。動作依每幀的時間推進（不會因主執行緒卡住而跳掉或彼此錯開）。
  * - 面板：章節與第幾步、標題、字幕（就是解說語音的台詞）、按鈕（重聽、跳過這步、下一步／完成、結束教學）；
- *   只有計分那一步放三種終結的說明圖。面板放在不會蓋住目標的位置（上方、下方、右側或左側）。
+ *   只有計分那一步放四種終結的說明圖。面板放在不會蓋住目標的位置（上方、下方、右側或左側）。
  * - 小提示（toast）：發射沒拉條、被終結重來時跳出一下。
  * 指引全部不接收指標（點下去直接到底下的遊戲畫面）；只有面板上的按鈕可以點。
  */
@@ -500,7 +500,7 @@ export class TutorialOverlay {
   }
 }
 
-/** 計分那一步的說明圖：三種終結的小動畫（停轉倒下、飛出場外、爆裂）與得分 */
+/** 計分那一步的說明圖：四種終結的小動畫（停轉倒下、飛出場外、爆裂、撞進實體戰鬥盤中間的寬口）與得分 */
 function finishCards(): HTMLElement[] {
   const card = (cls: string, name: string, pts: string) => {
     const c = el('div', `fin ${cls}`);
@@ -509,5 +509,5 @@ function finishCards(): HTMLElement[] {
     c.append(bowl, el('span', 'fin-name', name), el('b', 'fin-pts', pts));
     return c;
   };
-  return [card('f-spin', '旋轉終結', '1 分'), card('f-over', '場外終結', '2 分'), card('f-burst', '爆裂終結', '2 分')];
+  return [card('f-spin', '旋轉終結', '1 分'), card('f-over', '場外終結', '2 分'), card('f-burst', '爆裂終結', '2 分'), card('f-xtreme', '極限終結', '3 分')];
 }

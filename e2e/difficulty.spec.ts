@@ -12,26 +12,26 @@ test('難度：預設普通、切到簡單後生效並記住', async ({ page }) 
   await page.goto('./?seed=41');
   await page.evaluate(() => localStorage.removeItem('battle-tops.difficulty'));
   await page.reload();
-  await page.locator('#title').click();
-  await expect(page.locator('.difficulty button.on')).toHaveAttribute('data-id', 'normal');
+  await page.locator('#title .to-cpu').click();
+  await expect(page.locator('#select .difficulty button.on')).toHaveAttribute('data-id', 'normal');
 
   // 鍵盤 3 → 困難，再用滑鼠點簡單
   await page.keyboard.press('3');
-  await expect(page.locator('.difficulty button.on')).toHaveAttribute('data-id', 'hard');
-  await page.locator('.difficulty button[data-id="easy"]').click();
-  await expect(page.locator('.difficulty button.on')).toHaveAttribute('data-id', 'easy');
+  await expect(page.locator('#select .difficulty button.on')).toHaveAttribute('data-id', 'hard');
+  await page.locator('#select .difficulty button[data-id="easy"]').click();
+  await expect(page.locator('#select .difficulty button.on')).toHaveAttribute('data-id', 'easy');
   expect((await dbg(page)).difficulty).toBe('easy');
 
   // 點卡片後按 Enter／Space：只切換一次（按鈕焦點不會讓它觸發兩次而互相抵消）
-  const badge = page.locator('.card .badge').first();
-  await page.locator('.card').first().click();
+  const badge = page.locator('#select .card .badge').first();
+  await page.locator('#select .card').first().click();
   await expect(badge).toHaveText('1');
   await page.keyboard.press('Enter');
   await expect(badge).toHaveText('');
   await page.keyboard.press('Space');
   await expect(badge).toHaveText('1');
 
-  for (const i of [1, 2]) await page.locator('.card').nth(i).click();
+  for (const i of [1, 2]) await page.locator('#select .card').nth(i).click();
   await page.locator('#select .go').click();
   await confirmArrange(page);
   await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
@@ -45,6 +45,6 @@ test('難度：預設普通、切到簡單後生效並記住', async ({ page }) 
 
   // 重新整理後仍是簡單
   await page.reload();
-  await page.locator('#title').click();
-  await expect(page.locator('.difficulty button.on')).toHaveAttribute('data-id', 'easy');
+  await page.locator('#title .to-cpu').click();
+  await expect(page.locator('#select .difficulty button.on')).toHaveAttribute('data-id', 'easy');
 });

@@ -18,7 +18,7 @@ const dbg = (page: Page) => page.evaluate(() => (window as unknown as { __game: 
 /** 進入第一戰的倒數 */
 async function toLaunch(page: Page, seed: number): Promise<void> {
   await page.goto(`./?seed=${seed}`);
-  await page.locator('#title').click();
+  await page.locator('#title .to-cpu').click();
   await pickTeam(page, ['blaze', 'turtle', 'gale']);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
 }

@@ -32,6 +32,16 @@ export async function pickTeam(page: Page, ids: string[], tap = false): Promise<
   await confirmArrange(page, tap);
 }
 
+/**
+ * 第 2 步換零件：按那一顆欄位上的「盤」或「軸」按鈕，在展開的零件清單裡點一件（part 為空字串 = 換回原廠），清單收起。
+ */
+export async function choosePart(page: Page, top: string, slot: 'disk' | 'driver', part: string, tap = false): Promise<void> {
+  await press(page, `#arrange .ar-slot[data-id="${top}"] .part-btn[data-slot="${slot}"]`, tap);
+  await expect(page.locator('#part-menu')).toBeVisible();
+  await press(page, `#part-menu .pm-opt[data-part="${part}"]`, tap);
+  await expect(page.locator('#part-menu')).toHaveCount(0);
+}
+
 /** 第 2 步目前的出場順序（欄位上的陀螺代號） */
 export async function arrangeOrder(page: Page): Promise<string[]> {
   return page.locator('#arrange .ar-slot').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.id ?? ''));

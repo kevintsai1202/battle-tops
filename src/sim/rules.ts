@@ -1,7 +1,7 @@
 import type { FinishType } from './types';
 
-/** 各終結方式的得分 */
-export const FINISH_POINTS: Record<FinishType, number> = { spin: 1, over: 2, burst: 2 };
+/** 各終結方式的得分（照實體比賽：撞進中間寬口的極限終結 3 分） */
+export const FINISH_POINTS: Record<FinishType, number> = { spin: 1, over: 2, burst: 2, xtreme: 3 };
 
 /** 發射判定視窗：perfect 秒內滿分，誤差到 worst 秒線性降到最低力道 min */
 export interface LaunchWindow {

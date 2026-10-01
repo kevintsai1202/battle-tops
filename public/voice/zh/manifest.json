@@ -382,5 +382,13 @@
     "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
     "hash": "f13bb98c630732c7",
     "seconds": 2.148
+  },
+  "xtreme_finish": {
+    "file": "xtreme_finish.mp3",
+    "text": "[shouting][excited] 極限終結！！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "fb6387b3f07de46f",
+    "seconds": 1.007
   }
 }

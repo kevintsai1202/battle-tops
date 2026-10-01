@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ARENAS, ARENA_IDS, floorHeight, floorSlope, inPocket, ventPhase, type ArenaId } from '../src/sim/arena';
+import { activeRail, ARENAS, ARENA_IDS, floorHeight, floorSlope, inPocket, liftPhase, pocketAt, ventPhase, type ArenaId } from '../src/sim/arena';
 import { BattleSim } from '../src/sim/battle';
 import { createTop, integrateTop, resolvePillars } from '../src/sim/physics';
 import { TOP_SPECS } from '../src/sim/tops';
@@ -7,27 +7,30 @@ import { TOP_SPECS } from '../src/sim/tops';
 const STEP = 1 / 120;
 
 describe('場地規格', () => {
-  test('五個場地，半徑一致（鏡頭與特效共用尺寸）', () => {
-    expect(ARENA_IDS).toHaveLength(5);
+  test('六個場地，半徑一致（鏡頭與特效共用尺寸）', () => {
+    expect(ARENA_IDS).toHaveLength(6);
+    expect(ARENA_IDS).toContain('double');
     for (const id of ARENA_IDS) expect(ARENAS[id].radius).toBe(3.2);
   });
 
   test('出場口判定依各場地的出場口位置', () => {
     for (const id of ARENA_IDS) {
       const a = ARENAS[id];
-      for (const p of a.pockets) expect(inPocket(p, a)).toBe(true);
+      for (const p of a.pockets) expect(inPocket(p.at, a)).toBe(true);
     }
     // 標準戰鬥盤的出場口在不同角度：練習場的第二個出場口在這裡是牆
-    expect(inPocket(ARENAS.practice.pockets[1], ARENAS.stadium)).toBe(false);
+    expect(inPocket(ARENAS.practice.pockets[1].at, ARENAS.stadium)).toBe(false);
   });
 
-  test('坡度等於高度的數值微分（含火山錐）', () => {
+  test('坡度等於高度的數值微分（含火山錐、龍捲脊、外圈加陡、雙層盤升降的凹槽）', () => {
     for (const id of ARENA_IDS) {
       const a = ARENAS[id];
-      for (const r of [0.3, 1, 2, 3]) {
-        const h = 1e-4;
-        const num = (floorHeight(r + h, a) - floorHeight(r - h, a)) / (2 * h);
-        expect(floorSlope(r, a)).toBeCloseTo(num, 4);
+      for (const level of [0, 0.5, 1]) {
+        for (const r of [0.3, 1, 1.15, 1.8, 1.9, 2, 2.6, 3]) {
+          const h = 1e-4;
+          const num = (floorHeight(r + h, a, level) - floorHeight(r - h, a, level)) / (2 * h);
+          expect(floorSlope(r, a, level), `${id} r=${r} level=${level}`).toBeCloseTo(num, 4);
+        }
       }
     }
   });
@@ -43,7 +46,7 @@ describe('場地會改變陀螺走向', () => {
 
   test('每個特殊場地的軌跡都和練習場不同', () => {
     const base = run('practice');
-    for (const id of ['stadium', 'volcano', 'glacier', 'flooded'] as const) {
+    for (const id of ['stadium', 'double', 'volcano', 'glacier', 'flooded'] as const) {
       const t = run(id);
       expect(Math.hypot(t.pos.x - base.pos.x, t.pos.z - base.pos.z), id).toBeGreaterThan(0.1);
     }
@@ -128,5 +131,111 @@ describe('場地會改變陀螺走向', () => {
     integrateTop(off, STEP, ARENAS.volcano);
     expect(onLava.terrain).toBe('lava');
     expect(onLava.spin).toBeLessThan(off.spin);
+  });
+});
+
+describe('實體戰鬥盤：標準戰鬥盤（BX-10）與雙層戰鬥盤（BX-37）', () => {
+  const PHYSICAL = ['stadium', 'double'] as const;
+
+  test('出場口集中在同一邊：中間寬口是 Xtreme 區（極限終結），兩角是 Over 區（場外終結）', () => {
+    for (const id of PHYSICAL) {
+      const a = ARENAS[id];
+      expect(a.frame, id).toBe('square');
+      // 全部出場口都在 -z 那一側（兩個發射位置在 ±x，離出場口一樣遠）
+      for (const p of a.pockets) expect(Math.sin(p.at), id).toBeLessThan(-0.3);
+      const xtreme = a.pockets.filter((p) => p.kind === 'xtreme');
+      const over = a.pockets.filter((p) => p.kind === 'over');
+      expect(xtreme, id).toHaveLength(1);
+      expect(over, id).toHaveLength(2);
+      // 中間寬口比兩角的出場口寬，且在兩角的中間
+      for (const o of over) expect(xtreme[0].half).toBeGreaterThan(o.half);
+      expect(Math.sin(xtreme[0].at)).toBeCloseTo(-1, 6);
+      expect(pocketAt(xtreme[0].at, a)?.kind).toBe('xtreme');
+      expect(pocketAt(over[0].at, a)?.kind).toBe('over');
+      // 對面（+z）整片是牆
+      expect(pocketAt(Math.PI / 2, a)).toBeNull();
+    }
+    // 其他場地沒有 Xtreme 區
+    for (const id of ['practice', 'volcano', 'glacier', 'flooded'] as const) {
+      expect(ARENAS[id].pockets.every((p) => p.kind === 'over'), id).toBe(true);
+    }
+  });
+
+  test('兩層：內圈平台比外圈平緩，中間隔著一圈龍捲脊（脊上坡度比兩側陡）', () => {
+    for (const id of PHYSICAL) {
+      const a = ARENAS[id];
+      const ridge = a.ridge!;
+      expect(ridge, id).not.toBeNull();
+      expect(floorSlope(1, a), id).toBeLessThan(floorSlope(2.6, a));
+      expect(floorSlope(ridge.r - ridge.w * 0.7, a), id).toBeGreaterThan(floorSlope(ridge.r - ridge.w * 3, a));
+    }
+  });
+
+  test('外圈極限軌道照舊：標準戰鬥盤與雙層戰鬥盤的外圈都會加速', () => {
+    for (const id of PHYSICAL) {
+      const t = createTop(0, TOP_SPECS.valkyrie, { x: 2.8, z: 0 }, { x: 0, z: 0 }, 1);
+      integrateTop(t, STEP, ARENAS[id]);
+      expect(t.terrain, id).toBe('rail');
+      expect(Math.abs(t.vel.z), id).toBeGreaterThan(0.01);
+    }
+  });
+
+  test('雙層戰鬥盤：開場是升起的，之後中央定時降下（降下前有預兆），再升回來，週期重複', () => {
+    const lift = ARENAS.double.lift!;
+    expect(ARENAS.stadium.lift).toBeNull();
+    expect(liftPhase(lift, 0).level).toBe(0);
+    // 下降前的預兆
+    const warnAt = lift.raised - lift.warn / 2;
+    expect(liftPhase(lift, warnAt).level).toBe(0);
+    expect(liftPhase(lift, warnAt).warn).toBeGreaterThan(0);
+    // 降下中途、完全降下、升回
+    expect(liftPhase(lift, lift.raised + lift.move / 2).level).toBeGreaterThan(0);
+    expect(liftPhase(lift, lift.raised + lift.move / 2).level).toBeLessThan(1);
+    const down = lift.raised + lift.move + lift.lowered / 2;
+    expect(liftPhase(lift, down).level).toBe(1);
+    const cycle = lift.raised + lift.lowered + 2 * lift.move;
+    expect(liftPhase(lift, cycle + 0.1).level).toBe(0);
+    expect(liftPhase(lift, cycle + down).level).toBe(1);
+  });
+
+  test('雙層戰鬥盤：降下時中央變成凹槽（升起時和標準戰鬥盤一樣平），凹槽壁把陀螺往內推', () => {
+    const a = ARENAS.double;
+    const lift = a.lift!;
+    expect(floorHeight(0.5, a, 1)).toBeCloseTo(floorHeight(0.5, a, 0) - lift.depth, 6);
+    expect(floorHeight(lift.r + 0.01, a, 1)).toBeCloseTo(floorHeight(lift.r + 0.01, a, 0), 6);
+    // 凹槽壁上靜止的陀螺：降下時往中心加速得比升起時多
+    const wall = lift.r - lift.edge / 2;
+    const mk = () => createTop(0, TOP_SPECS.wolf, { x: wall, z: 0 }, { x: 0, z: 0 }, 0);
+    const [lowered, raised] = [mk(), mk()];
+    integrateTop(lowered, 0.05, a, 1);
+    integrateTop(raised, 0.05, a, 0);
+    expect(lowered.vel.x).toBeLessThan(raised.vel.x - 0.05);
+  });
+
+  test('雙層戰鬥盤：凹槽邊緣的內圈極限軌道只在降下時作用', () => {
+    const a = ARENAS.double;
+    const inner = a.rails.find((r) => r.lowered)!;
+    expect(inner).toBeDefined();
+    const r = (inner.from + inner.to) / 2;
+    expect(activeRail(r, a, 1)).toBe(inner);
+    expect(activeRail(r, a, 0)).toBeNull();
+    const mk = () => createTop(0, TOP_SPECS.valkyrie, { x: r, z: 0 }, { x: 0, z: 0 }, 1);
+    const [down, up] = [mk(), mk()];
+    integrateTop(down, STEP, a, 1);
+    integrateTop(up, STEP, a, 0);
+    expect(down.terrain).toBe('rail');
+    expect(up.terrain).toBe('ground');
+    expect(Math.abs(down.vel.z)).toBeGreaterThan(Math.abs(up.vel.z));
+  });
+
+  test('雙層戰鬥盤：模擬依時間推進升降（level），快照還原後一致', () => {
+    const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.turtle, { seed: 3, launch: [1, 1], arena: ARENAS.double });
+    expect(sim.level).toBe(0);
+    const lift = ARENAS.double.lift!;
+    const steps = Math.ceil((lift.raised + lift.move + 0.5) / STEP);
+    for (let i = 0; i < steps && !sim.result; i++) sim.step(STEP);
+    if (!sim.result) expect(sim.level).toBe(1);
+    const copy = BattleSim.fromSnapshot(sim.snapshot());
+    expect(copy.level).toBe(sim.level);
   });
 });
