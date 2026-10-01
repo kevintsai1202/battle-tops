@@ -2066,6 +2066,67 @@ body.selecting #help {
   background: rgba(20, 60, 120, 0.85);
 }
 
+/* ---------- 語言切換（日文版／全中文版，見 src/i18n.ts） ---------- */
+/* 標題畫面右上角的切換鈕：疊在大標題上層（標題換行時元素框橫跨整個畫面，又有 transform，不疊上層會吃掉點擊） */
+#title .lang-switch {
+  position: absolute;
+  z-index: 2;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(127, 240, 255, 0.5);
+  border-radius: 999px;
+  background: rgba(8, 20, 50, 0.7);
+}
+
+#title .lang-switch button {
+  min-width: 64px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #bff6ff;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+#title .lang-switch button[aria-pressed='true'] {
+  background: #7ff0ff;
+  color: #06142e;
+  font-weight: 700;
+}
+
+/*
+ * 矮螢幕（手機橫向）：大標題縮到一行。原本會換成兩行、整欄比畫面高，頂端的「BATTLE」與底下的線上對戰按鈕被切掉，
+ * 右上角的語言切換鈕也沒有地方放。切換鈕同時縮小，標題右端與切換鈕在 640 px 寬以上的畫面都不重疊。
+ */
+@media (max-height: 520px) {
+  #title h1 {
+    font-size: clamp(28px, 6vw, 52px);
+  }
+
+  #title .lang-switch button {
+    min-width: 0;
+    min-height: 36px;
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+}
+
+/* 只在日文版顯示的中文小註解：中文版的主文字已經是中文，不重複 */
+html:lang(zh) .ja-only {
+  display: none !important;
+}
+
+/* 中文版：標題字型缺字時先退到繁體中文字型（日文字型的漢字是日本字形） */
+html:lang(zh) {
+  --display: 'Dela Gothic One', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+}
+
 /* 內容比畫面高（手機橫向、房間列表很長）時從頂端開始捲動：置中排版會把上半部推到捲不到的地方 */
 #online {
   justify-content: flex-start;

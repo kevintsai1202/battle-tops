@@ -1,14 +1,23 @@
-// 用 Groq Whisper 對 public/voice/*.mp3 做聽寫抽查，與台詞原文（去語氣標記）比對字元相似度。
+// 用 Groq Whisper 對語音檔做聽寫抽查，與台詞原文（去語氣標記）比對字元相似度。
+// 日文抽查 public/voice/*.mp3，中文（--lang zh）抽查 public/voice/zh/*.mp3。
 // 用法（PowerShell 7）：
 //   node --env-file=../transcript-review/.env scripts/check-voice.mjs
-// 結果表存到 logs/voice-check.json。金鑰讀環境變數 GROQ_API_KEY，不會印出。
+//   node --env-file=../transcript-review/.env scripts/check-voice.mjs --lang zh
+//   node --env-file=../transcript-review/.env scripts/check-voice.mjs --lang zh --only go_shoot,countdown_3
+// 結果表存到 logs/voice-check.json（中文是 logs/voice-check-zh.json）。金鑰讀環境變數 GROQ_API_KEY，不會印出。
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const VOICE_DIR = path.join(ROOT, 'public/voice');
-const OUT_FILE = path.join(ROOT, 'logs/voice-check.json');
+/**
+ * 各語言的音檔位置、Whisper 語言與結果檔。
+ * 中文加上繁體提示：沒有提示時 Whisper 常輸出簡體字，相似度會無故變低。
+ */
+const LANGS = {
+  ja: { dir: 'public/voice', whisper: 'ja', prompt: null, out: 'logs/voice-check.json' },
+  zh: { dir: 'public/voice/zh', whisper: 'zh', prompt: '以下是繁體中文的句子。', out: 'logs/voice-check-zh.json' },
+};
 const API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const MAX_RETRY = 6;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -16,11 +25,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** 去掉方括號語氣標記，供比對與顯示。 */
 const stripTags = (s) => s.replace(/\[[^\]]*\]/g, '').trim();
 
-/** 正規化：去標記、長音符、標點、空白、中黑點，片假名轉平假名，供相似度比較。 */
+/**
+ * 正規化：去標記、長音符、破折號、標點、空白、中黑點，片假名轉平假名，
+ * 阿拉伯數字轉成中文數字（Whisper 常把「三！」聽寫成「3.」），供相似度比較。
+ */
 function normalize(s) {
   return stripTags(s)
-    .replace(/[ー－―\-・･\s、。，,.！!？?…「」『』（）()〜~]/g, '')
+    .replace(/[ー－―—\-・･\s、。，,.！!？?…「」『』（）()〜~：:；;]/g, '')
     .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[0-9]/g, (d) => '〇一二三四五六七八九'[Number(d)])
     .toLowerCase();
 }
 
@@ -45,13 +58,14 @@ function similarity(a, b) {
 }
 
 /** 呼叫 Groq Whisper 聽寫單一檔案；429/5xx 依 Retry-After 或指數退避重試。 */
-async function transcribe(key, file) {
-  const buf = await readFile(path.join(VOICE_DIR, file));
+async function transcribe(key, file, lang) {
+  const buf = await readFile(path.join(ROOT, lang.dir, file));
   for (let attempt = 0; ; attempt++) {
     const form = new FormData();
     form.append('file', new Blob([buf], { type: 'audio/mpeg' }), file);
     form.append('model', 'whisper-large-v3');
-    form.append('language', 'ja');
+    form.append('language', lang.whisper);
+    if (lang.prompt) form.append('prompt', lang.prompt);
     form.append('temperature', '0');
     const res = await fetch(API_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form });
     if (res.ok) return (await res.json()).text ?? '';
@@ -65,13 +79,18 @@ async function transcribe(key, file) {
 }
 
 /**
- * 主流程：逐句聽寫、算相似度、印表並寫入 logs/voice-check.json。
- * 參數 --only id1,id2 只抽查指定台詞（結果另存 logs/voice-check-only.json，不覆蓋全量結果）。
+ * 主流程：逐句聽寫、算相似度、印表並寫入結果檔。
+ * 參數 --lang ja|zh 選語言（預設 ja）；--only id1,id2 只抽查指定台詞（結果另存 *-only.json，不覆蓋全量結果）。
  */
 async function main() {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error('缺少環境變數 GROQ_API_KEY');
-  const manifest = JSON.parse(await readFile(path.join(VOICE_DIR, 'manifest.json'), 'utf8'));
+  const li = process.argv.indexOf('--lang');
+  const langId = li > 0 ? process.argv[li + 1] : 'ja';
+  const lang = LANGS[langId];
+  if (!lang) throw new Error(`--lang 只能是 ${Object.keys(LANGS).join('、')}`);
+  const OUT_FILE = path.join(ROOT, lang.out);
+  const manifest = JSON.parse(await readFile(path.join(ROOT, lang.dir, 'manifest.json'), 'utf8'));
   const oi = process.argv.indexOf('--only');
   const only = oi > 0 ? new Set(process.argv[oi + 1].split(',')) : null;
   const rows = [];
@@ -79,7 +98,7 @@ async function main() {
     if (only && !only.has(id)) continue;
     const expected = stripTags(m.text);
     let heard = '', error = null;
-    try { heard = await transcribe(key, m.file); } catch (e) { error = e.message; }
+    try { heard = await transcribe(key, m.file, lang); } catch (e) { error = e.message; }
     const score = error ? null : Number(similarity(normalize(expected), normalize(heard)).toFixed(3));
     rows.push({ id, speaker: m.speaker, tags: (m.text.match(/\[[^\]]*\]/g) ?? []).join(''), expected, heard, similarity: score, error });
     console.log(`${id}\t${score ?? 'ERR'}\t${expected}\t=>\t${heard}${error ? ' ' + error : ''}`);

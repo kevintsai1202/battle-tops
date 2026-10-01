@@ -1,3 +1,4 @@
+import { emblemOf, lang, LANGS, setLang, specialName, topName, tr, type Lang } from '../i18n';
 import { ARENA_IDS, ARENAS, type ArenaId } from '../sim/arena';
 import { DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
 import { equip, STOCK, type TeamLoadouts } from '../sim/parts';
@@ -10,13 +11,13 @@ import { DetailView } from './detail';
 
 export { css } from './common';
 
-/** 終結方式的英文名稱（結果畫面用） */
-const FINISH_EN: Record<FinishType, string> = { spin: 'SPIN FINISH', over: 'OVER FINISH', burst: 'BURST FINISH' };
+/** 終結方式的名稱（結果畫面用；日文版英文、中文版中文） */
+const finishName = (f: FinishType) => tr(`finish.${f}`);
 
 /** 場地選擇：五個場地加上「隨機」 */
 export type ArenaChoice = ArenaId | 'random';
 
-/** 陀螺卡片（延長賽三選一用）：順序徽章、名稱、類型、六項屬性條、必殺技名 */
+/** 陀螺卡片（延長賽三選一用）：順序徽章、名稱（日文版另附中文名）、類型、六項屬性條、必殺技名 */
 function buildCard(sp: TopSpec): HTMLButtonElement {
   const c = el('button', 'card');
   c.type = 'button';
@@ -31,11 +32,11 @@ function buildCard(sp: TopSpec): HTMLButtonElement {
   };
   c.append(
     el('span', 'badge'),
-    el('div', 'ja', sp.nameJa),
-    el('div', 'zh', sp.nameZh),
+    el('div', 'ja', topName(sp)),
+    el('div', 'zh ja-only', sp.nameZh),
     el('span', 'type', `${TYPE_LABEL[sp.type]}・${spinLabel(sp)}`),
     ...STAT_AXES.map((ax) => stat(ax.label, statScore(sp.stats, ax.key))),
-    el('div', 'sp', `必殺：${sp.special.nameJa}`),
+    el('div', 'sp', `必殺：${specialName(sp)}`),
   );
   return c;
 }
@@ -51,7 +52,7 @@ function buildTile(sp: TopSpec): HTMLButtonElement {
   const img = el('img', 'thumb');
   img.alt = '';
   img.hidden = true;
-  const emb = el('i', 'emb', sp.emblem);
+  const emb = el('i', 'emb', emblemOf(sp));
   c.append(el('span', 'badge'), img, emb, el('span', 'nm', sp.nameZh), el('span', 'ty', TYPE_LABEL[sp.type].slice(0, 1)));
   if (sp.spinDir === -1) c.append(el('span', 'left', '左'));
   return c;
@@ -184,16 +185,32 @@ export class Hud {
    * 顯示標題畫面，點擊後呼叫 onStart。
    * 用 click 而不是 pointerdown：觸控時瀏覽器在 pointerdown 之後才補送 click，
    * 若在 pointerdown 就切到組隊畫面，這個 click 會落在剛出現的陀螺小格上，誤選一顆。
+   * 右上角的語言按鈕切換日文版／全中文版（記住選擇），不會開始遊戲。
    */
   showTitle(onStart: () => void, onOnline?: () => void): void {
     const title = $('#title');
     const online = $<HTMLButtonElement>('.to-online', title);
     title.hidden = false;
     online.hidden = !onOnline;
+    const langBtns = [...title.querySelectorAll<HTMLButtonElement>('.lang-switch button')];
+    /** 標出目前的語言 */
+    const markLang = () => langBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang())));
+    langBtns.forEach((b) => {
+      b.onclick = (e) => {
+        // 攔住事件：不要讓標題的「點任意處開始」也觸發
+        e.stopPropagation();
+        const l = b.dataset.lang as Lang;
+        if (LANGS.includes(l)) setLang(l);
+        markLang();
+        b.blur();
+      };
+    });
+    markLang();
     const stop = () => {
       title.removeEventListener('click', go);
       window.removeEventListener('keydown', go);
       online.onclick = null;
+      langBtns.forEach((b) => (b.onclick = null));
       title.hidden = true;
     };
     const go = () => {
@@ -399,7 +416,7 @@ export class Hud {
     this.detail = detail;
     // CPU 陣容：依名鑑順序顯示，不洩漏出場順序；線上時改成對手狀態
     $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
-    $('.cpu-team .ct-label', root).textContent = online ? `對手：${online.opponent}` : 'CPU チーム';
+    $('.cpu-team .ct-label', root).textContent = online ? `對手：${online.opponent}` : tr('select.cpuTeam');
     $('.cpu-team small', root).textContent = online ? '選擇中…' : '出場順序保密';
     const go = $<HTMLButtonElement>('.go', root);
     const slots = $('.slots', root);
@@ -778,7 +795,7 @@ export class Hud {
   /** 對戰中的賽況：BATTLE n/3 或延長賽、場地名，以及雙方陣容小圖示（出戰中、已出戰與得分） */
   setMatchInfo(m: TeamMatch, specs: Record<TopId, TopSpec>, arenaName: string, current?: Pairing | null): void {
     const pair = current === undefined ? currentPairing(m) : current;
-    $('#hud .info').textContent = `${pair ? (pair.overtime ? '延長賽' : `BATTLE ${pair.battle}/3`) : 'FINAL'}・${arenaName}`;
+    $('#hud .info').textContent = `${pair ? (pair.overtime ? '延長賽' : tr('info.battle', { n: pair.battle })) : tr('info.final')}・${arenaName}`;
     const side = (team: TopId[], who: 0 | 1) =>
       team.map((t) => {
         const c = chip(specs[t]);
@@ -797,14 +814,14 @@ export class Hud {
     $('#hud .lineup .t1').replaceChildren(...side(cpuShown, 1));
   }
 
-  /** 顯示對戰 HUD 並填入名稱 */
-  showHud(a: TopSpec, b: TopSpec, opponent = 'CPU'): void {
+  /** 顯示對戰 HUD 並填入名稱（opponent 省略時為 CPU／電腦） */
+  showHud(a: TopSpec, b: TopSpec, opponent = tr('cpu')): void {
     const hud = $('#hud');
     hud.hidden = false;
     hud.style.setProperty('--p0', css(a.glow));
     hud.style.setProperty('--p1', css(b.glow));
-    $('.panel[data-side="0"] .name', hud).textContent = `YOU ｜ ${a.nameJa}`;
-    $('.panel[data-side="1"] .name', hud).textContent = `${b.nameJa} ｜ ${opponent}`;
+    $('.panel[data-side="0"] .name', hud).textContent = tr('hud.you', { name: topName(a) });
+    $('.panel[data-side="1"] .name', hud).textContent = `${topName(b)} ｜ ${opponent}`;
   }
 
   hideHud(): void {
@@ -862,7 +879,7 @@ export class Hud {
   }
 
   /**
-   * 發射台：時機環（外圈收縮，對上內圈 = 「ゴー」）與拉條。
+   * 發射台：時機環（外圈收縮，對上內圈 = 「ゴー」／「發射」）與拉條。
    * progress 為 0..1（1 = 外圈剛好對上內圈）；cord 為拉條中的狀態（沒在拉時為 null）。
    */
   launchMeter(show: boolean, progress = 0, cord: CordView | null = null): void {
@@ -884,10 +901,10 @@ export class Hud {
       knob.setAttribute('cx', String(cord.to.x));
       knob.setAttribute('cy', String(cord.to.y));
       $('.power i', root).style.width = `${Math.round(cord.power * 100)}%`;
-      $('.power span', root).textContent = `POWER ${Math.round(cord.power * 100)}%　${aimText(cord.aim)}`;
+      $('.power span', root).textContent = tr('launch.powerAim', { p: Math.round(cord.power * 100), aim: aimText(cord.aim) });
     } else {
       $('.power i', root).style.width = '0%';
-      $('.power span', root).textContent = 'POWER';
+      $('.power span', root).textContent = tr('launch.power');
     }
   }
 
@@ -896,8 +913,8 @@ export class Hud {
     const root = $('#cutin');
     const band = $('.band', root);
     band.style.setProperty('--c', css(spec.glow));
-    $('.who', root).textContent = isPlayer ? `YOU ｜ ${spec.nameJa}` : `CPU ｜ ${spec.nameJa}`;
-    $('.move', root).textContent = `必殺！${spec.special.nameJa}`;
+    $('.who', root).textContent = isPlayer ? tr('hud.you', { name: topName(spec) }) : `${tr('cpu')} ｜ ${topName(spec)}`;
+    $('.move', root).textContent = `必殺！${specialName(spec)}`;
     root.hidden = false;
     // 重新觸發動畫
     band.style.animation = 'none';
@@ -912,8 +929,8 @@ export class Hud {
   /** 結果畫面：勝負、總分與每一戰的對陣和終結方式 */
   showResult(win: boolean, m: TeamMatch, specs: Record<TopId, TopSpec>, footnote: string, onRetry: () => void, opts: ResultOptions = {}): void {
     const root = $('#result');
-    const opp = opts.opponent ?? 'CPU';
-    $('.headline', root).textContent = win ? 'YOU WIN!!' : 'YOU LOSE…';
+    const opp = opts.opponent ?? tr('cpu');
+    $('.headline', root).textContent = tr(win ? 'result.win' : 'result.lose');
     $('.final', root).textContent = `${m.score[0]} - ${m.score[1]}`;
     $('.diff', root).textContent = footnote;
     $('.breakdown', root).replaceChildren(
@@ -922,12 +939,12 @@ export class Hud {
         return el(
           'li',
           r.winner === 0 ? 'w' : 'l',
-          `${label}　${specs[r.player].nameZh} VS ${specs[r.cpu].nameZh}　${FINISH_EN[r.finish]}　${r.winner === 0 ? 'YOU' : opp} +${r.points[r.winner]}`,
+          `${label}　${specs[r.player].nameZh} ${tr('vs')} ${specs[r.cpu].nameZh}　${finishName(r.finish)}　${r.winner === 0 ? tr('you') : opp} +${r.points[r.winner]}`,
         );
       }),
     );
     const btn = $<HTMLButtonElement>('.retry', root);
-    btn.textContent = opts.retryLabel ?? 'もう一度！／再來一場';
+    btn.textContent = opts.retryLabel ?? tr('result.retry');
     btn.disabled = false;
     btn.onclick = () => {
       if (!opts.keepOpen) root.hidden = true;

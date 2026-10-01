@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { AudioEngine, type Hum } from '../audio/engine';
-import { VoicePlayer, type VoiceId } from '../audio/voice';
+import { specialVoice, VoicePlayer, type VoiceId } from '../audio/voice';
+import { CLASH_WORDS, lang, onLangChange, topName, tr, type TextKey } from '../i18n';
 import { CameraDirector } from '../director/director';
 import { CameraRig, type Shot } from '../render/cameraRig';
 import { Effects } from '../render/effects';
@@ -49,32 +50,23 @@ export interface GameOptions {
   arena?: ArenaId;
 }
 
-const FINISH_TEXT: Record<FinishType, { en: string; voice: VoiceId }> = {
-  spin: { en: 'SPIN FINISH!', voice: 'spin_finish' },
-  over: { en: 'OVER FINISH!!', voice: 'over_finish' },
-  burst: { en: 'BURST FINISH!!', voice: 'burst_finish' },
+/** 終結時的大字（字串表的鍵，依語言顯示）與主播台詞 */
+const FINISH_TEXT: Record<FinishType, { banner: TextKey; voice: VoiceId }> = {
+  spin: { banner: 'banner.spin', voice: 'spin_finish' },
+  over: { banner: 'banner.over', voice: 'over_finish' },
+  burst: { banner: 'banner.burst', voice: 'burst_finish' },
 };
 
-const CLASH_WORDS = ['ガキィン！', 'ドガッ！', 'バキィッ！', 'ガガッ！', 'ズガッ！'];
-const BIG_WORDS = ['ドゴォォン！！', 'ズガァァン！！', 'ドガガガッ！！', 'バゴォォン！！'];
+/** 發射評價的文字（依語言）：力道比例越高評價越好 */
+function rateLabel(ratio: number): string {
+  return tr(ratio >= 0.97 ? 'rate.perfect' : ratio >= 0.85 ? 'rate.great' : ratio >= 0.7 ? 'rate.good' : 'rate.weak');
+}
+
 const CLASH_LINES: VoiceId[] = ['clash_1', 'clash_2', 'clash_3', 'clash_4'];
 
 /** 瀏覽器記住難度與場地用的 localStorage 鍵 */
 const DIFFICULTY_KEY = 'battle-tops.difficulty';
 const ARENA_KEY = 'battle-tops.arena';
-
-/** 原創四顆沿用舊的必殺語音檔（依類型命名），其餘用 p_special_<代號> */
-const LEGACY_SPECIAL_VOICE: Record<string, string> = {
-  blaze: 'p_special_attack',
-  turtle: 'p_special_defense',
-  gale: 'p_special_stamina',
-  wolf: 'p_special_balance',
-};
-
-/** 必殺技台詞 id */
-function specialVoice(spec: TopSpec): VoiceId {
-  return (LEGACY_SPECIAL_VOICE[spec.id] ?? `p_special_${spec.id}`) as VoiceId;
-}
 
 /** 各座位的發射位置與基準初速方向（BattleSim 的開場配置，瞄準箭頭用；0 號在左、1 號在右） */
 const SEAT_START: V2[] = [
@@ -192,7 +184,7 @@ export class Game {
   /** 自己在模擬裡的座位（CPU 模式固定 0；線上對戰每一戰輪替） */
   private me: 0 | 1 = 0;
   /** 對手在畫面上的稱呼（CPU 模式為 CPU，線上為對手名稱） */
-  private oppLabel = 'CPU';
+  private oppLabel = tr('cpu');
   /** 線上對戰（CPU 模式為 null） */
   private online: OnlineSession | null = null;
   /** 這則快照裡伺服器判定為重擊（觸發特寫）的撞擊位置 */
@@ -231,6 +223,8 @@ export class Game {
     window.addEventListener('pointerup', (e) => this.onPullEnd(e));
     window.addEventListener('pointercancel', (e) => this.onPullEnd(e));
     window.addEventListener('blur', () => this.keys.clear());
+    // 標題畫面切換語言：語音換成那一種語言（還沒載過就在背景載入）
+    onLangChange((l) => this.voice?.setLang(l));
 
     if (opts.demo) {
       document.getElementById('title')!.hidden = true;
@@ -313,7 +307,7 @@ export class Game {
   private enterSelect(keep?: { picks: TopId[]; loadouts: TeamLoadouts }): void {
     this.me = 0;
     this.rig.seat = 0;
-    this.oppLabel = 'CPU';
+    this.oppLabel = tr('cpu');
     this.setState('select');
     this.hud.hideHud();
     this.hud.clearBanner();
@@ -348,7 +342,7 @@ export class Game {
       specs: TOP_SPECS,
       order: picks,
       loadouts,
-      opponent: { label: 'CPU チーム', team: TOP_IDS.filter((t) => this.cpuTeam.includes(t)), note: '出場順序保密' },
+      opponent: { label: tr('select.cpuTeam'), team: TOP_IDS.filter((t) => this.cpuTeam.includes(t)), note: '出場順序保密' },
       arena: this.arenaChoice === 'random' ? '隨機（開打時抽）' : ARENAS[this.arenaChoice].nameZh,
       deadline: null,
       readyLabel: '出陣！',
@@ -488,15 +482,15 @@ export class Game {
     this.pull = null;
     this.pullResult = null;
     this.setState('launch');
-    const title = pair.overtime ? 'OVERTIME' : pair.battle === 3 ? 'FINAL BATTLE' : `BATTLE ${pair.battle}`;
-    this.hud.banner(title, `${this.playerSpec.nameJa}  VS  ${this.cpuSpec.nameJa}${replay ? '（再戦）' : ''}
+    const title = pair.overtime ? tr('banner.overtime') : pair.battle === 3 ? tr('banner.final') : tr('banner.battle', { n: pair.battle });
+    this.hud.banner(title, `${topName(this.playerSpec)}  ${tr('vs')}  ${topName(this.cpuSpec)}${replay ? tr('banner.replay') : ''}
 ＠${this.arena.nameZh}`, {
       small: true,
       seconds: 0,
     });
     const line: VoiceId = replay ? 'round_ready' : pair.overtime || pair.battle === 3 ? 'battle_final' : pair.battle === 1 ? 'battle_1' : 'battle_2';
     const spoke = this.voice?.play(line, 2) ?? false;
-    // 主播講完才開始倒數，避免「スリー」蓋掉開場介紹
+    // 主播講完才開始倒數，避免「スリー」／「三」蓋掉開場介紹
     this.launchLead = Math.max(1.4, (spoke ? this.voice!.duration(line) : 0) + 0.4);
   }
 
@@ -518,7 +512,7 @@ export class Game {
         this.audio?.countdown(false);
         this.voice?.play(`countdown_${n}` as VoiceId, 2);
       } else {
-        this.hud.banner('ゴー・シュート!!', '', { seconds: 0.9 });
+        this.hud.banner(tr('banner.go'), '', { seconds: 0.9 });
         this.audio?.countdown(true);
         this.voice?.play('go_shoot', 2);
       }
@@ -634,7 +628,7 @@ export class Game {
       const aim = pull ? this.worldAim(pull.aim) : 0;
       this.online.sendLaunch(error, aim, pull);
       this.lastLaunch = { ratio: 0, label: '', cpu: 0, aim, pull };
-      this.hud.banner('シュート！', `等待${this.oppLabel}發射…`, { small: true, seconds: 1.2 });
+      this.hud.banner(tr('banner.shoot'), `等待${this.oppLabel}發射…`, { small: true, seconds: 1.2 });
       return;
     }
     const d = this.difficulty;
@@ -644,7 +638,7 @@ export class Game {
     const aim = this.opts.demo ? (this.rng() - 0.5) * 0.6 : pull ? this.worldAim(pull.aim) : 0;
     const cpuAim = (this.rng() - 0.5) * 0.7;
     const cpuRatio = d.cpuLaunch[0] + this.rng() * (d.cpuLaunch[1] - d.cpuLaunch[0]);
-    const label = ratio >= 0.97 ? 'PERFECT!!' : ratio >= 0.85 ? 'GREAT!' : ratio >= 0.7 ? 'GOOD' : 'WEAK…';
+    const label = rateLabel(ratio);
     this.lastLaunch = { ratio, label, cpu: cpuRatio, aim, pull };
     this.sim = new BattleSim(this.playerSpec, this.cpuSpec, {
       seed: Math.floor(this.rng() * 1e9),
@@ -657,7 +651,7 @@ export class Game {
       this.hums = this.sim.tops.map((t, i) => this.audio!.createHum(this.world(t.pos, 0.2), i === this.me ? 1 : 0.8));
       for (const t of this.sim.tops) this.audio.launch(this.world(t.pos, 0.3));
     }
-    this.hud.banner(label, `${Math.round(ratio * 100)}% POWER`, { small: true, seconds: 1 });
+    this.hud.banner(label, tr('rate.power', { p: Math.round(ratio * 100) }), { small: true, seconds: 1 });
     if (ratio >= 0.97) window.setTimeout(() => this.voice?.play('p_launch', 1), 900);
     this.acc = 0;
     this.setState('battle');
@@ -797,7 +791,7 @@ export class Game {
     this.online = null;
     this.me = 0;
     this.rig.seat = 0;
-    this.oppLabel = 'CPU';
+    this.oppLabel = tr('cpu');
     this.closeShowcase();
     this.setPreview(null);
     this.toTitle();
@@ -884,7 +878,7 @@ export class Game {
         } else if (this.state === 'online') {
           this.hud.setOnlineBusy(false);
           this.hud.setOnlineMessage(m.message, true);
-        } else this.hud.banner('ERROR', m.message, { small: true, seconds: 2 });
+        } else this.hud.banner(tr('banner.error'), m.message, { small: true, seconds: 2 });
         break;
       default:
         break;
@@ -1027,9 +1021,9 @@ export class Game {
       for (const t of this.sim.tops) this.audio.launch(this.world(t.pos, 0.3));
     }
     const ratio = m.launch[this.me];
-    const label = ratio >= 0.97 ? 'PERFECT!!' : ratio >= 0.85 ? 'GREAT!' : ratio >= 0.7 ? 'GOOD' : 'WEAK…';
+    const label = rateLabel(ratio);
     this.lastLaunch = { ratio, label, cpu: m.launch[this.me === 0 ? 1 : 0], aim: m.aim[this.me], pull: this.lastLaunch.pull };
-    this.hud.banner(label, `${Math.round(ratio * 100)}% POWER`, { small: true, seconds: 1 });
+    this.hud.banner(label, tr('rate.power', { p: Math.round(ratio * 100) }), { small: true, seconds: 1 });
     if (ratio >= 0.97) window.setTimeout(() => this.voice?.play('p_launch', 1), 900);
     this.acc = 0;
     this.setState('battle');
@@ -1316,9 +1310,11 @@ export class Game {
           this.counters.bigClashes++;
           this.audio?.slowmoIn();
           this.voice?.play(CLASH_LINES[Math.floor(this.rng() * CLASH_LINES.length)], 0);
-          this.hud.onomatopoeia(scr.x, scr.y - 40, BIG_WORDS[Math.floor(this.rng() * BIG_WORDS.length)], 96, '#ff3a1a');
+          const words = CLASH_WORDS[lang()].big;
+          this.hud.onomatopoeia(scr.x, scr.y - 40, words[Math.floor(this.rng() * words.length)], 96, '#ff3a1a');
         } else if (e.intensity > 3.2) {
-          this.hud.onomatopoeia(scr.x, scr.y - 30, CLASH_WORDS[Math.floor(this.rng() * CLASH_WORDS.length)], 40 + e.intensity * 5, '#ff9a1a');
+          const words = CLASH_WORDS[lang()].small;
+          this.hud.onomatopoeia(scr.x, scr.y - 30, words[Math.floor(this.rng() * words.length)], 40 + e.intensity * 5, '#ff9a1a');
           if (e.intensity > 4.5 && this.rng() < 0.3) {
             const playerAhead = spinRatio(mine) >= spinRatio(theirs);
             if (playerAhead) this.voice?.play('p_hit', 0);
@@ -1382,10 +1378,10 @@ export class Game {
         const res = sim.result;
         const info = FINISH_TEXT[e.finish];
         if (res && res.winner === null) {
-          this.hud.banner('DRAW', '引き分け！もう一度！', { seconds: 2.6 });
+          this.hud.banner(tr('banner.draw'), tr('banner.drawSub'), { seconds: 2.6 });
         } else {
           const winnerIsPlayer = e.loser !== this.me;
-          this.hud.banner(info.en, `${winnerIsPlayer ? 'YOU' : this.oppLabel} +${FINISH_POINTS[e.finish]}`, { blue: !winnerIsPlayer, seconds: 2.6 });
+          this.hud.banner(tr(info.banner), `${winnerIsPlayer ? tr('you') : this.oppLabel} +${FINISH_POINTS[e.finish]}`, { blue: !winnerIsPlayer, seconds: 2.6 });
           window.setTimeout(() => this.voice?.play(info.voice, 2), 250);
         }
         this.setState('roundEnd');
@@ -1521,7 +1517,7 @@ export class Game {
     const ready = !!me && me.alive && !me.specialUsed && me.special >= 1;
     if (hint.classList.contains('ready') !== ready) {
       hint.classList.toggle('ready', ready);
-      hint.textContent = ready ? '必殺 READY！三指觸控發動' : '滑動：推移　快甩：衝刺　三指：必殺';
+      hint.textContent = ready ? tr('touch.ready') : '滑動：推移　快甩：衝刺　三指：必殺';
     } else if (!hint.textContent) {
       hint.textContent = '滑動：推移　快甩：衝刺　三指：必殺';
     }
@@ -1559,7 +1555,8 @@ export class Game {
       sfx: this.audio?.sfxCount ?? 0,
       audioLevel: this.audio?.peakLevel ?? 0,
       audioState: this.audio?.ctx.state ?? 'none',
-      voice: { mode: this.voice?.mode ?? 'none', played: this.voice?.played ?? 0, last: this.voice?.last ?? null },
+      voice: { mode: this.voice?.mode ?? 'none', lang: this.voice?.lang ?? lang(), loaded: this.voice?.loaded ?? 0, played: this.voice?.played ?? 0, last: this.voice?.last ?? null },
+      lang: lang(),
       launch: this.lastLaunch,
       difficulty: this.difficulty.id,
       lastFinish: this.lastFinish,

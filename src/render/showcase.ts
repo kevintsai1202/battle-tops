@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { emblemOf, specialName } from '../i18n';
 import { ARENAS, floorHeight } from '../sim/arena';
 import { BattleSim } from '../sim/battle';
 import { createTop } from '../sim/physics';
@@ -39,8 +40,8 @@ interface ThumbJob {
 /** 縮圖快取（dataURL）：跨組隊畫面保留，換零件時依零件組合另外算一張 */
 const thumbCache = new Map<string, string>();
 
-/** 縮圖快取鍵：陀螺代號＋盤＋軸 */
-const thumbKey = (sp: TopSpec) => `${sp.id}:${sp.parts.disk}:${sp.parts.driver}`;
+/** 縮圖快取鍵：陀螺代號＋盤＋軸＋紋章字（中文版的紋章字形不同，切換語言後另外算一張） */
+const thumbKey = (sp: TopSpec) => `${sp.id}:${sp.parts.disk}:${sp.parts.driver}:${emblemOf(sp)}`;
 
 /**
  * 組隊畫面的外觀與絕招示範：在詳細資料的舞台窗裡用獨立的小渲染器，
@@ -179,7 +180,7 @@ export class Showcase {
       const t = d.sim.tops[e.id];
       this.effects.special(t.pos, t.spec.glow);
       this.fires++;
-      this.onFire(`${t.spec.special.nameJa}`);
+      this.onFire(specialName(t.spec));
     }
   }
 

@@ -3,6 +3,7 @@ import { ARENA, floorHeight, type ArenaSpec } from '../sim/arena';
 import type { PartId } from '../sim/parts';
 import { TOP_SPECS } from '../sim/tops';
 import type { Lobe, TopLook, TopSpec, TopState, V2 } from '../sim/types';
+import { emblemOf } from '../i18n';
 import { emblemTexture, spinBlurTexture } from './textures';
 
 /** 輪廓起伏的放大倍率：原型的凸起多半很淺，縮小到遊戲尺寸後放大一點才看得出形狀 */
@@ -305,7 +306,7 @@ export class TopView {
       new THREE.CylinderGeometry(0.1, 0.1, 0.04, 32),
       [
         dark,
-        new THREE.MeshBasicMaterial({ map: emblemTexture(spec.emblem, '#' + new THREE.Color(spec.glow).getHexString()) }),
+        new THREE.MeshBasicMaterial({ map: emblemTexture(emblemOf(spec), '#' + new THREE.Color(spec.glow).getHexString()) }),
         dark,
       ],
     );

@@ -1,3 +1,4 @@
+import { lang, specialName, topName } from '../i18n';
 import { DISK_IDS, DRIVER_IDS, PARTS, spareHolder, type PartId, type PartSlot, type TeamLoadouts } from '../sim/parts';
 import { TOP_SPECS, TYPE_LABEL } from '../sim/tops';
 import type { TopId, TopSpec } from '../sim/types';
@@ -12,7 +13,7 @@ const partName = (id: PartId) => `${PARTS[id].nameZh}（${PARTS[id].code}）`;
 /**
  * 組隊畫面右側的詳細資料：
  * - 上方是透明的「舞台」窗，主場景的鏡頭會對準這裡播放外觀與絕招示範（見 game.ts 的 showcase）。
- * - 名稱、類型、原型；雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
+ * - 名稱（日文版是日文名＋中文名，中文版只有中文名）、類型、原型；雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
  * - 盤與軸的選單：隊伍中的陀螺才能換；備用零件每種一件，被隊友用掉的會標出來且不能選
  *   （組隊第 1 步只看介紹，建立時 parts: false 不顯示選單；換零件在第 2 步）。
  * - 必殺技名稱、說明與集氣速度。
@@ -79,8 +80,9 @@ export class DetailView {
     const stock = TOP_SPECS[spec.id];
     this.root.style.setProperty('--c', css(spec.glow));
     this.root.dataset.id = spec.id;
-    this.ja.textContent = spec.nameJa;
+    this.ja.textContent = topName(spec);
     this.zh.textContent = spec.nameZh;
+    this.zh.hidden = lang() === 'zh';
     this.meta.textContent = `${TYPE_LABEL[spec.type]}・${spinLabel(spec)}${spec.origin ? `・原型：${spec.origin}` : '・原創'}`;
 
     // 雷達圖：目前屬性；換過零件時疊上原廠輪廓
@@ -125,7 +127,7 @@ export class DetailView {
       ? `${PARTS[spec.parts.disk].descZh} ${PARTS[spec.parts.driver].descZh}`
       : '加入隊伍後可以換盤和軸（備用零件每種只有一件，同隊不能重複）。';
 
-    this.sp.textContent = `必殺：${spec.special.nameJa}（${spec.special.nameZh}）`;
+    this.sp.textContent = lang() === 'zh' ? `必殺：${spec.special.nameZh}` : `必殺：${specialName(spec)}（${spec.special.nameZh}）`;
     this.charge.textContent = chargeLabel(spec);
     this.desc.textContent = spec.special.descZh;
   }

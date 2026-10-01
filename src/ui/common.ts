@@ -1,3 +1,4 @@
+import { emblemOf } from '../i18n';
 import type { BaseStats, TopSpec } from '../sim/types';
 
 /** 雷達圖與數值列的六項屬性（重量換算成 1～10 分顯示：30 g = 1、66 g = 10） */
@@ -34,7 +35,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, t
 
 /** 陣容小圖示：圓形底 + 紋章字，顏色取陀螺發光色 */
 export function chip(sp: TopSpec): HTMLElement {
-  const c = el('i', 'chip', sp.emblem);
+  const c = el('i', 'chip', emblemOf(sp));
   c.style.setProperty('--c', css(sp.glow));
   c.title = sp.nameZh;
   return c;

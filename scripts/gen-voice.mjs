@@ -1,30 +1,43 @@
-// 用 Fish Audio TTS 把 src/audio/voice-lines.json 的台詞生成成日語語音檔。
+// 用 Fish Audio TTS 把台詞表生成成語音檔：日文 src/audio/voice-lines.json → public/voice/，
+// 中文 src/audio/voice-lines.zh.json → public/voice/zh/。
 // 用法（PowerShell 7）：
 //   npm run voice
+//   npm run voice -- --lang zh
 //   npm run voice -- --force
 //   npm run voice -- --only countdown_3,go_shoot
 //   npm run voice -- --voice announcer=<voiceId> --voice rival=<voiceId>
 // 金鑰從環境變數 FISH_API_KEY 讀取（專案根目錄 .env 或 $env:FISH_API_KEY），不會印出。
+// 每句另外用 ffmpeg 解碼，記下去掉頭尾靜音後的播放長度（manifest 的 seconds），
+// 給單元測試檢查倒數、開場介紹、勝負宣告有沒有超過節拍；快取命中但還沒記長度的句子也會補上（不呼叫 API）。
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { trimmedSeconds } from '../src/audio/trim.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const LINES_FILE = path.join(ROOT, 'src/audio/voice-lines.json');
-const OUT_DIR = path.join(ROOT, 'public/voice');
-const MANIFEST_FILE = path.join(OUT_DIR, 'manifest.json');
+/** 各語言的台詞表與輸出資料夾 */
+const LANGS = {
+  ja: { lines: 'src/audio/voice-lines.json', out: 'public/voice' },
+  zh: { lines: 'src/audio/voice-lines.zh.json', out: 'public/voice/zh' },
+};
+const execFileP = promisify(execFile);
 
 const API_URL = 'https://api.fish.audio/v1/tts';
 const MODEL = 's2.1-pro-free';
 const MAX_RETRY = 5;
 
-/** 解析命令列參數：--force、--only a,b、--voice speaker=id（可重複）。 */
+/** 解析命令列參數：--lang ja|zh、--force、--only a,b、--voice speaker=id（可重複）。 */
 function parseArgs(argv) {
-  const opts = { force: false, only: null, voices: {} };
+  const opts = { lang: 'ja', force: false, only: null, voices: {} };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--force') opts.force = true;
+    if (a === '--lang') {
+      opts.lang = String(argv[++i] ?? '');
+      if (!LANGS[opts.lang]) throw new Error(`--lang 只能是 ${Object.keys(LANGS).join('、')}`);
+    } else if (a === '--force') opts.force = true;
     else if (a === '--only') opts.only = new Set(String(argv[++i] ?? '').split(',').map((s) => s.trim()).filter(Boolean));
     else if (a === '--voice') {
       const [sp, id] = String(argv[++i] ?? '').split('=');
@@ -48,8 +61,28 @@ async function exists(p) {
 }
 
 /** 讀 manifest，不存在或壞掉時回傳空物件。 */
-async function loadManifest() {
-  try { return JSON.parse(await readFile(MANIFEST_FILE, 'utf8')); } catch { return {}; }
+async function loadManifest(file) {
+  try { return JSON.parse(await readFile(file, 'utf8')); } catch { return {}; }
+}
+
+/**
+ * 遊戲裡實際播放的長度（秒）：ffmpeg 解碼第一聲道成 32-bit float，套用與 VoicePlayer 相同的頭尾靜音裁切。
+ * 沒有 ffmpeg 或解碼失敗時回傳 null（不影響生成）。
+ */
+async function playSeconds(file) {
+  const rate = 48000;
+  try {
+    const { stdout } = await execFileP(
+      'ffmpeg',
+      ['-v', 'error', '-i', file, '-af', 'pan=mono|c0=c0', '-ar', String(rate), '-f', 'f32le', 'pipe:1'],
+      { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
+    );
+    // Buffer 的位移不一定對齊 4 位元組，複製一份再轉 Float32Array
+    const samples = new Float32Array(stdout.buffer.slice(stdout.byteOffset, stdout.byteOffset + stdout.byteLength));
+    return Number(trimmedSeconds(samples, rate).toFixed(3));
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -90,10 +123,14 @@ async function main() {
   const key = process.env.FISH_API_KEY;
   if (!key) throw new Error('缺少環境變數 FISH_API_KEY（寫進專案根目錄 .env，或先設定 $env:FISH_API_KEY）');
 
+  const LINES_FILE = path.join(ROOT, LANGS[opts.lang].lines);
+  const OUT_DIR = path.join(ROOT, LANGS[opts.lang].out);
+  const MANIFEST_FILE = path.join(OUT_DIR, 'manifest.json');
   const data = JSON.parse(await readFile(LINES_FILE, 'utf8'));
   const speakers = data.speakers;
   await mkdir(OUT_DIR, { recursive: true });
-  const manifest = await loadManifest();
+  const manifest = await loadManifest(MANIFEST_FILE);
+  console.log(`語言：${opts.lang}（${path.relative(ROOT, LINES_FILE)} → ${path.relative(ROOT, OUT_DIR)}）`);
 
   if (opts.only) {
     const unknown = [...opts.only].filter((id) => !data.lines[id]);
@@ -111,7 +148,15 @@ async function main() {
     const file = `${id}.mp3`;
     const hash = hashOf(line.text, voiceId);
     if (!opts.force && manifest[id]?.hash === hash && (await exists(path.join(OUT_DIR, file)))) {
-      console.log(`${id}\t快取命中，跳過`);
+      // 舊的 manifest 沒有播放長度：補算（不呼叫 API）
+      if (manifest[id].seconds == null) {
+        const seconds = await playSeconds(path.join(OUT_DIR, file));
+        if (seconds != null) {
+          manifest[id] = { ...manifest[id], seconds };
+          await writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2));
+        }
+      }
+      console.log(`${id}\t快取命中，跳過\t${manifest[id].seconds ?? '?'}s`);
       cached++;
       continue;
     }
@@ -119,9 +164,10 @@ async function main() {
     try {
       const buf = await synthesize(key, line.text, voiceId);
       await writeFile(path.join(OUT_DIR, file), buf);
-      manifest[id] = { file, text: line.text, speaker: line.speaker, voiceId, hash };
+      const seconds = await playSeconds(path.join(OUT_DIR, file));
+      manifest[id] = { file, text: line.text, speaker: line.speaker, voiceId, hash, ...(seconds != null ? { seconds } : {}) };
       await writeFile(MANIFEST_FILE, JSON.stringify(manifest, null, 2)); // 每句即存，中斷也不丟進度
-      console.log(`${id}\t${buf.length} bytes\t${Date.now() - t0}ms`);
+      console.log(`${id}\t${buf.length} bytes\t${Date.now() - t0}ms\t${seconds ?? '?'}s`);
       made++;
     } catch (e) {
       console.log(`${id}\t失敗：${e.message}`);

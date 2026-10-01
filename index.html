@@ -15,43 +15,43 @@
       <div id="hud" hidden>
         <div class="panel" data-side="0">
           <div class="name"></div>
-          <div class="rpm"><span class="val">0</span> RPM</div>
+          <div class="rpm"><span class="val">0</span> <span data-i18n="hud.rpm">RPM</span></div>
           <div class="bar spin"><i></i></div>
-          <div class="label">BURST</div>
+          <div class="label" data-i18n="hud.burst">BURST</div>
           <div class="bar burst"><i></i></div>
           <div class="label">必殺</div>
           <div class="bar special"><i></i></div>
-          <div class="ready">必殺 READY ▶ <span class="kb">SPACE</span><span class="tc">三指觸控</span></div>
+          <div class="ready"><span data-i18n="hud.readyKey">必殺 READY ▶</span> <span class="kb">SPACE</span><span class="tc">三指觸控</span></div>
         </div>
         <div class="score">
           <span class="s0">0</span><em>-</em><span class="s1">0</span>
           <small class="info">BATTLE 1/3</small>
-          <div class="lineup"><span class="t0"></span><em>VS</em><span class="t1"></span></div>
+          <div class="lineup"><span class="t0"></span><em data-i18n="vs">VS</em><span class="t1"></span></div>
         </div>
         <div class="panel" data-side="1">
           <div class="name"></div>
-          <div class="rpm"><span class="val">0</span> RPM</div>
+          <div class="rpm"><span class="val">0</span> <span data-i18n="hud.rpm">RPM</span></div>
           <div class="bar spin"><i></i></div>
-          <div class="label">BURST</div>
+          <div class="label" data-i18n="hud.burst">BURST</div>
           <div class="bar burst"><i></i></div>
           <div class="label">必殺</div>
           <div class="bar special"><i></i></div>
-          <div class="ready">必殺 READY</div>
+          <div class="ready" data-i18n="hud.ready">必殺 READY</div>
         </div>
       </div>
 
       <div id="fx-layer"></div>
       <div id="banner"></div>
 
-      <!-- 發射台：時機環（外圈收縮，對上內圈 = ゴー）＋ 拉條（按住往下拉、放手發射，左右拉可瞄準） -->
+      <!-- 發射台：時機環（外圈收縮，對上內圈 = ゴー／發射）＋ 拉條（按住往下拉、放手發射，左右拉可瞄準） -->
       <div id="launch" hidden>
         <div class="ring"><div class="target"></div><div class="closing"></div></div>
         <div class="launcher"><div class="grip">⇩</div></div>
         <svg class="cord"><line x1="0" y1="0" x2="0" y2="0" /><circle r="16" cx="0" cy="0" /></svg>
-        <div class="power"><i></i><span>POWER</span></div>
+        <div class="power"><i></i><span data-i18n="launch.power">POWER</span></div>
         <div class="hint">
-          <span class="kb">滑鼠按住往下拖（拉條），在「ゴー」的瞬間放手！左右拖可瞄準・SPACE：簡易發射（最高 85%）</span
-          ><span class="tc">手指按住往下滑（拉條），在「ゴー」的瞬間放手！左右滑可瞄準</span>
+          <span class="kb" data-i18n="launch.hintKb">滑鼠按住往下拖（拉條），在「ゴー」的瞬間放手！左右拖可瞄準・SPACE：簡易發射（最高 85%）</span
+          ><span class="tc" data-i18n="launch.hintTc">手指按住往下滑（拉條），在「ゴー」的瞬間放手！左右滑可瞄準</span>
         </div>
       </div>
 
@@ -60,25 +60,31 @@
         <div class="band"><div class="who"></div><div class="move"></div></div>
       </div>
 
+      <!-- 標題畫面；右上角切換語言（日文版／全中文版，記住選擇），文字由 src/i18n.ts 依 data-i18n 換掉 -->
       <section id="title" class="screen">
-        <h1>BATTLE TOPS</h1>
-        <p class="en">爆転バトル ・ 戰鬥陀螺</p>
-        <p class="blink">クリックしてスタート ／ 點擊開始（CPU 對戰）</p>
-        <button type="button" class="to-online">オンライン対戦 ／ 線上對戰（找朋友）</button>
+        <div class="lang-switch" role="group" aria-label="語言">
+          <button type="button" data-lang="ja">日本語</button>
+          <button type="button" data-lang="zh">中文</button>
+        </div>
+        <h1 data-i18n="title.logo">BATTLE TOPS</h1>
+        <p class="en" data-i18n="title.sub">爆転バトル ・ 戰鬥陀螺</p>
+        <p class="blink" data-i18n="title.start">クリックしてスタート ／ 點擊開始（CPU 對戰）</p>
+        <button type="button" class="to-online" data-i18n="title.online">オンライン対戦 ／ 線上對戰（找朋友）</button>
         <p class="note">請開啟聲音（建議戴耳機，3D 立體音效）</p>
         <p class="rotate-hint">📱 橫向遊玩效果較好</p>
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2>チームを組め！<small>第 1 步：選場地與三顆陀螺（點選順序是預設的出場順序，下一步可以調整順序與零件）（<span class="kb">方向鍵移動、Space 選取／取消、Enter 下一步、1／2／3 難度、Q／E 場地</span><span class="tc">點小格選取／取消</span>）</small></h2>
+        <h2><span data-i18n="select.title">チームを組め！</span><small>第 1 步：選場地與三顆陀螺（點選順序是預設的出場順序，下一步可以調整順序與零件）（<span class="kb">方向鍵移動、Space 選取／取消、Enter 下一步、1／2／3 難度、Q／E 場地</span><span class="tc">點小格選取／取消</span>）</small></h2>
         <div class="select-row">
           <div class="difficulty" role="group" aria-label="難易度">
-            <button type="button" data-id="easy">かんたん<small>簡單</small></button>
-            <button type="button" data-id="normal">ふつう<small>普通</small></button>
-            <button type="button" data-id="hard">むずかしい<small>困難</small></button>
+            <!-- 中文小註解只在日文版顯示（ja-only），中文版的主文字已經是中文 -->
+            <button type="button" data-id="easy"><span data-i18n="diff.easy">かんたん</span><small class="ja-only">簡單</small></button>
+            <button type="button" data-id="normal"><span data-i18n="diff.normal">ふつう</span><small class="ja-only">普通</small></button>
+            <button type="button" data-id="hard"><span data-i18n="diff.hard">むずかしい</span><small class="ja-only">困難</small></button>
           </div>
           <div class="arena" role="group" aria-label="場地"></div>
-          <div class="cpu-team"><span class="ct-label">CPU チーム</span> <span class="chips"></span><small>出場順序保密</small></div>
+          <div class="cpu-team"><span class="ct-label" data-i18n="select.cpuTeam">CPU チーム</span> <span class="chips"></span><small>出場順序保密</small></div>
         </div>
         <p class="arena-desc"></p>
         <div class="select-main">
@@ -90,7 +96,7 @@
 
       <!-- 組隊第 2 步：出場順序與零件（線上限時，雙方都準備完成才開戰） -->
       <section id="arrange" class="screen" hidden>
-        <h2>出場順と部品<small>第 2 步：調整出場順序與零件，第 1 戰先上場（<span class="kb">↑↓ 選擇、Shift＋↑↓ 調換順序、Enter 確定</span><span class="tc">點一顆換零件，▲▼ 調換順序</span>）</small></h2>
+        <h2><span data-i18n="arrange.title">出場順と部品</span><small>第 2 步：調整出場順序與零件，第 1 戰先上場（<span class="kb">↑↓ 選擇、Shift＋↑↓ 調換順序、Enter 確定</span><span class="tc">點一顆換零件，▲▼ 調換順序</span>）</small></h2>
         <div class="ar-head">
           <div class="ar-opp"><span class="ar-opp-label"></span><span class="chips"></span><small class="ar-opp-note"></small></div>
           <span class="ar-arena"></span>
@@ -111,7 +117,7 @@
       </section>
 
       <section id="overtime" class="screen" hidden>
-        <h2>延長戦！<small>總分平手・サドンデス：從你的隊伍挑一顆出戰（<span class="kb">← → 移動、Enter 決定</span><span class="tc">點一下出戰</span>）</small></h2>
+        <h2><span data-i18n="overtime.title">延長戦！</span><small>總分平手・<span data-i18n="overtime.sudden">サドンデス</span>：從你的隊伍挑一顆出戰（<span class="kb">← → 移動、Enter 決定</span><span class="tc">點一下出戰</span>）</small></h2>
         <div class="cards"></div>
       </section>
 
@@ -122,14 +128,14 @@
         <ol class="breakdown"></ol>
         <p class="rm-status"></p>
         <div class="result-actions">
-          <button type="button" class="retry">もう一度！／再來一場</button>
+          <button type="button" class="retry" data-i18n="result.retry">もう一度！／再來一場</button>
           <button type="button" class="leave" hidden>離開</button>
         </div>
       </section>
 
       <!-- 線上對戰的房間：輸入名稱，建立房間（拿到房號與分享連結）或用房號加入 -->
       <section id="online" class="screen" hidden>
-        <h2>オンライン対戦<small>線上對戰：從房間列表點一下就加入，或按「快速加入」自動配對</small></h2>
+        <h2><span data-i18n="online.title">オンライン対戦</span><small>線上對戰：從房間列表點一下就加入，或按「快速加入」自動配對</small></h2>
         <div class="ol-panel">
           <div class="ol-form">
             <label class="ol-name">你的名稱 <input type="text" maxlength="12" autocomplete="nickname" /></label>
@@ -159,7 +165,7 @@
       <!-- 連線與等待的覆蓋層：對手斷線、重新連線中、等待對手組隊等 -->
       <div id="net-overlay" hidden><div class="no-box"><p class="no-text"></p><p class="no-sub"></p></div></div>
 
-      <div id="audio-hint" hidden>🔊 クリックで音声ON／點擊畫面開啟聲音</div>
+      <div id="audio-hint" hidden data-i18n="audio.hint">🔊 クリックで音声ON／點擊畫面開啟聲音</div>
       <!-- 手機觸控操作：畫面任意處滑動推移（圓圈 = 按下處、圓點 = 手指）、快甩衝刺、三指觸控必殺 -->
       <div id="swipe" hidden><div class="ring"></div><div class="dot"></div></div>
       <div id="touch-hint" hidden></div>

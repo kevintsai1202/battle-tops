@@ -1,0 +1,386 @@
+{
+  "countdown_3": {
+    "file": "countdown_3.mp3",
+    "text": "[excited] 三！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "e424a2831c02d530",
+    "seconds": 0.395
+  },
+  "countdown_2": {
+    "file": "countdown_2.mp3",
+    "text": "[excited] 二！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "7b8234e964f4dc5f",
+    "seconds": 0.442
+  },
+  "countdown_1": {
+    "file": "countdown_1.mp3",
+    "text": "[excited] 一！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "ec4d9efc7b04343e",
+    "seconds": 0.363
+  },
+  "go_shoot": {
+    "file": "go_shoot.mp3",
+    "text": "[shouting][excited] 發射吧——！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "88f17d5a4ac258f1",
+    "seconds": 0.777
+  },
+  "clash_1": {
+    "file": "clash_1.mp3",
+    "text": "[shouting][excited] 撞上了——！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "36b76e64cdf7b36c",
+    "seconds": 0.973
+  },
+  "clash_2": {
+    "file": "clash_2.mp3",
+    "text": "[excited] 好驚人的力量！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "46dec83f1dc4bb30",
+    "seconds": 1.112
+  },
+  "clash_3": {
+    "file": "clash_3.mp3",
+    "text": "[shouting] 這股衝擊太猛烈了！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "7d7d82750d9fa3fe",
+    "seconds": 1.503
+  },
+  "clash_4": {
+    "file": "clash_4.mp3",
+    "text": "[excited] 火花四射啊——！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "3c335cf24bd7d857",
+    "seconds": 1.074
+  },
+  "spin_finish": {
+    "file": "spin_finish.mp3",
+    "text": "[excited] 旋轉終結！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "45101827d2e3c2d5",
+    "seconds": 0.941
+  },
+  "over_finish": {
+    "file": "over_finish.mp3",
+    "text": "[shouting][excited] 場外終結！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "28ee32d7ae40063d",
+    "seconds": 0.965
+  },
+  "burst_finish": {
+    "file": "burst_finish.mp3",
+    "text": "[shouting][excited] 爆裂終結！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "65d08def2a528021",
+    "seconds": 1.023
+  },
+  "battle_1": {
+    "file": "battle_1.mp3",
+    "text": "[excited] 第一戰，準備！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "e379a9bcc3d2a105",
+    "seconds": 1.187
+  },
+  "battle_2": {
+    "file": "battle_2.mp3",
+    "text": "[excited] 第二戰，準備！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "6c85bdbdb4616d62",
+    "seconds": 1.28
+  },
+  "battle_final": {
+    "file": "battle_final.mp3",
+    "text": "[shouting][excited] 最終決戰！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "c8ddd509fe6dea8e",
+    "seconds": 0.965
+  },
+  "overtime": {
+    "file": "overtime.mp3",
+    "text": "[shouting][excited] 延長賽！一決勝負！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "5b28bbd16ba0a56f",
+    "seconds": 1.762
+  },
+  "round_ready": {
+    "file": "round_ready.mp3",
+    "text": "[excited] 重新再戰，準備！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "a9519c687ecc17a9",
+    "seconds": 1.515
+  },
+  "match_point": {
+    "file": "match_point.mp3",
+    "text": "[excited] 賽點到了！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "1cd1a6260d280374",
+    "seconds": 0.846
+  },
+  "winner_player": {
+    "file": "winner_player.mp3",
+    "text": "[shouting][excited] 勝負揭曉！勝利的是你！！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "cf05fa6c52538895",
+    "seconds": 2.227
+  },
+  "winner_rival": {
+    "file": "winner_rival.mp3",
+    "text": "[excited] 勝負揭曉！這次對手贏了！",
+    "speaker": "announcer",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "f97ee013ec1fae6c",
+    "seconds": 2.242
+  },
+  "p_launch": {
+    "file": "p_launch.mp3",
+    "text": "[shouting] 給我衝啊——！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "1f3169cbfc24f585",
+    "seconds": 0.946
+  },
+  "p_hit": {
+    "file": "p_hit.mp3",
+    "text": "[shouting] 還沒完呢——！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "6178c15a68e9d70a",
+    "seconds": 0.929
+  },
+  "p_hurt": {
+    "file": "p_hurt.mp3",
+    "text": "[shouting] 可惡…我才不會輸！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "f3bc3a04ddd5edba",
+    "seconds": 1.813
+  },
+  "p_special_attack": {
+    "file": "p_special_attack.mp3",
+    "text": "[shouting][excited] 必殺！烈龍衝擊！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "6684ecfabeaa8062",
+    "seconds": 1.743
+  },
+  "p_special_defense": {
+    "file": "p_special_defense.mp3",
+    "text": "[shouting][excited] 必殺！鋼鐵要塞！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "70949a688be02960",
+    "seconds": 1.737
+  },
+  "p_special_stamina": {
+    "file": "p_special_stamina.mp3",
+    "text": "[shouting][excited] 必殺！永恆旋風！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "d9511c6a0569fd24",
+    "seconds": 1.931
+  },
+  "p_special_balance": {
+    "file": "p_special_balance.mp3",
+    "text": "[shouting][excited] 必殺！星河新星！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "16559635d03cf244",
+    "seconds": 1.843
+  },
+  "p_special_azure": {
+    "file": "p_special_azure.mp3",
+    "text": "[shouting][excited] 必殺！蒼嵐突襲！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "0afb5255f431f75f",
+    "seconds": 1.622
+  },
+  "p_special_pegasus": {
+    "file": "p_special_pegasus.mp3",
+    "text": "[shouting][excited] 必殺！天馬急降！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "293fa606ab496113",
+    "seconds": 2.035
+  },
+  "p_special_ldrago": {
+    "file": "p_special_ldrago.mp3",
+    "text": "[shouting][excited] 必殺！龍皇翔咬擊！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "eff4a021c30ba6ec",
+    "seconds": 2.019
+  },
+  "p_special_valkyrie": {
+    "file": "p_special_valkyrie.mp3",
+    "text": "[shouting][excited] 必殺！疾風連擊！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "ae75bc402b85bc46",
+    "seconds": 1.697
+  },
+  "p_special_draciel": {
+    "file": "p_special_draciel.mp3",
+    "text": "[shouting][excited] 必殺！金屬球壁！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "eb31796c01761b02",
+    "seconds": 1.653
+  },
+  "p_special_leone": {
+    "file": "p_special_leone.mp3",
+    "text": "[shouting][excited] 必殺！獅子暴風壁！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "ffcaf280bb72acde",
+    "seconds": 2.117
+  },
+  "p_special_kerbeus": {
+    "file": "p_special_kerbeus.mp3",
+    "text": "[shouting][excited] 必殺！三首咆哮！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "a9f04f93d7411f8b",
+    "seconds": 2.125
+  },
+  "p_special_knight": {
+    "file": "p_special_knight.mp3",
+    "text": "[shouting][excited] 必殺！聖盾衝擊！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "3fe8061387ba4321",
+    "seconds": 1.723
+  },
+  "p_special_wolborg": {
+    "file": "p_special_wolborg.mp3",
+    "text": "[shouting][excited] 必殺！極光冰封！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "d60e9bdc1c906068",
+    "seconds": 1.772
+  },
+  "p_special_orion": {
+    "file": "p_special_orion.mp3",
+    "text": "[shouting][excited] 必殺！巴納德環！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "c58f86ff337f3dda",
+    "seconds": 1.569
+  },
+  "p_special_fafnir": {
+    "file": "p_special_fafnir.mp3",
+    "text": "[shouting][excited] 必殺！吸轉魔旋！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "4aeff6a85654431c",
+    "seconds": 1.698
+  },
+  "p_special_wizard": {
+    "file": "p_special_wizard.mp3",
+    "text": "[shouting][excited] 必殺！幻影招架！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "97d83b5fe3a066a8",
+    "seconds": 1.922
+  },
+  "p_special_dranzer": {
+    "file": "p_special_dranzer.mp3",
+    "text": "[shouting][excited] 必殺！烈火飛箭！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "7b52d04021f25488",
+    "seconds": 1.743
+  },
+  "p_special_nemesis": {
+    "file": "p_special_nemesis.mp3",
+    "text": "[shouting][excited] 必殺！天地崩落！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "cb669aa7492e1105",
+    "seconds": 1.778
+  },
+  "p_special_requiem": {
+    "file": "p_special_requiem.mp3",
+    "text": "[shouting][excited] 必殺！逆轉破擊！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "4be7c78edba2aa8d",
+    "seconds": 2.013
+  },
+  "p_special_scythe": {
+    "file": "p_special_scythe.mp3",
+    "text": "[shouting][excited] 必殺！新月審判！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "63ad52a99252e810",
+    "seconds": 1.746
+  },
+  "p_win": {
+    "file": "p_win.mp3",
+    "text": "[excited] 太好了！我們贏了！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "2d047a664f7f888d",
+    "seconds": 1.486
+  },
+  "p_lose": {
+    "file": "p_lose.mp3",
+    "text": "[sad] 可惡…下次絕對不會輸！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "c77e4553f17bed47",
+    "seconds": 2.421
+  },
+  "r_taunt": {
+    "file": "r_taunt.mp3",
+    "text": "[confident] 哼，就這點程度嗎？",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "64c2f4aa056d7ebb",
+    "seconds": 1.782
+  },
+  "r_special": {
+    "file": "r_special.mp3",
+    "text": "[shouting] 讓你見識我的必殺技！！",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "d37ec8bc555787a5",
+    "seconds": 1.648
+  },
+  "r_win": {
+    "file": "r_win.mp3",
+    "text": "[confident] 你還差得遠呢。",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "59caecde0d29def2",
+    "seconds": 0.96
+  },
+  "r_lose": {
+    "file": "r_lose.mp3",
+    "text": "[shocked] 怎麼可能…我竟然會輸…！",
+    "speaker": "rival",
+    "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a",
+    "hash": "f13bb98c630732c7",
+    "seconds": 2.148
+  }
+}
