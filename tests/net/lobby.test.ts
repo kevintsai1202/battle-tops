@@ -49,14 +49,14 @@ function join(room: Room, name: string): FakeConn {
 }
 
 describe('房間列表的狀態判斷', () => {
-  test('等人中：大廳、房主在線、還沒有客人；對戰中：雙方都在且至少一人在線（組隊、比賽、延長賽挑選、結果畫面）；其他不列', () => {
+  test('等人中：大廳、房主在線、還沒有客人；對戰中：雙方都在且至少一人在線（組隊、排順序、比賽、延長賽挑選、結果畫面）；其他不列', () => {
     const on = { connected: true };
     const off = { connected: false };
     expect(listingStatus('lobby', on, null)).toBe('waiting');
     expect(listingStatus('lobby', off, null)).toBeNull();
     expect(listingStatus('lobby', null, null)).toBeNull();
     expect(listingStatus('lobby', on, on)).toBeNull();
-    for (const phase of ['picking', 'match', 'overtimePick', 'result'] as const) {
+    for (const phase of ['picking', 'arranging', 'match', 'overtimePick', 'result'] as const) {
       expect(listingStatus(phase, on, on)).toBe('playing');
       expect(listingStatus(phase, off, on)).toBe('playing');
       expect(listingStatus(phase, on, off)).toBe('playing');

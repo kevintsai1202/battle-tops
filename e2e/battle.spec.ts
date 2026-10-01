@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { arrangeOrder } from './team.helpers';
 
 /**
  * 端對端驗收：在真的瀏覽器裡跑遊戲，確認撞擊特寫、特效、音效與日語語音真的有發生。
@@ -141,6 +142,15 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.screenshot({ path: 'e2e/screenshots/11-select.png' });
   await page.keyboard.press('Enter');
 
+  // 第 2 步（出場順序與零件）：Shift＋↓ 把第 1 戰的烈焰龍往後調一戰，Enter 出陣
+  await expect(page.locator('#arrange')).toBeVisible();
+  await expect(page.locator('#arrange .ar-slot')).toHaveCount(3);
+  await page.keyboard.press('Shift+ArrowDown');
+  await expect.poll(() => arrangeOrder(page)).toEqual(['turtle', 'blaze', 'gale']);
+  await page.screenshot({ path: 'e2e/screenshots/11b-arrange.png' });
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#arrange')).toBeHidden();
+
   await expect(page.locator('#hud')).toBeVisible();
   await expect(page.locator('#hud .info')).toHaveText('BATTLE 1/3・練習場');
   await expect(page.locator('#hud .lineup .chip')).toHaveCount(6);
@@ -150,6 +160,8 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.keyboard.press('Space');
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   const s = await snap(page);
+  // 第 1 戰上場的是調換順序後的鐵壁龜
+  expect((s as unknown as { tops: { id: string }[] }).tops[0].id).toBe('turtle');
   expect(s.launch.ratio).toBeGreaterThanOrEqual(0.5);
   expect(s.launch.ratio).toBeLessThanOrEqual(0.85);
   expect(s.launch.label).not.toBe('');

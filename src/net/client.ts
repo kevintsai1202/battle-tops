@@ -1,5 +1,5 @@
 import { ClockSync } from './clock';
-import type { ClientMessage, ServerMessage } from './protocol';
+import { PROTOCOL_VERSION, type ClientMessage, type ServerMessage } from './protocol';
 
 /** 連線狀態 */
 export type NetStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
@@ -49,7 +49,7 @@ export class NetClient {
         opened = true;
         this.attempt = 0;
         this.setStatus('open');
-        if (this.resumeInfo) this.send({ t: 'resume', ...this.resumeInfo });
+        if (this.resumeInfo) this.send({ t: 'resume', ...this.resumeInfo, v: PROTOCOL_VERSION });
         this.startPings();
         ok();
       };

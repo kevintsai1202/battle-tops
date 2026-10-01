@@ -1,5 +1,6 @@
 import { devices, expect, test } from '@playwright/test';
 import { dbg, expectInViewport, expectNoHorizontalScroll, swipe } from './mobile.helpers';
+import { pickTops } from './team.helpers';
 
 /** 手機直向（Pixel 7 模擬）：提示橫向、視角補償、版面不超出畫面 */
 test.use({ ...devices['Pixel 7'] });
@@ -14,8 +15,11 @@ test('直向手機：提示橫向遊玩、組隊與 HUD 不超出、場地視角
   await expectInViewport(page, '#select .detail');
   await expectInViewport(page, '#select .go');
   await expectNoHorizontalScroll(page);
-  for (const id of ['gale', 'blaze', 'wolf']) await page.locator(`#select .card[data-id="${id}"]`).tap();
-  await page.locator('#select .go').tap();
+  await pickTops(page, ['gale', 'blaze', 'wolf'], true);
+  await expect(page.locator('#arrange')).toBeVisible();
+  await expectInViewport(page, '#arrange .ar-ready');
+  await expectNoHorizontalScroll(page);
+  await page.locator('#arrange .ar-ready').tap();
   await page.locator('#banner .bn', { hasText: /^1$/ }).waitFor({ timeout: 45_000 });
   await swipe(page, { x: 200, y: 250 }, { x: 170, y: 650 });
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });

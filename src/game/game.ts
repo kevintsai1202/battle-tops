@@ -28,7 +28,7 @@ import type { ServerMessage } from '../net/protocol';
 import { loadName, OnlineSession, saveName, type Msg } from './online';
 
 /** 遊戲階段（online：線上房間畫面；waiting：線上等待對手組隊或挑延長賽） */
-export type GameState = 'title' | 'select' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result' | 'online' | 'waiting';
+export type GameState = 'title' | 'select' | 'arrange' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result' | 'online' | 'waiting';
 
 /** 模擬固定步長 */
 const STEP = 1 / 120;
@@ -306,8 +306,11 @@ export class Game {
 
   // ---------------- 選角 ----------------
 
-  /** 組隊畫面：CPU 先組好（公開三顆、順序保密），玩家從全部陀螺挑三顆，並選難度與場地 */
-  private enterSelect(): void {
+  /**
+   * 組隊第 1 步：CPU 先組好（公開三顆、順序保密），玩家從全部陀螺挑三顆，並選難度與場地。
+   * keep：從第 2 步回上一步時保留的三顆與零件（CPU 的隊伍不重抽）。
+   */
+  private enterSelect(keep?: { picks: TopId[]; loadouts: TeamLoadouts }): void {
     this.me = 0;
     this.rig.seat = 0;
     this.oppLabel = 'CPU';
@@ -316,24 +319,53 @@ export class Game {
     this.hud.clearBanner();
     this.clearArena();
     this.audio?.setMusic(this.musicOn, false);
-    this.cpuTeam = cpuPickTeam(this.rng);
+    if (!keep) this.cpuTeam = cpuPickTeam(this.rng);
     this.hud.showTeamSelect({
       specs: TOP_SPECS,
       cpuTeam: this.cpuTeam,
       difficulty: this.difficulty.id,
       arena: this.arenaChoice,
+      picks: keep?.picks,
       onDifficulty: (d) => this.setDifficulty(d),
       onArena: (a) => this.chooseArena(a),
       // 外觀與絕招示範在詳細資料的舞台窗裡播放；主場景的場地中央不再放預覽陀螺（會被名鑑擋住）
       onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
       thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
-      onConfirm: (team, loadouts) => {
-        this.playerTeam = team;
-        this.playerLoadouts = loadouts;
+      onNext: (picks) => {
+        // 回上一步後還留在隊伍裡的陀螺保留零件
+        const loadouts: TeamLoadouts = {};
+        for (const t of picks) if (keep?.loadouts[t]) loadouts[t] = keep.loadouts[t];
+        this.closeShowcase();
+        this.enterArrange(picks, loadouts);
+      },
+    });
+  }
+
+  /** 組隊第 2 步（CPU）：調整出場順序與零件，不計時；可以回上一步改選的三顆 */
+  private enterArrange(picks: TopId[], loadouts: TeamLoadouts): void {
+    this.setState('arrange');
+    this.hud.showArrange({
+      specs: TOP_SPECS,
+      order: picks,
+      loadouts,
+      opponent: { label: 'CPU チーム', team: TOP_IDS.filter((t) => this.cpuTeam.includes(t)), note: '出場順序保密' },
+      arena: this.arenaChoice === 'random' ? '隨機（開打時抽）' : ARENAS[this.arenaChoice].nameZh,
+      deadline: null,
+      readyLabel: '出陣！',
+      onBack: (order, lo) => {
+        this.closeShowcase();
+        this.enterSelect({ picks: order, loadouts: lo });
+      },
+      onReady: (order, lo) => {
+        this.hud.hideArrange();
+        this.playerTeam = order;
+        this.playerLoadouts = lo;
         this.setPreview(null);
         this.closeShowcase();
         this.startMatch();
       },
+      onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
+      thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
     });
   }
 
@@ -639,6 +671,7 @@ export class Game {
     this.setState('title');
     this.clearArena();
     this.hud.hideTeamSelect();
+    this.hud.hideArrange();
     this.hud.hideHud();
     this.hud.clearBanner();
     this.hud.hideResult();
@@ -669,6 +702,7 @@ export class Game {
     this.clearArena();
     this.closeShowcase();
     this.hud.hideTeamSelect();
+    this.hud.hideArrange();
     this.hud.hideHud();
     this.hud.clearBanner();
     this.hud.hideResult();
@@ -800,8 +834,15 @@ export class Game {
       case 'lobby':
         this.onLobby(m);
         break;
+      case 'reveal':
+        o.onReveal(m);
+        this.enterOnlineArrange(m);
+        break;
       case 'teams':
+        // 開打前確定的隊伍：時間到自動開打時也以伺服器的順序與零件為準（延長賽挑選用）
         o.teams = m;
+        this.playerTeam = [...m.mine];
+        this.playerLoadouts = structuredClone(m.loadouts);
         this.setArena(ARENAS[m.arena]);
         break;
       case 'battle':
@@ -863,15 +904,17 @@ export class Game {
     } else if (m.phase === 'picking') {
       if (this.state !== 'select' && this.state !== 'waiting') this.enterOnlineSelect(m);
       else {
-        this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', !op ? '離開了' : !op.connected ? '連線中斷…' : op.ready ? '已完成組隊' : '選擇中…');
+        this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', !op ? '離開了' : !op.connected ? '連線中斷…' : op.ready ? '已選好三顆' : '選擇中…');
         if (m.arena !== 'random' && this.state === 'select') this.setArena(ARENAS[m.arena]);
       }
+    } else if (m.phase === 'arranging') {
+      if (this.state === 'arrange') this.hud.updateArrangeOpponent(this.arrangeOpponentText(op));
     } else if (m.phase === 'result' && this.state === 'result') {
       this.hud.setResultStatus(!op ? '對手已離開，無法再來一場' : op.ready ? `${op.name} 想再來一場` : m.me.ready ? '等待對手…' : '');
     }
   }
 
-  /** 線上組隊：沒有難度；客人看得到房主選的場地；送出隊伍後等待對手 */
+  /** 線上組隊第 1 步：沒有難度；客人看得到房主選的場地；選好三顆後等對手選完 */
   private enterOnlineSelect(m: Msg<'lobby'>): void {
     const o = this.online!;
     this.hud.hideOnlineLobby();
@@ -899,23 +942,58 @@ export class Game {
       },
       onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
       thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
-      onConfirm: (team, loadouts) => {
-        this.playerTeam = team;
-        this.playerLoadouts = loadouts;
+      onNext: (picks) => {
         this.closeShowcase();
-        o.sendTeam(team, loadouts);
+        o.sendPicks(picks);
         this.setState('waiting');
-        this.hud.showNetOverlay('等待對手完成組隊…', `對手：${o.opponentName}`);
+        this.hud.showNetOverlay('等待對手選好三顆…', `對手：${o.opponentName}`);
       },
     });
     const op = m.opponent;
-    this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', op?.ready ? '已完成組隊' : '選擇中…');
+    this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', op?.ready ? '已選好三顆' : '選擇中…');
+  }
+
+  /**
+   * 線上組隊第 2 步：雙方的三顆公開後，限時調整出場順序與零件（每次調整都同步給伺服器）；
+   * 按準備完成就鎖定。雙方都準備完成或時間到，伺服器用當下的設定開打（收到 teams／battle）。
+   */
+  private enterOnlineArrange(m: Msg<'reveal'>): void {
+    const o = this.online!;
+    this.hud.hideNetOverlay();
+    this.hud.hideTeamSelect();
+    this.closeShowcase();
+    this.setState('arrange');
+    const arena = o.lobby?.arena ?? 'random';
+    this.hud.showArrange({
+      specs: TOP_SPECS,
+      order: m.order,
+      loadouts: m.loadouts,
+      opponent: { label: `對手：${o.opponentName}`, team: m.theirs, note: this.arrangeOpponentText(o.lobby?.opponent ?? null) },
+      arena: arena === 'random' ? '隨機（開打時抽）' : ARENAS[arena].nameZh,
+      deadline: o.toLocal(m.deadline),
+      readyLabel: '準備完成',
+      onChange: (order, lo) => o.sendArrange(order, lo),
+      onReady: (order, lo) => {
+        o.sendReady(order, lo);
+        this.hud.lockArrange('已準備完成，等待對手…');
+      },
+      onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
+      thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
+    });
+    if (m.ready) this.hud.lockArrange('已準備完成，等待對手…');
+  }
+
+  /** 第 2 步的對手狀態文字 */
+  private arrangeOpponentText(op: { connected: boolean; ready: boolean } | null): string {
+    return !op ? '離開了' : !op.connected ? '連線中斷…' : op.ready ? '準備完成 ✓' : '調整中…';
   }
 
   /** 線上的一戰開場：座位、雙方規格與賽況由伺服器決定；倒數對齊伺服器的「ゴー」 */
   private startOnlineRound(m: Msg<'battle'>): void {
     const o = this.online!;
     o.onBattle(m);
+    this.hud.hideArrange();
+    this.closeShowcase();
     this.hud.hideNetOverlay();
     this.hud.hideOvertimePick();
     this.hud.hideResult();
@@ -1173,7 +1251,7 @@ export class Game {
     const shot: Shot =
       this.state === 'title' || this.state === 'online'
         ? 'title'
-        : this.state === 'select' || this.state === 'overtime' || this.state === 'waiting'
+        : this.state === 'select' || this.state === 'arrange' || this.state === 'overtime' || this.state === 'waiting'
           ? 'select'
           : this.state === 'launch'
             ? 'launch'
@@ -1489,7 +1567,7 @@ export class Game {
       arenaChoice: this.arenaChoice,
       pulling: this.pull !== null,
       me: this.me,
-      tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control, special: t.special, specialUsed: t.specialUsed })) ?? [],
+      tops: this.sim?.tops.map((t) => ({ id: t.spec.id, type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control, special: t.special, specialUsed: t.specialUsed })) ?? [],
       touchMode: this.touchMode,
       online: this.online
         ? {

@@ -1,6 +1,8 @@
 import { expect as baseExpect, devices, test, type Browser, type BrowserContextOptions, type BrowserType, type LaunchOptions, type Page } from '@playwright/test';
 import { Bot } from '../server/tests/bot';
+import { PROTOCOL_VERSION } from '../src/net/protocol';
 import { expectInViewport } from './mobile.helpers';
+import { arrangeOrder, confirmArrange, pickTops } from './team.helpers';
 
 /** 兩個瀏覽器同時軟體算圖時每個只有約 5 fps，跨客戶端的畫面更新要等比較久：預設等 30 秒 */
 const expect = baseExpect.configure({ timeout: 30_000 });
@@ -12,6 +14,7 @@ const expect = baseExpect.configure({ timeout: 30_000 });
  * headless 軟體算圖很慢、CDP 事件間隔大，發射一律讓它自動發射（不驗發射力道）；
  * 衝刺與必殺要在對戰階段才能驗，這一戰先結束的話下一戰再試，最後一定要驗到。
  * 第二個測試：房間列表（不公開的不列、對戰中灰色不能點、點一下加入、快速加入），B 用手機橫向。
+ * 第三個測試：組隊第 2 步限時（本機伺服器 ARRANGE_MS 縮短為 30 秒）：沒按準備完成，時間到用目前的順序開打。
  */
 
 const SERVER = process.env.GAME_SERVER ?? 'ws://localhost:8787/ws';
@@ -19,9 +22,9 @@ const SERVER = process.env.GAME_SERVER ?? 'ws://localhost:8787/ws';
 type OnlineDbg = {
   state: string;
   me: 0 | 1;
-  match: { battle: number | null } | null;
+  match: { battle: number | null; player: string[] } | null;
   counters: { specials: number; rounds: number; dashes: number };
-  tops: { control: { x: number; z: number }; special: number; specialUsed: boolean; alive: boolean }[];
+  tops: { id: string; control: { x: number; z: number }; special: number; specialUsed: boolean; alive: boolean }[];
   online: {
     code: string | null;
     host: boolean;
@@ -117,12 +120,6 @@ async function dumpPlayers(): Promise<void> {
   }
 }
 
-/** 組隊並出陣 */
-async function pickTeam(page: Page, ids: string[]): Promise<void> {
-  await expect(page.locator('#select')).toBeVisible({ timeout: 30_000 });
-  for (const id of ids) await page.locator(`#select .card[data-id="${id}"]`).click();
-  await page.locator('#select .go').click();
-}
 
 test('線上對戰：兩個分頁建房、加入、組隊、對戰、斷線重連、結果與再來一場', async ({ playwright, browserName, launchOptions, baseURL }) => {
   const browserType = playwright[browserName];
@@ -161,12 +158,26 @@ test('線上對戰：兩個分頁建房、加入、組隊、對戰、斷線重�
   await expect(b.locator('#select .arena button').first()).toBeDisabled();
   await a.locator('#select .arena button[data-id="stadium"]').click();
   await expect(b.locator('#select .arena button.on')).toHaveAttribute('data-id', 'stadium');
-  await pickTeam(a, ['blaze', 'turtle', 'gale']);
-  await expect(b.locator('#select .cpu-team small')).toHaveText('已完成組隊');
-  await expect(a.locator('#net-overlay')).toBeVisible();
+  await pickTops(a, ['blaze', 'turtle', 'gale']);
+  await expect(b.locator('#select .cpu-team small')).toHaveText('已選好三顆');
+  await expect(a.locator('#net-overlay .no-text')).toContainText('等待對手選好三顆');
   await b.screenshot({ path: 'e2e/screenshots/81-online-select.png' });
-  await pickTeam(b, ['wolf', 'orion', 'pegasus']);
-  step('雙方出陣');
+  await pickTops(b, ['wolf', 'orion', 'pegasus']);
+  step('雙方選好三顆');
+
+  // 第 2 步：雙方看到對手公開的三顆與倒數；A 先準備完成，B 看到對手已準備，B 也準備完成就開打
+  for (const p of [a, b]) {
+    await expect(p.locator('#arrange')).toBeVisible();
+    await expect(p.locator('#arrange .ar-opp .chip')).toHaveCount(3);
+    await expect(p.locator('#arrange .ar-timer')).toContainText('剩');
+  }
+  await a.screenshot({ path: 'e2e/screenshots/86-online-arrange.png' });
+  await confirmArrange(a);
+  await expect(a.locator('#arrange .ar-status')).toContainText('等待對手');
+  await expect(a.locator('#arrange .ar-ready')).toBeDisabled();
+  await expect(b.locator('#arrange .ar-opp-note')).toHaveText('準備完成 ✓');
+  await confirmArrange(b);
+  step('雙方準備完成');
 
   // 第 1 戰：雙方都進入倒數，座位相反（房主 0 號）
   await expect.poll(async () => (await dbg(a)).state, { timeout: 30_000 }).toMatch(/launch|battle/);
@@ -335,9 +346,9 @@ test('房間列表：不公開的不列、對戰中灰色不能點、點一下�
   const bot2 = new Bot(SERVER, 32);
   bots.push(bot1, bot2);
   await Promise.all([bot1.open(), bot2.open()]);
-  bot1.send({ t: 'create', name: `Bot1-${tag}`, public: true });
+  bot1.send({ t: 'create', name: `Bot1-${tag}`, public: true, v: PROTOCOL_VERSION });
   const br = await bot1.waitFor('room');
-  bot2.send({ t: 'join', code: br.code, name: `Bot2-${tag}` });
+  bot2.send({ t: 'join', code: br.code, name: `Bot2-${tag}`, v: PROTOCOL_VERSION });
   await bot2.waitFor('room');
   const grey = b.locator(`#online .ol-room-row.playing[data-code="${br.code}"]`);
   await expect(grey).toContainText(`Bot1-${tag} vs Bot2-${tag}`);
@@ -384,6 +395,56 @@ test('房間列表：不公開的不列、對戰中灰色不能點、點一下�
     await expect(b.locator('#select .cpu-team .ct-label')).toHaveText(`對手：${alice}`);
     step('快速加入配對成功');
   }
+
+  expect((a as unknown as { errors: string[] }).errors).toEqual([]);
+  expect((b as unknown as { errors: string[] }).errors).toEqual([]);
+});
+
+test('組隊第 2 步限時：沒按準備完成，時間到就用目前的順序與零件開打（B 用手機橫向點 ▲ 調整順序）', async ({ playwright, browserName, launchOptions, baseURL }) => {
+  const browserType = playwright[browserName];
+  test.setTimeout(600_000);
+  const a = await newPlayer('A', browserType, launchOptions, baseURL);
+  const b = await newPlayer('B', browserType, launchOptions, baseURL, phone('Pixel 7 landscape'));
+
+  // A 開不公開的房間，B 輸入房號加入（不會被別人的快速加入配走）
+  await a.goto(`./?seed=5&server=${encodeURIComponent(SERVER)}`);
+  await a.locator('#title .to-online').click();
+  await a.locator('#online .ol-name input').fill('Alice');
+  await a.locator('#online .ol-private input').check();
+  await a.locator('#online .ol-create').click();
+  await expect(a.locator('#online .ol-code-big')).toHaveText(/^[A-Z2-9]{4}$/);
+  const code = (await a.locator('#online .ol-code-big').textContent())!;
+  await b.goto(`./?seed=6&server=${encodeURIComponent(SERVER)}`);
+  await b.locator('#title .to-online').tap();
+  await b.locator('#online .ol-name input').fill('Bob');
+  await b.locator('#online .ol-code').fill(code);
+  await b.locator('#online .ol-join-btn').tap();
+  step(`B 用房號加入 ${code}`);
+
+  // 第 1 步：雙方選三顆（B 用觸控）
+  await pickTops(a, ['blaze', 'turtle', 'gale']);
+  await pickTops(b, ['wolf', 'orion', 'pegasus'], true);
+
+  // 第 2 步：B 點 ▲ 兩次把天馬調到第 1 戰；雙方都不按準備完成
+  await expect(b.locator('#arrange')).toBeVisible();
+  await expect(b.locator('#arrange .ar-timer')).toContainText('剩');
+  for (const sel of ['#arrange .ar-slots', '#arrange .ar-ready', '#arrange .ar-opp', '#arrange .ar-timer']) await expectInViewport(b, sel);
+  await b.locator('#arrange .ar-slot[data-id="pegasus"] .ar-up').tap();
+  await b.locator('#arrange .ar-slot[data-id="pegasus"] .ar-up').tap();
+  expect(await arrangeOrder(b)).toEqual(['pegasus', 'wolf', 'orion']);
+  await b.screenshot({ path: 'e2e/screenshots/87-online-arrange-mobile.png' });
+  step('B 調好順序，等時間到');
+
+  // 時間到：雙方鎖定，伺服器用 B 調整後的順序、A 選的順序開打
+  await expect(a.locator('#arrange .ar-timer')).toHaveText('時間到', { timeout: 90_000 });
+  await expect.poll(async () => (await dbg(a)).state, { timeout: 60_000 }).toBe('battle');
+  await expect.poll(async () => (await dbg(b)).state, { timeout: 60_000 }).toBe('battle');
+  const da = await dbg(a);
+  const db = await dbg(b);
+  expect(da.tops.map((t) => t.id)).toEqual(['blaze', 'pegasus']);
+  expect(db.tops.map((t) => t.id)).toEqual(['blaze', 'pegasus']);
+  expect(db.match?.player).toEqual(['pegasus', 'wolf', 'orion']);
+  step('時間到自動開打，第 1 戰是烈焰龍對暴嵐天駒');
 
   expect((a as unknown as { errors: string[] }).errors).toEqual([]);
   expect((b as unknown as { errors: string[] }).errors).toEqual([]);

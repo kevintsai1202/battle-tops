@@ -25,6 +25,12 @@ export interface SpecRef {
 /** 單則訊息大小上限（字元數） */
 export const MAX_MESSAGE = 2048;
 
+/**
+ * 協定版本：進房類訊息（create／join／quick／resume）都要帶，伺服器只接受相同版本。
+ * 2：組隊分成「選三顆」與「順序與零件（限時）」兩步（picks／arrange／ready）。舊版網頁沒帶版本，伺服器回「請重新整理」。
+ */
+export const PROTOCOL_VERSION = 2;
+
 /** 房號使用的字元：去掉容易混淆的 I、O、0、1 */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 /** 房號長度 */
@@ -36,20 +42,24 @@ const NAME_MAX = 12;
 
 /** 客戶端送出的訊息 */
 export type ClientMessage =
-  /** 建立房間（自己是房主）；public 為是否列在房間列表（不公開時只能用房號或連結加入） */
-  | { t: 'create'; name: string; public: boolean }
+  /** 建立房間（自己是房主）；public 為是否列在房間列表（不公開時只能用房號或連結加入）；v 為協定版本 */
+  | { t: 'create'; name: string; public: boolean; v: number }
   /** 用房號加入 */
-  | { t: 'join'; code: string; name: string }
+  | { t: 'join'; code: string; name: string; v: number }
   /** 快速加入：加入等最久的公開房間，沒有就建一間公開房間 */
-  | { t: 'quick'; name: string }
+  | { t: 'quick'; name: string; v: number }
   /** 查詢房間列表 */
   | { t: 'list' }
   /** 斷線後用 token 重連 */
-  | { t: 'resume'; code: string; token: string }
+  | { t: 'resume'; code: string; token: string; v: number }
   /** 房主選場地 */
   | { t: 'arena'; arena: ArenaChoice }
-  /** 送出隊伍（點選順序即出場順序）與換上的備用零件 */
-  | { t: 'team'; picks: TopId[]; loadouts: TeamLoadouts }
+  /** 第 1 步：選好的三顆（點選順序是第 2 步的預設出場順序） */
+  | { t: 'picks'; picks: TopId[] }
+  /** 第 2 步調整中：目前的出場順序與換上的備用零件（時間到時伺服器用最後收到的這一份） */
+  | { t: 'arrange'; order: TopId[]; loadouts: TeamLoadouts }
+  /** 第 2 步準備完成：最後的出場順序與零件（送出後鎖定） */
+  | { t: 'ready'; order: TopId[]; loadouts: TeamLoadouts }
   /** 發射：時機誤差（秒，提早為負）、世界座標的瞄準角度（相對座位的基準方向）、拉條量測（按 Space 時為 null） */
   | { t: 'launch'; error: number; aim: number; pull: PullMetrics | null }
   /** 推移方向（世界座標，長度 ≤ 1）；seq 遞增，伺服器在快照裡回報處理到第幾號 */
@@ -69,8 +79,8 @@ export type ClientMessage =
 
 // ---------------------------------------------------------------- 伺服器 → 客戶端
 
-/** 房間階段：大廳（等人、選場地）、組隊、比賽中、延長賽挑選、結果 */
-export type RoomPhase = 'lobby' | 'picking' | 'match' | 'overtimePick' | 'result';
+/** 房間階段：大廳（等人、選場地）、組隊第 1 步（選三顆）、第 2 步（順序與零件，限時）、比賽中、延長賽挑選、結果 */
+export type RoomPhase = 'lobby' | 'picking' | 'arranging' | 'match' | 'overtimePick' | 'result';
 
 /** 房間列表的一列：等人中（可加入）或對戰中（灰色、不能加入）；waited 為等人中已經等了幾秒（對戰中為 0） */
 export interface RoomSummary {
@@ -82,7 +92,7 @@ export interface RoomSummary {
   waited: number;
 }
 
-/** 一位玩家在房間裡的狀態（ready：組隊時＝已送出隊伍、結果畫面時＝要再來一場） */
+/** 一位玩家在房間裡的狀態（ready：第 1 步＝已選好三顆、第 2 步＝準備完成、結果畫面＝要再來一場） */
 export interface PlayerInfo {
   name: string;
   connected: boolean;
@@ -114,7 +124,12 @@ export type ServerMessage =
   | { t: 'rooms'; rooms: RoomSummary[] }
   /** 房間狀態（大廳、組隊、結果畫面的雙方狀態與場地） */
   | { t: 'lobby'; phase: RoomPhase; arena: ArenaChoice; host: boolean; me: PlayerInfo; opponent: PlayerInfo | null }
-  /** 雙方隊伍公開：自己的依出場順序、對手的依名鑑順序（出場順序保密）；arena 為實際場地（隨機已抽出） */
+  /**
+   * 第 2 步開始（雙方都選好三顆）：自己選的三顆、對手的三顆（依名鑑順序，出場順序保密）、截止的伺服器時間（毫秒），
+   * 以及目前的順序、零件與是否已準備完成（重連時還原畫面用；剛開始時順序就是選的順序）
+   */
+  | { t: 'reveal'; mine: TopId[]; theirs: TopId[]; deadline: number; order: TopId[]; loadouts: TeamLoadouts; ready: boolean }
+  /** 開打前雙方隊伍確定：自己的依出場順序、對手的依名鑑順序（出場順序保密）；arena 為實際場地（隨機已抽出） */
   | { t: 'teams'; mine: TopId[]; theirs: TopId[]; loadouts: TeamLoadouts; arena: ArenaId }
   /** 新的一戰：對陣、自己的座位、雙方規格（依座位）、「ゴー」的伺服器時間（毫秒）、目前總分與戰績 */
   | {
@@ -222,31 +237,36 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   } catch {
     return null;
   }
+  // 協定版本：沒帶或不是數字（舊版網頁）為 0，由伺服器回「請重新整理」
+  const v = num(m.v) ? m.v : 0;
   switch (m.t) {
     case 'create':
       // 沒帶 public（舊版網頁）或不是 false 都視為公開
-      return { t: 'create', name: sanitizeName(m.name), public: m.public !== false };
+      return { t: 'create', name: sanitizeName(m.name), public: m.public !== false, v };
     case 'quick':
-      return { t: 'quick', name: sanitizeName(m.name) };
+      return { t: 'quick', name: sanitizeName(m.name), v };
     case 'list':
       return { t: 'list' };
     case 'join': {
       const code = typeof m.code === 'string' ? m.code.toUpperCase() : '';
-      return isRoomCode(code) ? { t: 'join', code, name: sanitizeName(m.name) } : null;
+      return isRoomCode(code) ? { t: 'join', code, name: sanitizeName(m.name), v } : null;
     }
     case 'resume': {
       const code = typeof m.code === 'string' ? m.code.toUpperCase() : '';
       const token = m.token;
       if (!isRoomCode(code) || typeof token !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
-      return { t: 'resume', code, token };
+      return { t: 'resume', code, token, v };
     }
     case 'arena':
       return m.arena === 'random' || (typeof m.arena === 'string' && ARENA_IDS.includes(m.arena as ArenaId))
         ? { t: 'arena', arena: m.arena as ArenaChoice }
         : null;
-    case 'team': {
-      const r = checkTeam(m.picks, m.loadouts ?? {});
-      return r.error ? null : { t: 'team', picks: [...(m.picks as TopId[])], loadouts: r.loadouts };
+    case 'picks':
+      return checkTeam(m.picks, {}).error ? null : { t: 'picks', picks: [...(m.picks as TopId[])] };
+    case 'arrange':
+    case 'ready': {
+      const r = checkTeam(m.order, m.loadouts ?? {});
+      return r.error ? null : { t: m.t, order: [...(m.order as TopId[])], loadouts: r.loadouts };
     }
     case 'launch': {
       if (!num(m.error) || !num(m.aim)) return null;

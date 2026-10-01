@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { MAX_MESSAGE, parseClientMessage, type ServerMessage } from '../../src/net/protocol';
+import { MAX_MESSAGE, parseClientMessage, PROTOCOL_VERSION, type ServerMessage } from '../../src/net/protocol';
 import { RoomManager } from './manager';
 import type { Conn, Room, Side } from './room';
 
@@ -16,6 +16,8 @@ export interface ServerOptions {
   speed?: number;
   /** 紀錄輸出（預設 console.log） */
   log?: (msg: string) => void;
+  /** 組隊第 2 步的時間限制（毫秒；預設 60 秒，e2e 縮短用） */
+  arrangeMs?: number;
 }
 
 /** 啟動中的伺服器 */
@@ -41,7 +43,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
   const t0 = Date.now();
   /** 伺服器時間（毫秒）：測試加速時按倍率前進 */
   const now = () => (speed === 1 ? Date.now() : t0 + (Date.now() - t0) * speed);
-  const manager = new RoomManager({ now, rng: Math.random, makeToken: () => randomBytes(18).toString('base64url'), log });
+  const manager = new RoomManager({ now, rng: Math.random, makeToken: () => randomBytes(18).toString('base64url'), log, arrangeMs: opts.arrangeMs });
   const startedAt = Date.now();
   let connections = 0;
 
@@ -102,6 +104,11 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         case 'join':
         case 'quick':
         case 'resume': {
+          // 協定版本不同（舊版網頁快取）：請玩家重新整理，不讓它進房（組隊流程不相容）
+          if (msg.v !== PROTOCOL_VERSION) {
+            conn.send({ t: 'error', code: 'OUTDATED', message: '遊戲已更新，請重新整理頁面（電腦按 Ctrl＋F5，手機下拉重新整理）' });
+            return;
+          }
           // 換房間前先離開原本的房間
           if (session) session.room.handle(session.side, { t: 'leave' });
           session = null;

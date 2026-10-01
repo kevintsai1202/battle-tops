@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { MAX_AIM } from '../../src/sim/launcher';
-import { isRoomCode, makeRoomCode, parseClientMessage, sanitizeName, validateTeam } from '../../src/net/protocol';
+import { isRoomCode, makeRoomCode, parseClientMessage, PROTOCOL_VERSION, sanitizeName, validateTeam } from '../../src/net/protocol';
 import { createRng } from '../../src/sim/rng';
 
 describe('房號', () => {
@@ -39,8 +39,8 @@ describe('客戶端訊息檢查', () => {
   });
 
   test('房號轉大寫後檢查、名稱會清理', () => {
-    expect(parseClientMessage(JSON.stringify({ t: 'join', code: 'abcd', name: '  阿明 ' }))).toEqual({ t: 'join', code: 'ABCD', name: '阿明' });
-    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'Kevin' }))).toEqual({ t: 'create', name: 'Kevin', public: true });
+    expect(parseClientMessage(JSON.stringify({ t: 'join', code: 'abcd', name: '  阿明 ', v: 2 }))).toEqual({ t: 'join', code: 'ABCD', name: '阿明', v: 2 });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'Kevin', v: 2 }))).toEqual({ t: 'create', name: 'Kevin', public: true, v: 2 });
   });
 
   test('推移：非有限數字丟掉；長度超過 1 正規化成 1', () => {
@@ -77,7 +77,7 @@ describe('客戶端訊息檢查', () => {
   });
 
   test('重連需要房號與 token', () => {
-    expect(parseClientMessage(JSON.stringify({ t: 'resume', code: 'ABCD', token: 'x'.repeat(24) }))).toEqual({ t: 'resume', code: 'ABCD', token: 'x'.repeat(24) });
+    expect(parseClientMessage(JSON.stringify({ t: 'resume', code: 'ABCD', token: 'x'.repeat(24), v: 2 }))).toEqual({ t: 'resume', code: 'ABCD', token: 'x'.repeat(24), v: 2 });
     expect(parseClientMessage(JSON.stringify({ t: 'resume', code: 'ABCD' }))).toBeNull();
   });
 });
@@ -98,22 +98,41 @@ describe('隊伍檢查', () => {
     expect(validateTeam(['blaze', 'turtle', 'gale'], { blaze: { disk: 'nope', driver: null } })).not.toBeNull();
   });
 
-  test('隊伍訊息經過檢查：不合法的隊伍整則丟掉', () => {
-    expect(parseClientMessage(JSON.stringify({ t: 'team', picks: ['blaze', 'turtle', 'gale'], loadouts: {} }))).toEqual({
-      t: 'team',
-      picks: ['blaze', 'turtle', 'gale'],
-      loadouts: {},
-    });
-    expect(parseClientMessage(JSON.stringify({ t: 'team', picks: ['blaze', 'blaze', 'gale'], loadouts: {} }))).toBeNull();
+  test('第 1 步選三顆、第 2 步順序與零件的訊息經過檢查：不合法的整則丟掉；舊的一次送出隊伍訊息已移除', () => {
+    const parse = (m: unknown) => parseClientMessage(JSON.stringify(m));
+    expect(parse({ t: 'picks', picks: ['blaze', 'turtle', 'gale'] })).toEqual({ t: 'picks', picks: ['blaze', 'turtle', 'gale'] });
+    expect(parse({ t: 'picks', picks: ['blaze', 'blaze', 'gale'] })).toBeNull();
+    expect(parse({ t: 'picks', picks: ['blaze', 'turtle'] })).toBeNull();
+    expect(parse({ t: 'picks', picks: ['blaze', 'turtle', 'nope'] })).toBeNull();
+    for (const t of ['arrange', 'ready'] as const) {
+      const loadouts = { blaze: { disk: 'heavy', driver: null } };
+      expect(parse({ t, order: ['gale', 'blaze', 'turtle'], loadouts })).toEqual({ t, order: ['gale', 'blaze', 'turtle'], loadouts });
+      expect(parse({ t, order: ['gale', 'gale', 'turtle'], loadouts: {} })).toBeNull();
+      // 備用零件同隊不能重複
+      expect(parse({ t, order: ['blaze', 'turtle', 'gale'], loadouts: { blaze: { disk: null, driver: 'sharp' }, turtle: { disk: null, driver: 'sharp' } } })).toBeNull();
+    }
+    expect(parse({ t: 'team', picks: ['blaze', 'turtle', 'gale'], loadouts: {} })).toBeNull();
   });
 });
 
 describe('房間列表與快速加入', () => {
   test('list、quick 與建房的公開設定：沒帶 public（舊版網頁）或不是 false 都視為公開', () => {
     expect(parseClientMessage(JSON.stringify({ t: 'list' }))).toEqual({ t: 'list' });
-    expect(parseClientMessage(JSON.stringify({ t: 'quick', name: ' 小明 ' }))).toEqual({ t: 'quick', name: '小明' });
-    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A' }))).toEqual({ t: 'create', name: 'A', public: true });
-    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', public: false }))).toEqual({ t: 'create', name: 'A', public: false });
-    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', public: 'no' }))).toEqual({ t: 'create', name: 'A', public: true });
+    expect(parseClientMessage(JSON.stringify({ t: 'quick', name: ' 小明 ', v: 2 }))).toEqual({ t: 'quick', name: '小明', v: 2 });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', v: 2 }))).toEqual({ t: 'create', name: 'A', public: true, v: 2 });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', public: false, v: 2 }))).toEqual({ t: 'create', name: 'A', public: false, v: 2 });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', public: 'no', v: 2 }))).toEqual({ t: 'create', name: 'A', public: true, v: 2 });
+  });
+});
+
+describe('協定版本', () => {
+  test('建房、加入、快速加入、重連都帶協定版本；沒帶或不是數字（舊版網頁）為 0，由伺服器回「請重新整理」', () => {
+    const parse = (m: unknown) => parseClientMessage(JSON.stringify(m));
+    expect(PROTOCOL_VERSION).toBe(2);
+    expect(parse({ t: 'create', name: 'A' })).toMatchObject({ v: 0 });
+    expect(parse({ t: 'join', code: 'ABCD', name: 'A', v: 2 })).toMatchObject({ v: 2 });
+    expect(parse({ t: 'quick', name: 'A', v: 'x' })).toMatchObject({ v: 0 });
+    expect(parse({ t: 'resume', code: 'ABCD', token: 'x'.repeat(24), v: 2 })).toMatchObject({ v: 2 });
+    expect(parse({ t: 'resume', code: 'ABCD', token: 'x'.repeat(24) })).toMatchObject({ v: 0 });
   });
 });

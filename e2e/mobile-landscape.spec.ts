@@ -1,5 +1,6 @@
 import { devices, expect, test } from '@playwright/test';
 import { dbg, expectInViewport, expectNoHorizontalScroll, swipe } from './mobile.helpers';
+import { arrangeOrder } from './team.helpers';
 
 /**
  * 手機橫向（Pixel 7 模擬、觸控）：點選流程、滑動拉發射台、三指觸控必殺、滑動推移、快甩衝刺、版面不超出畫面。
@@ -29,6 +30,16 @@ test('橫向手機：觸控組隊、拉條發射、三指必殺、滑動推移�
   await page.screenshot({ path: 'e2e/screenshots/30-mobile-select.png' });
   await page.locator('#select .go').tap();
   await expect(page.locator('#select')).toBeHidden();
+  // 第 2 步：版面在畫面內；點 ▲ 把烈焰龍（第 3 戰）往前一戰，再出陣
+  await expect(page.locator('#arrange')).toBeVisible();
+  for (const sel of ['#arrange .ar-slots', '#arrange .ar-ready', '#arrange .detail']) await expectInViewport(page, sel);
+  await expectNoHorizontalScroll(page);
+  await page.locator('#arrange .ar-slot[data-id="blaze"] .ar-up').tap();
+  expect(await arrangeOrder(page)).toEqual(['turtle', 'blaze', 'gale']);
+  await page.screenshot({ path: 'e2e/screenshots/30b-mobile-arrange.png' });
+  await page.locator('#arrange .ar-ready').tap();
+  await expect(page.locator('#arrange')).toBeHidden();
+  expect(await page.evaluate(() => (window as unknown as { __game: { debug(): { match: { player: string[] } } } }).__game.debug().match.player)).toEqual(['turtle', 'blaze', 'gale']);
   // 發射階段不啟用滑動操作（手指要拉發射台）
   await expect(page.locator('#launch')).toBeVisible({ timeout: 45_000 });
   await expect(page.locator('#touch-hint')).toBeHidden();

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { pickTeam } from './team.helpers';
 
 /**
  * 3 對 3 賽制：
@@ -43,9 +44,7 @@ test('展示模式：3 對 3 打完整一場，結果畫面列出每一戰', asy
 test('延長賽：總分平手時從自己的隊伍挑一顆出戰', async ({ page }) => {
   await page.goto('./?seed=33');
   await page.locator('#title').click();
-  await expect(page.locator('#select')).toBeVisible();
-  for (const id of ['wolf', 'blaze', 'turtle']) await page.locator(`#select .card[data-id="${id}"]`).click();
-  await page.locator('#select .go').click();
+  await pickTeam(page, ['wolf', 'blaze', 'turtle']);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
 
   await page.evaluate(() => (window as any).__game.debugForceOvertime());

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import WebSocket from 'ws';
+import { PROTOCOL_VERSION } from '../../src/net/protocol';
 import { startServer, type RunningServer } from '../src/app';
 import { RoomManager } from '../src/manager';
 import { Bot } from './bot';
@@ -34,16 +35,17 @@ async function bot(seed: number, origin?: string): Promise<Bot> {
   return b;
 }
 
-/** 建房、加入、雙方送出隊伍 */
+/** 建房、加入、雙方選三顆（第 2 步由機器人收到公開陣容後自動準備完成） */
 async function setup(): Promise<[Bot, Bot]> {
   const host = await bot(1);
-  host.send({ t: 'create', name: '房主', public: true });
+  host.send({ t: 'create', name: '房主', public: true, v: PROTOCOL_VERSION });
   const room = await host.waitFor('room');
   const guest = await bot(2);
-  guest.send({ t: 'join', code: room.code, name: '客人' });
+  guest.send({ t: 'join', code: room.code, name: '客人', v: PROTOCOL_VERSION });
   await guest.waitFor('room');
-  host.send({ t: 'team', picks: ['blaze', 'turtle', 'gale'], loadouts: { gale: { disk: null, driver: 'bearing' } } });
-  guest.send({ t: 'team', picks: ['wolf', 'orion', 'pegasus'], loadouts: {} });
+  host.plan = { loadouts: { gale: { disk: null, driver: 'bearing' } } };
+  host.send({ t: 'picks', picks: ['blaze', 'turtle', 'gale'] });
+  guest.send({ t: 'picks', picks: ['wolf', 'orion', 'pegasus'] });
   return [host, guest];
 }
 
@@ -75,7 +77,7 @@ describe('伺服器整合', () => {
     guest.close();
     await host.waitFor('paused');
     const again = await bot(3);
-    again.send({ t: 'resume', code, token });
+    again.send({ t: 'resume', code, token, v: PROTOCOL_VERSION });
     await host.waitFor('resumed');
     const state = await again.waitFor('launched');
     expect(state.snap.tops).toHaveLength(2);
@@ -99,22 +101,22 @@ describe('伺服器整合', () => {
 
   test('找不到房間與房間已滿會回錯誤訊息', async () => {
     const a = await bot(4);
-    a.send({ t: 'join', code: 'ZZZZ', name: 'x' });
+    a.send({ t: 'join', code: 'ZZZZ', name: 'x', v: PROTOCOL_VERSION });
     expect((await a.waitFor('error')).code).toBe('NOT_FOUND');
     const h = await bot(5);
-    h.send({ t: 'create', name: 'h', public: true });
+    h.send({ t: 'create', name: 'h', public: true, v: PROTOCOL_VERSION });
     const { code } = await h.waitFor('room');
     const g = await bot(6);
-    g.send({ t: 'join', code, name: 'g' });
+    g.send({ t: 'join', code, name: 'g', v: PROTOCOL_VERSION });
     await g.waitFor('room');
     const third = await bot(7);
-    third.send({ t: 'join', code, name: 't' });
+    third.send({ t: 'join', code, name: 't', v: PROTOCOL_VERSION });
     expect((await third.waitFor('error')).code).toBe('ROOM_FULL');
   });
 
   test('快速加入：兩個機器人先後按，配進同一間；查詢列表看得到等人中、再變成對戰中', async () => {
     const a = await bot(21);
-    a.send({ t: 'quick', name: '甲' });
+    a.send({ t: 'quick', name: '甲', v: PROTOCOL_VERSION });
     const ra = await a.waitFor('room');
     expect(ra).toMatchObject({ host: true, public: true });
     const viewer = await bot(23);
@@ -122,12 +124,26 @@ describe('伺服器整合', () => {
     const l1 = await viewer.waitFor('rooms');
     expect(l1.rooms).toEqual([expect.objectContaining({ code: ra.code, host: '甲', guest: null, status: 'waiting' })]);
     const b = await bot(22);
-    b.send({ t: 'quick', name: '乙' });
+    b.send({ t: 'quick', name: '乙', v: PROTOCOL_VERSION });
     const rb = await b.waitFor('room');
     expect(rb).toMatchObject({ code: ra.code, host: false });
     viewer.send({ t: 'list' });
     const l2 = await viewer.waitFor('rooms', (m) => m !== l1);
     expect(l2.rooms).toEqual([expect.objectContaining({ code: ra.code, host: '甲', guest: '乙', status: 'playing' })]);
+  });
+
+  test('舊版網頁（沒帶協定版本）建房、加入、快速加入：回「遊戲已更新，請重新整理」，不會進房；查房間列表照常可用', async () => {
+    const old = await bot(41);
+    for (const m of [{ t: 'create', name: '舊' }, { t: 'join', code: 'ABCD', name: '舊' }, { t: 'quick', name: '舊' }]) {
+      old.ws.send(JSON.stringify(m));
+      const e = await old.waitFor('error');
+      expect(e).toMatchObject({ code: 'OUTDATED' });
+      expect(e.message).toContain('重新整理');
+      old.msgs.length = 0;
+    }
+    expect(old.all('room')).toEqual([]);
+    old.send({ t: 'list' });
+    expect((await old.waitFor('rooms')).rooms).toEqual([]);
   });
 
   test('處理訊息時丟出例外：只記錄錯誤，伺服器與這條連線照常服務', async () => {
@@ -141,7 +157,7 @@ describe('伺服器整合', () => {
       const b = new Bot(`ws://127.0.0.1:${own.port}/ws`, 11);
       bots.push(b);
       await b.open();
-      b.send({ t: 'join', code: 'ABCD', name: 'x' });
+      b.send({ t: 'join', code: 'ABCD', name: 'x', v: PROTOCOL_VERSION });
       b.send({ t: 'ping', c: 7 });
       expect((await b.waitFor('pong', () => true, 5000)).c).toBe(7);
       expect(logs.some((l) => l.includes('測試用例外'))).toBe(true);

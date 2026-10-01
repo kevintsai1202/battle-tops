@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { pickTeam } from './team.helpers';
 
 /**
  * 拉發射台（電腦版：滑鼠按住拖曳）：
@@ -18,8 +19,7 @@ const dbg = (page: Page) => page.evaluate(() => (window as unknown as { __game: 
 async function toLaunch(page: Page, seed: number): Promise<void> {
   await page.goto(`./?seed=${seed}`);
   await page.locator('#title').click();
-  for (const id of ['blaze', 'turtle', 'gale']) await page.locator(`#select .card[data-id="${id}"]`).click();
-  await page.locator('#select .go').click();
+  await pickTeam(page, ['blaze', 'turtle', 'gale']);
   await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
 }
 

@@ -33,7 +33,8 @@ export default defineConfig({
           timeout: 60_000,
           // 伺服器紀錄（建房、加入、重連、錯誤）印在測試輸出，線上對戰失敗時看得到伺服器端發生什麼
           stdout: 'pipe',
-          env: { PORT: '8787' },
+          // 組隊第 2 步的時限縮成 30 秒（正式 60 秒），online.spec 的逾時測試才不用等太久
+          env: { PORT: '8787', ARRANGE_MS: '30000' },
         },
       ],
 });

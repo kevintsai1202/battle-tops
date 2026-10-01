@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { PROTOCOL_VERSION } from '../src/net/protocol';
 import type { TopId } from '../src/sim/types';
 import { Bot } from '../server/tests/bot';
 
@@ -40,14 +41,16 @@ test('線上伺服器：兩個機器人以真實時間打完整一場', async ()
       rtt.push(performance.now() - t0);
     }
 
-    host.send({ t: 'create', name: '機器人A', public: false });
+    host.send({ t: 'create', name: '機器人A', public: false, v: PROTOCOL_VERSION });
     const room = await host.waitFor('room', () => true, 10_000);
-    guest.send({ t: 'join', code: room.code, name: '機器人B' });
+    guest.send({ t: 'join', code: room.code, name: '機器人B', v: PROTOCOL_VERSION });
     await guest.waitFor('room', () => true, 10_000);
     const hostTeam: TopId[] = ['blaze', 'turtle', 'gale'];
     const guestTeam: TopId[] = ['wolf', 'orion', 'pegasus'];
-    host.send({ t: 'team', picks: hostTeam, loadouts: { gale: { disk: null, driver: 'bearing' } } });
-    guest.send({ t: 'team', picks: guestTeam, loadouts: {} });
+    // 第 1 步選三顆；第 2 步機器人收到公開陣容後自動準備完成（房主的疾風鳳換軸承軸）
+    host.plan = { loadouts: { gale: { disk: null, driver: 'bearing' } } };
+    host.send({ t: 'picks', picks: hostTeam });
+    guest.send({ t: 'picks', picks: guestTeam });
     const started = performance.now();
     const [hr, gr] = await Promise.all([host.waitFor('result', () => true, 420_000), guest.waitFor('result', () => true, 420_000)]);
     const minutes = (performance.now() - started) / 60_000;
@@ -89,9 +92,9 @@ test('線上伺服器：兩個機器人以真實時間打完整一場', async ()
       console.log(`房間列表：等人中 ${others.length} 間、對戰中 ${list.rooms.length - others.length} 間`);
       if (others.length) console.log('有人在等，略過快速加入檢查（避免配到真實玩家）');
       else {
-        q1.send({ t: 'quick', name: '機器人Q1' });
+        q1.send({ t: 'quick', name: '機器人Q1', v: PROTOCOL_VERSION });
         const r1 = await q1.waitFor('room', () => true, 10_000);
-        q2.send({ t: 'quick', name: '機器人Q2' });
+        q2.send({ t: 'quick', name: '機器人Q2', v: PROTOCOL_VERSION });
         const r2 = await q2.waitFor('room', () => true, 10_000);
         console.log(`快速加入：${r1.code}（房主）← ${r2.code}`);
         expect(r1.host).toBe(true);

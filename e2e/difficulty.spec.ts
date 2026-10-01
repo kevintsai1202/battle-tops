@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { confirmArrange } from './team.helpers';
 
 /**
  * 難度：組隊畫面切換、瀏覽器記住選擇、實際影響 CPU 發射力道；
@@ -32,6 +33,7 @@ test('難度：預設普通、切到簡單後生效並記住', async ({ page }) 
 
   for (const i of [1, 2]) await page.locator('.card').nth(i).click();
   await page.locator('#select .go').click();
+  await confirmArrange(page);
   await page.locator('#banner .bn', { hasText: 'ゴー' }).waitFor({ timeout: 45_000 });
   await page.keyboard.press('Space');
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 15_000 });

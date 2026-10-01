@@ -30,6 +30,8 @@ export const ROUND_END_MS = 3600;
 export const SNAP_INTERVAL_MS = 50;
 /** 斷線後保留座位的時間 */
 export const RECONNECT_MS = 30_000;
+/** 組隊第 2 步（出場順序與零件）的時間限制；時間到就用當下的設定開打 */
+export const ARRANGE_MS = 60_000;
 
 /** 模擬固定步長 */
 const STEP = 1 / 120;
@@ -57,6 +59,8 @@ export interface RoomDeps {
   /** 產生重連用 token */
   makeToken(): string;
   log?(msg: string): void;
+  /** 第 2 步的時間限制（毫秒，預設 ARRANGE_MS；e2e 用環境變數縮短） */
+  arrangeMs?: number;
 }
 
 /** 房主這一戰坐幾號：第 1、3 戰坐 0 號，第 2 戰與延長賽坐 1 號（抵銷座位偏差） */
@@ -89,15 +93,22 @@ export function listingStatus(
   return phase !== 'lobby' && (host.connected || guest.connected) ? 'playing' : null;
 }
 
+/** order 是否剛好是 picks 這三顆的排列 */
+function isPermutation(order: readonly TopId[], picks: readonly TopId[] | null): boolean {
+  return !!picks && order.length === picks.length && picks.every((t) => order.includes(t));
+}
+
 /** 一位玩家 */
 interface Player {
   name: string;
   token: string;
   conn: Conn | null;
-  /** 隊伍（出場順序）；組隊時還沒送出為 null */
+  /** 第 1 步選好的三顆（還沒選好為 null） */
+  picks: TopId[] | null;
+  /** 出場順序：第 2 步開始時是選的順序，之後依 arrange／ready 更新；第 1 步時為 null */
   team: TopId[] | null;
   loadouts: TeamLoadouts;
-  /** 結果畫面：要再來一場 */
+  /** 第 2 步：已準備完成（鎖定）；結果畫面：要再來一場 */
   ready: boolean;
   /** 延長賽挑的陀螺 */
   overtime: TopId | null;
@@ -153,6 +164,8 @@ export class Room {
   private lastBattleNo = 0;
   /** 斷線暫停：開始時間、判負時間、斷線的陣營 */
   private paused: { since: number; until: number; side: Side } | null = null;
+  /** 第 2 步截止的伺服器時間（毫秒） */
+  private arrangeDeadline = 0;
   /** 最後一次有人連著的時間（房間清理用） */
   lastActive: number;
   private isClosed = false;
@@ -204,6 +217,7 @@ export class Room {
       name,
       token: this.deps.makeToken(),
       conn,
+      picks: null,
       team: null,
       loadouts: {},
       ready: false,
@@ -263,10 +277,16 @@ export class Room {
       this.close();
       return;
     }
-    // 客人離開：房主回到等人的狀態
-    if (this.phase === 'picking') {
+    // 客人在組隊時離開：房主回到等人的狀態，選擇清掉（新客人加入後從第 1 步重來）
+    if (this.phase === 'picking' || this.phase === 'arranging') {
       this.phase = 'lobby';
-      if (this.players[0]) this.players[0].team = null;
+      const h = this.players[0];
+      if (h) {
+        h.picks = null;
+        h.team = null;
+        h.loadouts = {};
+        h.ready = false;
+      }
     }
     this.broadcastLobby();
   }
@@ -296,12 +316,23 @@ export class Room {
         this.arenaChoice = msg.arena;
         this.broadcastLobby();
         return;
-      case 'team':
+      case 'picks':
         if (this.phase !== 'picking') return;
-        p.team = [...msg.picks];
-        p.loadouts = structuredClone(msg.loadouts);
+        p.picks = [...msg.picks];
         this.broadcastLobby();
-        if (this.players.every((q) => q?.team)) this.startMatch();
+        if (this.players.every((q) => q?.picks)) this.startArranging();
+        return;
+      case 'arrange':
+      case 'ready':
+        // 第 2 步：只接受自己選的三顆的排列；按了準備完成就鎖定
+        if (this.phase !== 'arranging' || p.ready || !isPermutation(msg.order, p.picks)) return;
+        p.team = [...msg.order];
+        p.loadouts = structuredClone(msg.loadouts);
+        if (msg.t === 'ready') {
+          p.ready = true;
+          this.broadcastLobby();
+          if (this.players.every((q) => q?.ready)) this.startMatch();
+        }
         return;
       case 'launch': {
         const b = this.battle;
@@ -347,9 +378,41 @@ export class Room {
 
   // ------------------------------------------------------------ 比賽流程
 
-  /** 雙方都送出隊伍：抽場地、公開隊伍、開第一戰 */
+  /** 雙方都選好三顆：進入第 2 步，公開雙方的三顆並開始倒數（出場順序預設為選的順序） */
+  private startArranging(): void {
+    this.phase = 'arranging';
+    this.arrangeDeadline = this.deps.now() + (this.deps.arrangeMs ?? ARRANGE_MS);
+    for (const p of this.players) {
+      if (!p) continue;
+      p.team = [...p.picks!];
+      p.loadouts = {};
+      p.ready = false;
+    }
+    for (const side of [0, 1] as const) this.send(side, this.revealMessage(side));
+    this.broadcastLobby();
+  }
+
+  /** 第 2 步的公開資訊（含自己目前的順序與零件，重連時還原畫面） */
+  private revealMessage(side: Side): ServerMessage {
+    const me = this.players[side]!;
+    const them = this.players[this.other(side)];
+    return {
+      t: 'reveal',
+      mine: [...(me.picks ?? [])],
+      theirs: TOP_IDS.filter((t) => them?.picks?.includes(t)),
+      deadline: this.arrangeDeadline,
+      order: [...(me.team ?? me.picks ?? [])],
+      loadouts: structuredClone(me.loadouts),
+      ready: me.ready,
+    };
+  }
+
+  /** 第 2 步結束（雙方都準備完成或時間到）：抽場地、公開隊伍、開第一戰 */
   private startMatch(): void {
     const [h, g] = this.players as [Player, Player];
+    // ready 接下來給結果畫面的「再來一場」用
+    h.ready = false;
+    g.ready = false;
     const id = this.arenaChoice === 'random' ? ARENA_IDS[Math.floor(this.deps.rng() * ARENA_IDS.length)] : this.arenaChoice;
     this.arena = ARENAS[id];
     this.match = createMatch(h.team!, g.team!);
@@ -361,6 +424,13 @@ export class Room {
     }
     this.phase = 'match';
     this.startBattle();
+    // 第 2 步時間到時有人斷線（還沒到「斷線太久視同離開」）：比賽一開始就暫停並開始判負倒數，和對戰中斷線一樣
+    const gone = ([0, 1] as const).find((side) => !this.players[side]!.conn);
+    if (gone !== undefined && !this.paused) {
+      const now = this.deps.now();
+      this.paused = { since: now, until: now + RECONNECT_MS, side: gone };
+      this.send(this.other(gone), { t: 'paused', until: this.paused.until });
+    }
   }
 
   /** 開始目前對陣的一戰（平手重打沿用同一組對陣與座位） */
@@ -545,6 +615,7 @@ export class Room {
     this.battle = null;
     for (const p of this.players) {
       if (!p) continue;
+      p.picks = null;
       p.team = null;
       p.loadouts = {};
       p.ready = false;
@@ -570,6 +641,8 @@ export class Room {
       const p = this.players[side];
       if (p && p.goneAt !== null && now - p.goneAt >= RECONNECT_MS && this.phase !== 'match' && this.phase !== 'overtimePick') this.leave(side);
     }
+    // 第 2 步時間到：用當下的順序與零件開打（倒數不因斷線暫停）
+    if (this.phase === 'arranging' && now >= this.arrangeDeadline && this.players[0] && this.players[1]) this.startMatch();
     const b = this.battle;
     if (!b || this.isClosed) return;
     if (b.stage === 'launch') {
@@ -619,8 +692,9 @@ export class Room {
     const p = this.players[side]!;
     this.send(side, { t: 'room', code: this.code, token: p.token, host: side === 0, public: this.isPublic });
     this.send(side, this.lobbyMessage(side));
+    if (this.phase === 'arranging') this.send(side, this.revealMessage(side));
     const m = this.match;
-    if (m && this.phase !== 'picking') {
+    if (m && this.phase !== 'picking' && this.phase !== 'arranging') {
       const them = this.players[this.other(side)];
       this.send(side, { t: 'teams', mine: [...(p.team ?? [])], theirs: TOP_IDS.filter((t) => them?.team?.includes(t)), loadouts: structuredClone(p.loadouts), arena: this.arena.id });
     }
@@ -638,7 +712,7 @@ export class Room {
     const info = (q: Player): PlayerInfo => ({
       name: q.name,
       connected: q.conn !== null,
-      ready: this.phase === 'picking' ? q.team !== null : this.phase === 'result' ? q.ready : false,
+      ready: this.phase === 'picking' ? q.picks !== null : this.phase === 'arranging' || this.phase === 'result' ? q.ready : false,
     });
     const me = this.players[side]!;
     const them = this.players[this.other(side)];

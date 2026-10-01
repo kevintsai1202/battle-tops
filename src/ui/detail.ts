@@ -13,7 +13,8 @@ const partName = (id: PartId) => `${PARTS[id].nameZh}（${PARTS[id].code}）`;
  * 組隊畫面右側的詳細資料：
  * - 上方是透明的「舞台」窗，主場景的鏡頭會對準這裡播放外觀與絕招示範（見 game.ts 的 showcase）。
  * - 名稱、類型、原型；雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
- * - 盤與軸的選單：隊伍中的陀螺才能換；備用零件每種一件，被隊友用掉的會標出來且不能選。
+ * - 盤與軸的選單：隊伍中的陀螺才能換；備用零件每種一件，被隊友用掉的會標出來且不能選
+ *   （組隊第 1 步只看介紹，建立時 parts: false 不顯示選單；換零件在第 2 步）。
  * - 必殺技名稱、說明與集氣速度。
  * 元素只建立一次，之後就地更新：換零件時不會把正在操作的選單整個重建。
  */
@@ -35,8 +36,8 @@ export class DetailView {
   private readonly desc: HTMLElement;
   private flashTimer = 0;
 
-  /** onChange：玩家在選單換零件（part 為 null 表示換回原廠） */
-  constructor(root: HTMLElement, onChange: (slot: PartSlot, part: PartId | null) => void) {
+  /** onChange：玩家在選單換零件（part 為 null 表示換回原廠）；opts.parts 為 false 時不顯示零件選單 */
+  constructor(root: HTMLElement, onChange?: (slot: PartSlot, part: PartId | null) => void, opts: { parts?: boolean } = {}) {
     this.root = root;
     this.stage = el('div', 'd-stage');
     this.canvas = el('canvas', 'd-canvas');
@@ -53,7 +54,7 @@ export class DetailView {
       const s = el('select', '');
       s.dataset.slot = slot;
       s.addEventListener('change', () => {
-        onChange(slot, s.value === '' ? null : s.value);
+        onChange?.(slot, s.value === '' ? null : s.value);
         s.blur();
       });
       row.append(el('span', 'd-slot', SLOT_LABEL[slot]), s);
@@ -63,6 +64,7 @@ export class DetailView {
     this.selects = { disk: mk('disk'), driver: mk('driver') };
     this.partNote = el('div', 'd-note');
     parts.append(this.partNote);
+    parts.hidden = opts.parts === false;
     this.sp = el('div', 'd-sp');
     this.charge = el('div', 'd-charge');
     this.desc = el('div', 'd-desc');

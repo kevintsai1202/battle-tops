@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MAX_AHEAD_MS, OnlineSession, type Msg } from '../../src/game/online';
+import { PROTOCOL_VERSION } from '../../src/net/protocol';
 import { ARENAS } from '../../src/sim/arena';
 import { BattleSim } from '../../src/sim/battle';
 import { TOP_SPECS } from '../../src/sim/tops';
@@ -146,9 +147,25 @@ describe('線上連線：房間列表', () => {
     expect(o.rooms).toEqual(rooms);
     expect(o.roomsSeen).toBe(1);
     o.create(false);
-    expect(send).toHaveBeenLastCalledWith({ t: 'create', name: 'A', public: false });
+    expect(send).toHaveBeenLastCalledWith({ t: 'create', name: 'A', public: false, v: PROTOCOL_VERSION });
     o.quick();
-    expect(send).toHaveBeenLastCalledWith({ t: 'quick', name: 'A' });
+    expect(send).toHaveBeenLastCalledWith({ t: 'quick', name: 'A', v: PROTOCOL_VERSION });
+  });
+
+  test('進房訊息都帶協定版本；第 1 步送選的三顆、第 2 步送調整與準備完成；收到公開陣容就記下來', () => {
+    const { o, send } = offline('open');
+    o.join('abcd');
+    expect(send).toHaveBeenLastCalledWith({ t: 'join', code: 'ABCD', name: 'A', v: PROTOCOL_VERSION });
+    o.sendPicks(['blaze', 'turtle', 'gale']);
+    expect(send).toHaveBeenLastCalledWith({ t: 'picks', picks: ['blaze', 'turtle', 'gale'] });
+    const loadouts = { blaze: { disk: 'heavy' as const, driver: null } };
+    o.sendArrange(['gale', 'blaze', 'turtle'], loadouts);
+    expect(send).toHaveBeenLastCalledWith({ t: 'arrange', order: ['gale', 'blaze', 'turtle'], loadouts });
+    o.sendReady(['gale', 'blaze', 'turtle'], loadouts);
+    expect(send).toHaveBeenLastCalledWith({ t: 'ready', order: ['gale', 'blaze', 'turtle'], loadouts });
+    const reveal: Msg<'reveal'> = { t: 'reveal', mine: ['blaze', 'turtle', 'gale'], theirs: ['wolf', 'orion', 'pegasus'], deadline: 5000, order: ['blaze', 'turtle', 'gale'], loadouts: {}, ready: false };
+    o.onReveal(reveal);
+    expect(o.reveal).toEqual(reveal);
   });
 
   test('連線：已連上直接完成；同時呼叫兩次只開一條連線；重連中就等它連上', async () => {

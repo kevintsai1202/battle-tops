@@ -70,7 +70,7 @@
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2>チームを組め！<small>挑三顆組成隊伍，點選順序就是出場順序（<span class="kb">方向鍵移動、Space 選取／取消、Enter 出陣、1／2／3 難度、Q／E 場地</span><span class="tc">點小格選取／取消</span>）</small></h2>
+        <h2>チームを組め！<small>第 1 步：選場地與三顆陀螺（點選順序是預設的出場順序，下一步可以調整順序與零件）（<span class="kb">方向鍵移動、Space 選取／取消、Enter 下一步、1／2／3 難度、Q／E 場地</span><span class="tc">點小格選取／取消</span>）</small></h2>
         <div class="select-row">
           <div class="difficulty" role="group" aria-label="難易度">
             <button type="button" data-id="easy">かんたん<small>簡單</small></button>
@@ -85,7 +85,29 @@
           <div class="cards"></div>
           <div class="detail"></div>
         </div>
-        <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled>出陣！</button></div>
+        <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled>下一步 ▶</button></div>
+      </section>
+
+      <!-- 組隊第 2 步：出場順序與零件（線上限時，雙方都準備完成才開戰） -->
+      <section id="arrange" class="screen" hidden>
+        <h2>出場順と部品<small>第 2 步：調整出場順序與零件，第 1 戰先上場（<span class="kb">↑↓ 選擇、Shift＋↑↓ 調換順序、Enter 確定</span><span class="tc">點一顆換零件，▲▼ 調換順序</span>）</small></h2>
+        <div class="ar-head">
+          <div class="ar-opp"><span class="ar-opp-label"></span><span class="chips"></span><small class="ar-opp-note"></small></div>
+          <span class="ar-arena"></span>
+          <span class="ar-timer" hidden></span>
+        </div>
+        <div class="ar-main">
+          <!-- 左欄：三個出場欄位與按鈕（手機橫向時按鈕才不會被擠出畫面） -->
+          <div class="ar-left">
+            <ol class="ar-slots"></ol>
+            <div class="ar-actions">
+              <button type="button" class="ar-back">◀ 回上一步</button>
+              <button type="button" class="ar-ready">出陣！</button>
+            </div>
+            <p class="ar-status"></p>
+          </div>
+          <div class="detail ar-detail"></div>
+        </div>
       </section>
 
       <section id="overtime" class="screen" hidden>

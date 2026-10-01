@@ -129,6 +129,7 @@ body.touch .tc {
 }
 
 #select h2,
+#arrange h2,
 #result h2 {
   font-family: var(--display);
   font-weight: 400;
@@ -137,7 +138,8 @@ body.touch .tc {
   text-shadow: 0 0 18px rgba(255, 160, 60, 0.9), 0 4px 0 #000;
 }
 
-#select h2 small {
+#select h2 small,
+#arrange h2 small {
   display: block;
   font-family: inherit;
   font-size: 15px;
@@ -1780,6 +1782,269 @@ body.selecting #help {
   .arena button {
     padding: 4px 7px;
     font-size: 11px;
+  }
+}
+
+/* ---------- 組隊第 2 步：出場順序與零件 ---------- */
+/* 內容比畫面高（手機）時從頂端開始捲動：置中排版會把上半部推到捲不到的地方 */
+#arrange {
+  justify-content: flex-start;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.8));
+}
+
+#arrange > h2 {
+  margin-top: auto;
+}
+
+#arrange > .ar-main {
+  margin-bottom: auto;
+}
+
+#arrange > * {
+  flex-shrink: 0;
+}
+
+#arrange h2 {
+  font-size: clamp(28px, 4.6vw, 52px);
+}
+
+.ar-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 18px;
+  width: min(1000px, 100%);
+}
+
+.ar-opp {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.ar-opp .chips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ar-opp-note {
+  opacity: 0.8;
+}
+
+.ar-arena {
+  font-size: 14px;
+  color: #9fe7ff;
+}
+
+.ar-timer {
+  min-width: 5em;
+  font-family: var(--display);
+  font-size: 22px;
+  color: #ffe35a;
+}
+
+.ar-timer.warn {
+  color: #ff6a4a;
+}
+
+.ar-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 14px;
+  width: min(1000px, 100%);
+  align-items: start;
+}
+
+.ar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ar-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ar-slot {
+  display: grid;
+  grid-template-columns: auto 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  background: rgba(8, 12, 30, 0.85);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ar-slot.on {
+  border-color: #ffe35a;
+  box-shadow: 0 0 16px rgba(255, 200, 60, 0.5);
+}
+
+.ar-n {
+  font-family: var(--display);
+  font-size: 16px;
+  color: #ffe35a;
+  white-space: nowrap;
+}
+
+.ar-thumb {
+  width: 64px;
+  height: 64px;
+  background: center / contain no-repeat;
+}
+
+.ar-name {
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: bold;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ar-name small {
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
+  opacity: 0.75;
+}
+
+.ar-move {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ar-move button {
+  width: 42px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(127, 240, 255, 0.22);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ar-move button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+#arrange .detail {
+  max-height: calc(100dvh - 260px);
+}
+
+.ar-actions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+.ar-actions button {
+  padding: 8px 28px;
+  border: 0;
+  border-radius: 999px;
+  font-family: var(--display);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.ar-back {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.ar-ready {
+  background: linear-gradient(180deg, #ffe16a, #ff8a1a);
+  color: #1a0a00;
+  box-shadow: 0 0 20px rgba(255, 150, 40, 0.8);
+}
+
+.ar-actions button:disabled {
+  filter: grayscale(1);
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: default;
+}
+
+.ar-status {
+  min-height: 1.2em;
+  margin: 0;
+  color: #9fe7ff;
+}
+
+/* 矮螢幕（橫向手機）：標題縮小、欄位與縮圖變小、按鈕橫排 */
+@media (max-height: 520px) {
+  #arrange h2 {
+    font-size: 22px;
+    margin-bottom: 0;
+  }
+  #arrange h2 small {
+    display: none;
+  }
+  #arrange {
+    gap: 6px;
+    padding: 8px 12px;
+  }
+  .ar-timer {
+    font-size: 18px;
+  }
+  .ar-main {
+    grid-template-columns: minmax(0, 1fr) 270px;
+    gap: 8px;
+  }
+  .ar-left {
+    gap: 6px;
+  }
+  .ar-slots {
+    gap: 5px;
+  }
+  .ar-slot {
+    grid-template-columns: auto 40px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+  .ar-thumb {
+    width: 40px;
+    height: 40px;
+  }
+  .ar-name {
+    font-size: 14px;
+  }
+  .ar-move {
+    flex-direction: row;
+  }
+  .ar-move button {
+    width: 36px;
+    height: 28px;
+  }
+  #arrange .detail {
+    max-height: calc(100dvh - 90px);
+  }
+  .ar-actions button {
+    padding: 6px 20px;
+    font-size: 16px;
+  }
+}
+
+/* 直向窄螢幕：欄位在上、詳細資料在下 */
+@media (max-width: 640px) {
+  .ar-main {
+    grid-template-columns: 1fr;
+  }
+  #arrange .detail {
+    max-height: 40vh;
   }
 }
 

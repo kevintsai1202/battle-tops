@@ -1,17 +1,21 @@
 import WebSocket from 'ws';
 import type { ClientMessage, ServerMessage } from '../../src/net/protocol';
+import type { TeamLoadouts } from '../../src/sim/parts';
 import { BattleSim } from '../../src/sim/battle';
 import { cpuThink } from '../../src/sim/cpu';
 import { createRng } from '../../src/sim/rng';
 import type { TopId } from '../../src/sim/types';
 
 /**
- * 用 CPU 邏輯自動對戰的機器人（WebSocket 客戶端）：收到開戰就送發射、每幾則快照用 CPU 邏輯送一次推移與必殺、
- * 延長賽挑隊伍第一顆。給伺服器整合測試與線上伺服器檢查（scripts/live-server-report.test.ts）共用。
+ * 用 CPU 邏輯自動對戰的機器人（WebSocket 客戶端）：第 2 步收到公開陣容就照 plan 送出順序與零件並準備完成、
+ * 收到開戰就送發射、每幾則快照用 CPU 邏輯送一次推移與必殺、延長賽挑隊伍第一顆。
+ * 給伺服器整合測試、e2e 與線上伺服器檢查（scripts/live-server-report.test.ts）共用。
  */
 export class Bot {
   readonly ws: WebSocket;
   readonly msgs: ServerMessage[] = [];
+  /** 第 2 步要送出的出場順序與零件（沒給順序就照第 1 步選的順序）；autoReady 為 false 時不自動準備完成 */
+  plan: { order?: TopId[]; loadouts?: TeamLoadouts; autoReady?: boolean } = {};
   /** 每則訊息收到的時間（performance.now，毫秒；和 msgs 一一對應） */
   readonly at: number[] = [];
   private seat: 0 | 1 = 0;
@@ -69,6 +73,9 @@ export class Bot {
     this.msgs.push(m);
     this.at.push(performance.now());
     switch (m.t) {
+      case 'reveal':
+        if (this.plan.autoReady !== false) this.send({ t: 'ready', order: this.plan.order ?? m.mine, loadouts: this.plan.loadouts ?? {} });
+        break;
       case 'teams':
         this.team = m.mine;
         break;

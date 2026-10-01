@@ -1,6 +1,6 @@
 import { gameServerUrl, NetClient } from '../net/client';
 import { Predictor } from '../net/predict';
-import type { ArenaChoice, ClientMessage, ResultRow, RoomSummary, ServerMessage } from '../net/protocol';
+import { PROTOCOL_VERSION, type ArenaChoice, type ClientMessage, type ResultRow, type RoomSummary, type ServerMessage } from '../net/protocol';
 import type { PullMetrics } from '../sim/launcher';
 import type { TeamLoadouts } from '../sim/parts';
 import type { TopId, V2 } from '../sim/types';
@@ -55,8 +55,9 @@ export class OnlineSession {
   code: string | null = null;
   host = false;
   isPublic = true;
-  /** 最新的房間狀態、公開的隊伍、目前這一戰 */
+  /** 最新的房間狀態、第 2 步公開的陣容、開打前確定的隊伍、目前這一戰 */
   lobby: Msg<'lobby'> | null = null;
+  reveal: Msg<'reveal'> | null = null;
   teams: Msg<'teams'> | null = null;
   battle: Msg<'battle'> | null = null;
   /** 戰績與總分（自己的觀點） */
@@ -167,16 +168,16 @@ export class OnlineSession {
 
   /** 建立房間；isPublic 為是否列在房間列表 */
   create(isPublic = true): void {
-    this.send({ t: 'create', name: this.name, public: isPublic });
+    this.send({ t: 'create', name: this.name, public: isPublic, v: PROTOCOL_VERSION });
   }
 
   /** 快速加入：加入等最久的公開房間，沒有就建一間公開房間 */
   quick(): void {
-    this.send({ t: 'quick', name: this.name });
+    this.send({ t: 'quick', name: this.name, v: PROTOCOL_VERSION });
   }
 
   join(code: string): void {
-    this.send({ t: 'join', code: code.toUpperCase(), name: this.name });
+    this.send({ t: 'join', code: code.toUpperCase(), name: this.name, v: PROTOCOL_VERSION });
   }
 
   leave(): void {
@@ -187,8 +188,24 @@ export class OnlineSession {
     this.send({ t: 'arena', arena });
   }
 
-  sendTeam(picks: TopId[], loadouts: TeamLoadouts): void {
-    this.send({ t: 'team', picks, loadouts });
+  /** 第 1 步：送出選好的三顆（點選順序是第 2 步的預設出場順序） */
+  sendPicks(picks: TopId[]): void {
+    this.send({ t: 'picks', picks });
+  }
+
+  /** 第 2 步調整中：送出目前的出場順序與零件（時間到時伺服器用最後收到的這一份） */
+  sendArrange(order: TopId[], loadouts: TeamLoadouts): void {
+    this.send({ t: 'arrange', order, loadouts });
+  }
+
+  /** 第 2 步準備完成：送出最後的出場順序與零件（送出後鎖定） */
+  sendReady(order: TopId[], loadouts: TeamLoadouts): void {
+    this.send({ t: 'ready', order, loadouts });
+  }
+
+  /** 第 2 步開始（或重連時補送）：記下公開的陣容、截止時間與目前的設定 */
+  onReveal(m: Msg<'reveal'>): void {
+    this.reveal = m;
   }
 
   /** 發射：時機誤差（秒）、世界座標的瞄準角度、拉條量測（Space 時為 null） */

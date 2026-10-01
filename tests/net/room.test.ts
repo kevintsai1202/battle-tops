@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import {
+  ARRANGE_MS,
   COUNTDOWN_MS,
   hostSeatFor,
   INTRO_LEAD_MS,
@@ -45,10 +46,17 @@ function seat2(): void {
   expect(room.addPlayer(guest, '客人')).toBe(1);
 }
 
-/** 雙方送出隊伍（房主 blaze→turtle→gale，客人 wolf→orion→pegasus） */
+/** 雙方都選好三顆（第 1 步）：房主 blaze、turtle、gale，客人 wolf、orion、pegasus */
+function picksBoth(): void {
+  room.handle(0, { t: 'picks', picks: ['blaze', 'turtle', 'gale'] });
+  room.handle(1, { t: 'picks', picks: ['wolf', 'orion', 'pegasus'] });
+}
+
+/** 雙方選好三顆並在第 2 步按準備完成（房主 blaze→turtle→gale、blaze 換上重盤；客人 wolf→orion→pegasus） */
 function teams(): void {
-  room.handle(0, { t: 'team', picks: ['blaze', 'turtle', 'gale'], loadouts: { blaze: { disk: 'heavy', driver: null } } });
-  room.handle(1, { t: 'team', picks: ['wolf', 'orion', 'pegasus'], loadouts: {} });
+  picksBoth();
+  room.handle(0, { t: 'ready', order: ['blaze', 'turtle', 'gale'], loadouts: { blaze: { disk: 'heavy', driver: null } } });
+  room.handle(1, { t: 'ready', order: ['wolf', 'orion', 'pegasus'], loadouts: {} });
 }
 
 /** 雙方都立刻發射（完美時機） */
@@ -101,8 +109,8 @@ describe('房間：大廳與組隊', () => {
     expect(guest.last('error')).toBeTruthy();
   });
 
-  test('一方送出隊伍：對方看到「已完成」但看不到內容', () => {
-    room.handle(0, { t: 'team', picks: ['blaze', 'turtle', 'gale'], loadouts: {} });
+  test('第 1 步：一方選好三顆，對方看到「已完成」但看不到內容', () => {
+    room.handle(0, { t: 'picks', picks: ['blaze', 'turtle', 'gale'] });
     expect(guest.last('lobby').opponent).toMatchObject({ ready: true });
     expect(guest.msgs.some((m) => JSON.stringify(m).includes('turtle'))).toBe(false);
   });
@@ -120,6 +128,107 @@ describe('房間：大廳與組隊', () => {
     expect(b.specs[1].id).toBe('wolf');
     expect(guest.last('battle').seat).toBe(1);
     expect(b.goAt).toBe(clock + INTRO_LEAD_MS + COUNTDOWN_MS);
+  });
+});
+
+describe('房間：第 2 步 順序與零件', () => {
+  beforeEach(seat2);
+
+  const hostTeam = ['blaze', 'turtle', 'gale'] as const;
+  const guestTeam = ['wolf', 'orion', 'pegasus'] as const;
+  /** 依名鑑排序（對手的出場順序保密） */
+  const catalog = (team: readonly string[]) => TOP_IDS.filter((t) => team.includes(t));
+
+  test('雙方都選好三顆：公開雙方的三顆（對手依名鑑順序）並開始倒數；這時還沒開打', () => {
+    picksBoth();
+    expect(host.last('reveal')).toEqual({
+      t: 'reveal',
+      mine: [...hostTeam],
+      theirs: catalog(guestTeam),
+      deadline: clock + ARRANGE_MS,
+      order: [...hostTeam],
+      loadouts: {},
+      ready: false,
+    });
+    expect(guest.last('reveal')).toMatchObject({ mine: [...guestTeam], theirs: catalog(hostTeam) });
+    expect(host.last('lobby')).toMatchObject({ phase: 'arranging', opponent: { ready: false } });
+    expect(host.all('battle')).toHaveLength(0);
+  });
+
+  test('只接受自己三顆的排列；雙方都按準備完成就開打，用最後的順序與零件', () => {
+    picksBoth();
+    room.handle(0, { t: 'arrange', order: ['gale', 'turtle', 'blaze'], loadouts: {} });
+    // 不是自己的三顆：不算
+    room.handle(0, { t: 'ready', order: ['wolf', 'blaze', 'turtle'], loadouts: {} });
+    expect(guest.last('lobby').opponent).toMatchObject({ ready: false });
+    room.handle(0, { t: 'ready', order: ['gale', 'blaze', 'turtle'], loadouts: { blaze: { disk: 'heavy', driver: null } } });
+    expect(guest.last('lobby').opponent).toMatchObject({ ready: true });
+    expect(host.all('battle')).toHaveLength(0);
+    room.handle(1, { t: 'ready', order: ['pegasus', 'wolf', 'orion'], loadouts: {} });
+    expect(host.last('teams')).toMatchObject({ mine: ['gale', 'blaze', 'turtle'], loadouts: { blaze: { disk: 'heavy', driver: null } } });
+    const b = host.last('battle');
+    expect(b.specs.map((x) => x.id)).toEqual(['gale', 'pegasus']);
+  });
+
+  test('時間到：沒按準備完成也用目前的順序與零件開打（調整過的用調整後的，沒調整的照選的順序）', () => {
+    picksBoth();
+    room.handle(1, { t: 'arrange', order: ['orion', 'wolf', 'pegasus'], loadouts: {} });
+    advance(room, ARRANGE_MS - 200);
+    expect(host.all('battle')).toHaveLength(0);
+    advance(room, 400);
+    expect(host.last('battle').specs.map((x) => x.id)).toEqual(['blaze', 'orion']);
+  });
+
+  test('按了準備完成就鎖定：之後送來的調整不算', () => {
+    picksBoth();
+    room.handle(0, { t: 'ready', order: ['turtle', 'blaze', 'gale'], loadouts: {} });
+    room.handle(0, { t: 'arrange', order: ['gale', 'blaze', 'turtle'], loadouts: {} });
+    room.handle(1, { t: 'ready', order: [...guestTeam], loadouts: {} });
+    expect(host.last('teams').mine).toEqual(['turtle', 'blaze', 'gale']);
+  });
+
+  test('第 2 步斷線重連：補送公開的陣容、目前的順序與零件與原本的截止時間（倒數不暫停）', () => {
+    picksBoth();
+    const deadline = host.last('reveal').deadline;
+    room.handle(0, { t: 'arrange', order: ['gale', 'turtle', 'blaze'], loadouts: { blaze: { disk: 'heavy', driver: null } } });
+    advance(room, 10_000);
+    room.disconnect(0);
+    advance(room, 5_000);
+    const again = new FakeConn();
+    expect(room.resume(again, host.last('room').token)).toBe(0);
+    expect(again.last('reveal')).toMatchObject({ deadline, order: ['gale', 'turtle', 'blaze'], loadouts: { blaze: { disk: 'heavy', driver: null } }, ready: false });
+    advance(room, ARRANGE_MS - 15_000 + 200);
+    expect(again.last('battle').specs[0].id).toBe('gale');
+  });
+
+  test('第 2 步快結束時斷線、時間到照常開打：比賽立刻暫停並開始判負倒數（不會讓對手對著沒人操作的陀螺打）', () => {
+    picksBoth();
+    advance(room, ARRANGE_MS - 10_000);
+    room.disconnect(1);
+    advance(room, 10_200);
+    expect(host.last('battle').battle).toBe(1);
+    expect(host.last('paused').until).toBeGreaterThan(clock);
+    expect(room.debug.paused).toBe(true);
+    advance(room, RECONNECT_MS + 200);
+    expect(host.last('result')).toMatchObject({ winner: 'me', forfeit: true });
+  });
+
+  test('場地只能在第 1 步改：第 2 步改場地無效', () => {
+    picksBoth();
+    room.handle(0, { t: 'arena', arena: 'volcano' });
+    expect(host.last('lobby').arena).toBe('practice');
+  });
+
+  test('第 2 步客人離開：房主回到等人，雙方的選擇清掉；新客人加入後重新從第 1 步開始', () => {
+    picksBoth();
+    room.handle(1, { t: 'leave' });
+    expect(host.last('lobby')).toMatchObject({ phase: 'lobby', opponent: null });
+    const g2 = new FakeConn();
+    expect(room.addPlayer(g2, '新客人')).toBe(1);
+    expect(host.last('lobby')).toMatchObject({ phase: 'picking', me: { ready: false } });
+    // 房主還沒重新選三顆：準備完成不算
+    room.handle(0, { t: 'ready', order: [...hostTeam], loadouts: {} });
+    expect(g2.last('lobby').opponent).toMatchObject({ ready: false });
   });
 });
 

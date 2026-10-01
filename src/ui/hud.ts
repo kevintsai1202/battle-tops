@@ -1,6 +1,6 @@
 import { ARENA_IDS, ARENAS, type ArenaId } from '../sim/arena';
 import { DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
-import { equip, release, STOCK, type TeamLoadouts } from '../sim/parts';
+import { equip, STOCK, type TeamLoadouts } from '../sim/parts';
 import { spinRatio } from '../sim/physics';
 import { currentPairing, type Pairing, type TeamMatch } from '../sim/team';
 import { buildSpec, TOP_IDS, TYPE_LABEL } from '../sim/tops';
@@ -77,13 +77,41 @@ export interface TeamSelectOptions {
   onHover: (spec: TopSpec) => void;
   /** 要一張 3D 縮圖（dataURL）：有快取時立刻回呼，否則產生後回呼 */
   thumb: (spec: TopSpec, cb: (url: string) => void) => void;
-  /** 出陣：隊伍（順序即出場順序）與換上的備用零件 */
-  onConfirm: (team: TopId[], loadouts: TeamLoadouts) => void;
+  /** 預先選好的三顆（從第 2 步回上一步時帶入；順序即點選順序） */
+  picks?: TopId[];
+  /** 下一步：選好的三顆（點選順序是第 2 步的預設出場順序） */
+  onNext: (picks: TopId[]) => void;
   /**
    * 線上對戰：隱藏難度；CPU 陣容的位置改成顯示對手狀態；只有房主能選場地（客人只看得到房主的選擇）。
    * 之後的對手狀態與場地變化用 updateSelectOnline 更新。
    */
   online?: { host: boolean; opponent: string };
+}
+
+/** 組隊第 2 步（出場順序與零件）的參數 */
+export interface ArrangeOptions {
+  specs: Record<TopId, TopSpec>;
+  /** 一開始的出場順序與零件（第 1 步選的順序；線上重連時是伺服器記得的設定） */
+  order: TopId[];
+  loadouts: TeamLoadouts;
+  /** 對手：標題（CPU チーム／對手：名稱）、三顆（依名鑑順序，出場順序保密）與狀態文字 */
+  opponent: { label: string; team: TopId[]; note: string };
+  /** 場地名稱 */
+  arena: string;
+  /** 截止的本機時間（毫秒）；null 為不計時（CPU 模式） */
+  deadline: number | null;
+  /** 確定按鈕的文字（CPU：出陣！；線上：準備完成） */
+  readyLabel: string;
+  /** 回上一步（CPU 模式才有；帶回目前的順序與零件） */
+  onBack?: (order: TopId[], loadouts: TeamLoadouts) => void;
+  /** 順序或零件改變時（線上：同步給伺服器，時間到時用最後一份） */
+  onChange?: (order: TopId[], loadouts: TeamLoadouts) => void;
+  /** 確定（出陣／準備完成） */
+  onReady: (order: TopId[], loadouts: TeamLoadouts) => void;
+  /** 選到的陀螺（spec 已套用零件；換 3D 示範用） */
+  onHover: (spec: TopSpec) => void;
+  /** 要一張 3D 縮圖（dataURL） */
+  thumb: (spec: TopSpec, cb: (url: string) => void) => void;
 }
 
 /** 線上房間畫面的參數 */
@@ -145,6 +173,10 @@ export class Hud {
   private selectOnline: { setArena: (a: ArenaChoice) => void } | null = null;
   /** 線上房間畫面正在連線（按鈕停用中） */
   private onlineBusy = false;
+  /** 第 2 步：倒數的定時器、鍵盤操作、鎖定（準備完成或時間到）的函式（畫面開著時才有） */
+  private arrangeTimer = 0;
+  private arrangeKeys: ((e: KeyboardEvent) => void) | null = null;
+  private arrangeLock: ((status: string) => void) | null = null;
   /** 目前畫在房間列表上的內容（沒變就不重畫） */
   private roomsKey = '';
 
@@ -361,23 +393,9 @@ export class Hud {
       : null;
 
     const cards = $('.cards', root);
-    /** 隊伍換上的備用零件 */
-    let loadouts: TeamLoadouts = {};
-    /** 套用零件後的規格 */
-    const specOf = (t: TopId) => buildSpec(t, loadouts[t] ?? STOCK);
-    const detail = new DetailView($('.detail', root), (slot, part) => {
-      const t = TOP_IDS[idx];
-      if (!picks.includes(t)) return;
-      try {
-        loadouts = equip(loadouts, t, o.specs[t].stock, slot, part);
-      } catch {
-        // 零件已被隊友使用（選單已停用該選項，正常不會發生）：維持原狀
-      }
-      const sp = specOf(t);
-      detail.show(sp, true, loadouts);
-      o.onHover(sp);
-      refreshThumb(idx);
-    });
+    /** 第 1 步只看原廠規格的介紹與絕招示範；換零件在第 2 步 */
+    const specOf = (t: TopId) => o.specs[t];
+    const detail = new DetailView($('.detail', root), undefined, { parts: false });
     this.detail = detail;
     // CPU 陣容：依名鑑順序顯示，不洩漏出場順序；線上時改成對手狀態
     $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
@@ -386,7 +404,7 @@ export class Hud {
     const go = $<HTMLButtonElement>('.go', root);
     const slots = $('.slots', root);
     let idx = 0;
-    const picks: TopId[] = [];
+    const picks: TopId[] = [...(o.picks ?? [])];
     const els: HTMLButtonElement[] = [];
 
     const refresh = () => {
@@ -405,31 +423,20 @@ export class Hud {
       );
       go.disabled = picks.length !== 3;
     };
-    /** 更新某一格的 3D 縮圖（換零件後軸心的外形會變） */
-    const refreshThumb = (i: number) => {
-      const tile = els[i];
-      if (tile) o.thumb(specOf(TOP_IDS[i]), (url) => setTileThumb(tile, url));
-    };
     const setIdx = (i: number) => {
       idx = (i + TOP_IDS.length) % TOP_IDS.length;
       const t = TOP_IDS[idx];
       const sp = specOf(t);
       o.onHover(sp);
-      detail.show(sp, picks.includes(t), loadouts);
+      detail.show(sp, picks.includes(t), {});
       refresh();
       els[idx]?.scrollIntoView({ block: 'nearest' });
     };
     const toggle = (i: number) => {
       const t = TOP_IDS[i];
       const n = picks.indexOf(t);
-      if (n >= 0) {
-        picks.splice(n, 1);
-        // 離開隊伍：身上的備用零件歸還
-        if (loadouts[t]) {
-          loadouts = release(loadouts, t);
-          refreshThumb(i);
-        }
-      } else if (picks.length < 3) picks.push(t);
+      if (n >= 0) picks.splice(n, 1);
+      else if (picks.length < 3) picks.push(t);
       setIdx(i);
     };
     const confirm = () => {
@@ -440,7 +447,7 @@ export class Hud {
       this.detail = null;
       this.selectOnline = null;
       document.body.classList.remove('selecting');
-      o.onConfirm([...picks], { ...loadouts });
+      o.onNext([...picks]);
     };
     /** 目前一列有幾格（依實際排版計算，給上下鍵用） */
     const columns = () => {
@@ -488,11 +495,7 @@ export class Hud {
         if (picks.length === 3) confirm();
         else toggle(idx);
       } else if (k === 'Backspace' && picks.length) {
-        const t = picks.pop()!;
-        if (loadouts[t]) {
-          loadouts = release(loadouts, t);
-          refreshThumb(TOP_IDS.indexOf(t));
-        }
+        picks.pop();
         setIdx(idx);
       } else if ((k === '1' || k === '2' || k === '3') && !online) {
         setDiff(DIFFICULTY_IDS[Number(k) - 1]);
@@ -506,6 +509,190 @@ export class Hud {
     // 組隊中隱藏對戰操作說明（手機上會蓋住出陣按鈕）
     document.body.classList.add('selecting');
     setIdx(0);
+  }
+
+  /**
+   * 組隊第 2 步：三個出場欄位（▲▼ 或 Shift＋↑↓ 調換順序，點一顆就在右側換盤與軸）、對手公開的三顆、場地與倒數。
+   * 零件規則同第 1 步以前：備用零件每種一件、同隊不能重複（equip 用整隊的零件狀態檢查）。
+   * 線上：每次調整都呼叫 onChange（同步給伺服器）；倒數歸零或 lockArrange 後鎖定，不能再改。
+   */
+  showArrange(o: ArrangeOptions): void {
+    this.hideArrange();
+    const root = $('#arrange');
+    /** 目前的出場順序、零件、選到第幾個欄位、是否鎖定 */
+    const order = [...o.order];
+    let loadouts: TeamLoadouts = structuredClone(o.loadouts);
+    let sel = 0;
+    let locked = false;
+    const specOf = (t: TopId) => buildSpec(t, loadouts[t] ?? STOCK);
+
+    $('.ar-opp-label', root).textContent = o.opponent.label;
+    $('.ar-opp .chips', root).replaceChildren(...o.opponent.team.map((t) => chip(o.specs[t])));
+    $('.ar-opp-note', root).textContent = o.opponent.note;
+    $('.ar-arena', root).textContent = `場地：${o.arena}`;
+    $('.ar-status', root).textContent = '';
+    const back = $<HTMLButtonElement>('.ar-back', root);
+    back.hidden = !o.onBack;
+    back.disabled = false;
+    const ready = $<HTMLButtonElement>('.ar-ready', root);
+    ready.textContent = o.readyLabel;
+    ready.disabled = false;
+
+    const detail = new DetailView($('.ar-detail', root), (slot, part) => {
+      if (locked) return;
+      const t = order[sel];
+      try {
+        loadouts = equip(loadouts, t, o.specs[t].stock, slot, part);
+      } catch {
+        // 零件已被隊友使用（選單已停用該選項，正常不會發生）：維持原狀
+      }
+      changed();
+    });
+    this.detail = detail;
+
+    const slots = $('.ar-slots', root);
+    /** 重畫三個出場欄位與右側的詳細資料 */
+    const render = () => {
+      slots.replaceChildren(
+        ...order.map((t, i) => {
+          const sp = specOf(t);
+          const li = el('li', 'ar-slot');
+          li.dataset.id = t;
+          li.classList.toggle('on', i === sel);
+          const thumb = el('span', 'ar-thumb');
+          o.thumb(sp, (url) => (thumb.style.backgroundImage = `url(${url})`));
+          const name = el('span', 'ar-name', sp.nameZh);
+          name.append(el('small', '', `${TYPE_LABEL[sp.type]}${loadouts[t] ? '・換了零件' : ''}`));
+          const mv = el('span', 'ar-move');
+          const up = el('button', 'ar-up', '▲');
+          const down = el('button', 'ar-down', '▼');
+          up.type = 'button';
+          down.type = 'button';
+          up.setAttribute('aria-label', '往前一戰');
+          down.setAttribute('aria-label', '往後一戰');
+          up.disabled = locked || i === 0;
+          down.disabled = locked || i === order.length - 1;
+          up.onclick = (e) => {
+            e.stopPropagation();
+            move(i, -1);
+          };
+          down.onclick = (e) => {
+            e.stopPropagation();
+            move(i, 1);
+          };
+          mv.append(up, down);
+          li.append(el('span', 'ar-n', `第 ${i + 1} 戰`), thumb, name, mv);
+          li.onclick = () => select(i);
+          return li;
+        }),
+      );
+      const sp = specOf(order[sel]);
+      detail.show(sp, !locked, loadouts);
+      o.onHover(sp);
+    };
+    const select = (i: number) => {
+      sel = (i + order.length) % order.length;
+      render();
+    };
+    /** 把第 i 個欄位的陀螺往前（d = -1）或往後（d = 1）調換一戰 */
+    const move = (i: number, d: number) => {
+      const j = i + d;
+      if (locked || j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      sel = j;
+      changed();
+    };
+    const changed = () => {
+      render();
+      o.onChange?.([...order], structuredClone(loadouts));
+    };
+    /** 鎖定：準備完成或時間到之後不能再改 */
+    const lock = (status: string) => {
+      locked = true;
+      ready.disabled = true;
+      back.disabled = true;
+      $('.ar-status', root).textContent = status;
+      render();
+    };
+    this.arrangeLock = lock;
+    const confirm = () => {
+      if (!locked) o.onReady([...order], structuredClone(loadouts));
+    };
+    ready.onclick = () => {
+      ready.blur();
+      confirm();
+    };
+    back.onclick = () => {
+      back.blur();
+      if (locked || !o.onBack) return;
+      this.hideArrange();
+      o.onBack([...order], structuredClone(loadouts));
+    };
+
+    // 倒數（線上）：最後 10 秒變紅；歸零時鎖定，等伺服器用目前的設定開打
+    const timer = $('.ar-timer', root);
+    timer.hidden = o.deadline === null;
+    if (o.deadline !== null) {
+      const deadline = o.deadline;
+      const tick = () => {
+        const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        timer.textContent = left > 0 ? `剩 ${left} 秒` : '時間到';
+        timer.classList.toggle('warn', left <= 10);
+        if (left <= 0 && !locked) lock('時間到，用目前的順序與零件開戰…');
+      };
+      tick();
+      this.arrangeTimer = window.setInterval(tick, 250);
+    }
+
+    this.arrangeKeys = (e: KeyboardEvent) => {
+      // 零件選單有焦點時，方向鍵與 Enter 交給選單本身
+      if ((e.target as HTMLElement | null)?.tagName === 'SELECT') return;
+      const k = e.key.toLowerCase();
+      if (k === 'arrowup' || k === 'w') {
+        e.preventDefault();
+        if (e.shiftKey) move(sel, -1);
+        else select(sel - 1);
+      } else if (k === 'arrowdown' || k === 's') {
+        e.preventDefault();
+        if (e.shiftKey) move(sel, 1);
+        else select(sel + 1);
+      } else if (k === 'enter') {
+        e.preventDefault();
+        confirm();
+      } else if ((k === 'backspace' || k === 'escape') && o.onBack) {
+        e.preventDefault();
+        back.click();
+      }
+    };
+    window.addEventListener('keydown', this.arrangeKeys);
+    root.hidden = false;
+    document.body.classList.add('selecting');
+    render();
+  }
+
+  /** 第 2 步鎖定（線上按了準備完成、或從伺服器得知已準備完成）：顯示狀態文字 */
+  lockArrange(status: string): void {
+    this.arrangeLock?.(status);
+  }
+
+  /** 第 2 步的對手狀態文字（調整中／準備完成／連線中斷） */
+  updateArrangeOpponent(text: string): void {
+    $('#arrange .ar-opp-note').textContent = text;
+  }
+
+  /** 收起第 2 步：停止倒數、拿掉鍵盤操作 */
+  hideArrange(): void {
+    window.clearInterval(this.arrangeTimer);
+    this.arrangeTimer = 0;
+    if (this.arrangeKeys) window.removeEventListener('keydown', this.arrangeKeys);
+    this.arrangeKeys = null;
+    this.arrangeLock = null;
+    const root = $('#arrange');
+    if (!root.hidden) {
+      root.hidden = true;
+      this.detail = null;
+      document.body.classList.remove('selecting');
+    }
   }
 
   /**
