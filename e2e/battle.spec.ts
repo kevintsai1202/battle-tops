@@ -13,7 +13,7 @@ type Snapshot = {
   round: number;
   score: [number, number];
   director: { mode: string; timeScale: number; closeups: number; progress: number };
-  counters: { clashes: number; bigClashes: number; finishes: number; specials: number; rounds: number };
+  counters: { clashes: number; bigClashes: number; finishes: number; specials: number; rounds: number; dashes: number };
   sparks: number;
   sfx: number;
   audioLevel: number;
@@ -153,6 +153,20 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   expect(s.launch.ratio).toBeGreaterThanOrEqual(0.5);
   expect(s.launch.ratio).toBeLessThanOrEqual(0.85);
   expect(s.launch.label).not.toBe('');
+
+  // Shift＋方向鍵衝刺：按一次衝一次；按住 Shift 時系統送的自動重複 keydown（repeat）不會連續衝刺
+  const dashes0 = (await snap(page)).counters.dashes;
+  await page.keyboard.down('w');
+  await page.keyboard.press('Shift');
+  await expect.poll(async () => (await snap(page)).counters.dashes, { timeout: 5000 }).toBe(dashes0 + 1);
+  await page.evaluate(() => {
+    const g = (window as any).__game;
+    g.sim.lastDash[g.me] = -10; // 冷卻歸零：這時若照單全收 repeat 就會再衝一次
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true, repeat: true }));
+  });
+  await page.waitForTimeout(800);
+  expect((await snap(page)).counters.dashes).toBe(dashes0 + 1);
+  await page.keyboard.up('w');
 
   // 必殺技：把量表灌滿後按 Space，確認 cut-in 出現並觸發必殺事件
   await page.evaluate(() => ((window as any).__game.sim.tops[0].special = 1));

@@ -1,6 +1,6 @@
 # Battle Tops（戰鬥陀螺）
 
-瀏覽器上的 3D 戰鬥陀螺對戰遊戲，1P 對 CPU，正宗 3 對 3 賽制：雙方各挑三顆依序對戰，三戰總分高者獲勝。
+瀏覽器上的 3D 戰鬥陀螺對戰遊戲，可以 1P 對 CPU，也可以用房號找朋友線上對戰。正宗 3 對 3 賽制：雙方各挑三顆依序對戰，三戰總分高者獲勝。
 20 顆陀螺（4 顆原創＋16 顆致敬歷代名作），外觀參考原型的配色與輪廓，能力由六項基本屬性推導；組隊時可以換重心盤與軸心調整屬性。5 個場地（練習場、標準戰鬥盤、火山、冰川、積水），場地機關會實際改變陀螺走向；用拉發射台（滑鼠拖曳／手指滑動）發射。
 
 **線上遊玩：<https://kevintsai1202.github.io/battle-tops/>**（電腦與手機都能玩；建議戴耳機）
@@ -40,6 +40,16 @@ npm run build
 npm run preview      # http://localhost:4173
 ```
 
+線上對戰伺服器（本機測試用；正式的在 Zeabur，見「發佈」）：
+
+```powershell
+npm run server:build   # 打包成 dist-server/index.cjs
+npm run server:start   # http://localhost:8787/health，WebSocket 在 ws://localhost:8787/ws
+# 開 http://localhost:5173/?server=ws://localhost:8787/ws 或 http://localhost:4173/?server=ws://localhost:8787/ws 就會連本機伺服器
+```
+
+伺服器的環境變數：`PORT`（預設 8787）、`ALLOWED_ORIGINS`（允許連線的網頁來源，逗號分隔；預設是 GitHub Pages 與本機 5173、4173）。
+
 網址參數：
 
 | 參數 | 說明 |
@@ -48,6 +58,8 @@ npm run preview      # http://localhost:4173
 | `&seed=42` | 亂數種子，同一種子重現同一場 |
 | `&p=blaze,turtle&c=wolf` | 展示模式指定雙方隊伍的前幾顆（陀螺代號見下方名鑑，其餘隨機補滿 3 顆） |
 | `&arena=volcano` | 展示模式的場地：practice / stadium / volcano / glacier / flooded（預設 practice） |
+| `?room=ABCD` | 線上對戰的分享連結：點標題畫面直接進線上房間，房號已帶入 |
+| `?server=ws://localhost:8787/ws` | 線上對戰改連指定的伺服器（預設 `wss://battle-tops.zeabur.app/ws`；建置時也可以用環境變數 `VITE_GAME_SERVER` 指定） |
 
 建議戴耳機，才聽得出 3D 定位。
 
@@ -67,6 +79,25 @@ npm run preview      # http://localhost:4173
 2. **每一戰只打一回合**：停轉 Spin Finish 1 分、出場 Over Finish 2 分、爆裂 Burst Finish 2 分加給勝者；雙方同時倒下則該戰重打。
 3. **三戰打完比總分**，高者獲勝；總分平手進入**延長賽**：從自己的三顆再挑一顆，CPU 也從它的三顆挑一顆，打一回合決勝。
 4. 結果畫面會列出每一戰的對陣、終結方式與得分。
+
+### 線上對戰
+
+1. 標題畫面按「線上對戰（找朋友）」，輸入名稱後按「建立房間」，會拿到 4 碼房號與分享連結（「複製連結」）。
+2. 朋友開分享連結（或在同一個畫面輸入房號按「加入」）。
+3. 房主選場地，客人只能看；雙方各自組隊（零件規則和 CPU 模式相同），都按「出陣！」後同時公開三顆，出場順序保密。
+4. 倒數與拉條發射和 CPU 模式一樣，力道用「普通」的判定視窗計算；「ゴー」後 1.4 秒還沒發射的一方以最低力道自動發射。
+5. 撞擊特寫、必殺 cut-in 與終結的慢動作由伺服器決定，雙方同時看到。
+6. 自己永遠在 HUD 左邊、鏡頭在自己背後；每一戰交換開場位置（第 1、3 戰房主在 0 號位，第 2 戰與延長賽換邊），抵銷出場口的差異。
+7. 結果畫面按「再來一場」，雙方都按了就回到組隊；「離開」回到標題。
+
+連線：
+
+- 伺服器在東京（Zeabur），從台灣連線的往返延遲約 40 ms。
+- 推移、必殺、衝刺都先在自己的畫面上立刻反應（本機預測），再依伺服器每秒 20 次的快照校正。
+- 斷線時雙方畫面暫停並顯示倒數，30 秒內自動重新連上就繼續，逾時判對方獲勝。
+- 房間只有房主沒人加入時 10 分鐘後關閉，比賽結束後 5 分鐘關閉。
+
+設計與協定見 [docs/online-design.md](docs/online-design.md)。
 
 ### 陀螺名鑑
 
@@ -165,6 +196,7 @@ CPU 也會看場地：積水場守在水池外緣、火山守在溝槽，而不�
    - 鍵盤退路：在「ゴー」時按 Space 也能發射，但力道最高 85%，方向固定。
 2. 對戰中：
    - WASD 或方向鍵推移陀螺（方向相對於鏡頭）。推移會消耗轉速，不要一直按著；機動越低推得越慢。
+   - Shift＋方向鍵：朝那個方向衝刺一小段（和手機快甩相同：消耗一點轉速、冷卻 0.9 秒）。按一次衝一次，按住 Shift 不會連續衝。
    - 主動衝撞的一方受到的傷害較少。
    - 必殺量表會隨時間累積，撞擊時累積得更快（和旋轉方向無關），一般對戰中約 5～10 秒集滿，快慢依陀螺而定（名鑑的「集氣」）。滿了按 Space 發動必殺技，每一戰限用一次。
 3. M 鍵：音樂開關。
@@ -182,7 +214,7 @@ CPU 也會看場地：積水場守在水池外緣、火山守在溝槽，而不�
 ## 測試
 
 ```powershell
-npm test                   # 單元測試：物理、屬性推導、必殺技、場地機關、拉條判定、計分、鏡頭導演、CPU 對打耐久（Vitest）
+npm test                   # 單元測試：物理、屬性推導、必殺技、場地機關、拉條判定、計分、鏡頭導演、CPU 對打耐久；線上對戰的協定檢查、房間狀態機、快照還原、預測校正、伺服器整合（兩個機器人透過 WebSocket 打完整一場）（Vitest）
 npm run balance            # 平衡報表：20×20 組合各跑 10 場，印每顆勝率、終結方式分布、集氣時間與放出必殺的回合比例（練習場）
 npm run balance:parts      # 零件平衡報表：每顆換上每件備用零件後對全部原廠陀螺的勝率變化（約 3 分鐘）
 
@@ -206,8 +238,10 @@ e2e 會實際確認以下幾件事：
 - 組隊畫面：20 格 3D 縮圖、絕招示範會放出必殺、沒進隊伍的陀螺不能換零件、換盤與軸後雷達圖與數值立刻更新、備用零件被隊友用掉時不能選、離隊後歸還、換上的零件帶進對戰。
 - 手機（Pixel 7 模擬、觸控）：點選組隊、手指滑動拉發射台、三指觸控發動必殺、單指拖曳推移、快甩衝刺、組隊畫面與版面不超出畫面、直向視角加寬。
 - 需要手勢才能出聲的瀏覽器開展示模式不會卡住。
+- Shift＋方向鍵衝刺一次；按住 Shift 的自動重複不會連續衝刺。
+- 線上對戰（兩個瀏覽器對本機伺服器，Playwright 會一起啟動伺服器）：建房、開分享連結加入、客人不能改場地、雙方座位相反、推移與衝刺經伺服器傳到對方、必殺雙方都看到、斷線自動重連、第 2 戰交換座位、打到結果雙方勝負相反、再來一場、離開。
 
-headless 用軟體 WebGL，約 10～15 fps，全套 22 個測試約 15～35 分鐘（看機器負載；閒置省電或螢幕保護程式啟動時會慢很多），一次只跑一個 worker。GitHub Actions 只跑單元測試與建置（CI 沒有 GPU），e2e 在本機跑。要對線上網址跑 e2e：
+headless 用軟體 WebGL，約 10～15 fps，全套 23 個測試約 20～45 分鐘（看機器負載；閒置省電或螢幕保護程式啟動時會慢很多），一次只跑一個 worker。GitHub Actions 只跑單元測試與建置（CI 沒有 GPU），e2e 在本機跑。要對線上網址跑 e2e：
 
 ```powershell
 $env:BASE_URL = 'https://kevintsai1202.github.io/battle-tops/'
@@ -215,9 +249,26 @@ npx playwright test -g 展示模式
 Remove-Item Env:BASE_URL
 ```
 
+線上對戰的 e2e 開兩個瀏覽器，各自軟體算圖時只剩約 5 fps（裝置像素比設 0.5 才有這個速度），一場約 10 分鐘。要改對線上的伺服器跑：
+
+```powershell
+$env:GAME_SERVER = 'wss://battle-tops.zeabur.app/ws'
+npx playwright test online.spec
+Remove-Item Env:GAME_SERVER
+```
+
 ## 發佈
 
-推到 `main` 會由 [.github/workflows/pages.yml](.github/workflows/pages.yml) 自動跑單元測試、建置並發佈到 GitHub Pages。Vite 的 `base` 設成相對路徑（`./`），同一份 `dist/` 放在子路徑或任何靜態主機都能用，不需要後端。
+推到 `main` 會由 [.github/workflows/pages.yml](.github/workflows/pages.yml) 自動跑單元測試、建置並發佈到 GitHub Pages。Vite 的 `base` 設成相對路徑（`./`），同一份 `dist/` 放在子路徑或任何靜態主機都能用；CPU 對戰不需要後端。
+
+線上對戰的伺服器（`server/`）另外部署在 Zeabur（東京的騰訊主機），不會隨 GitHub Pages 自動更新，改了伺服器或共用的 `src/sim/`、`src/net/protocol.ts` 要手動部署：
+
+```powershell
+.\scripts\deploy-server.ps1              # 打包、上傳、等部署完成、驗證 https://battle-tops.zeabur.app/health
+.\scripts\deploy-server.ps1 -VerifyOnly  # 只驗證線上伺服器
+```
+
+專案與服務 ID 記在 [server/CLAUDE.md](server/CLAUDE.md) 與 `server/zeabur-service.json`；服務要保留環境變數 `ZBPACK_DOCKERFILE_PATH=Dockerfile`。前端與伺服器共用同一份模擬程式，兩邊的協定要一致：改了協定就先部署伺服器、再推前端。
 
 ## 語音台詞
 
@@ -252,8 +303,10 @@ npm run voice:check -- --only go_shoot          # 用 Whisper 聽寫抽查發音
 | `src/render/` | Three.js 場景、陀螺模型與終結動畫、特效、後製 shader、鏡頭擺位。 |
 | `src/audio/` | Web Audio 合成引擎、BGM、語音播放（頭尾靜音裁切、優先權、ducking）。 |
 | `src/ui/` | DOM 覆蓋層：HUD、組隊名鑑與雷達圖、場地選擇、發射台（拉條）、擬聲字、cut-in、結果畫面。 |
-| `src/game/` | 狀態機與每幀迴圈，把模擬事件分派給特效、鏡頭、音效、語音。 |
-| `scripts/` | 語音生成與抽查腳本、平衡報表。 |
+| `src/game/` | 狀態機與每幀迴圈，把模擬事件分派給特效、鏡頭、音效、語音；`online.ts` 是線上對戰的連線狀態與操作送出。 |
+| `src/net/` | 線上對戰：訊息協定與檢查（前端與伺服器共用）、連線與自動重連、時鐘同步、本機預測與校正。 |
+| `server/` | 線上對戰伺服器（Node.js＋ws）：房間狀態機、權威模擬、HTTP `/health`；打包設定與整合測試。 |
+| `scripts/` | 語音生成與抽查腳本、平衡報表、伺服器部署腳本；`scripts/net-eval/` 是連線方案評估（跨瀏覽器確定性、線上延遲、雙瀏覽器效能診斷）。 |
 | `tests/`、`e2e/` | 單元測試、Playwright 端對端測試。 |
 
 ## 已知限制
@@ -264,3 +317,9 @@ npm run voice:check -- --only go_shoot          # 用 Whisper 聽寫抽查發音
 - headless 瀏覽器送觸控事件很慢（機器忙時一個事件將近 1 秒），做不出真正的快甩，e2e 改在頁面內送 pointer 事件驗證快甩；快甩的時間判定由單元測試把關。
 - 平衡報表的座位有偏差：練習場 A 座（玩家的位置）在雙方發射力道相同時勝率約 44%，推測和出場口不對稱有關（難度是依實際座位校準的）。
 - 生成語音每次的語氣可能不同，不滿意可以用 `--only <id> --force` 重生單句。
+- 線上對戰：
+  - 發射時機由客戶端回報，伺服器只檢查數值範圍；朋友對戰可以接受，但擋不住改程式的作弊。
+  - 只有房號找朋友：沒有配對、觀戰、排行榜；組隊與零件不存在伺服器。
+  - 斷線重連只在同一個分頁有效：重新整理頁面會失去重連資料，30 秒後判負。
+  - 伺服器只有東京一台；往返延遲超過 250 ms 時，自己的陀螺會比實際位置晚一點顯示。
+  - 真人雙機對戰只在本機兩個 headless 瀏覽器與線上伺服器驗證過，手機（特別是 iOS Safari）還沒實測；線上房間畫面與結果畫面的「再來一場／離開」也還沒有手機版面的 e2e。

@@ -1,8 +1,10 @@
-import { ARENA, inCircle, ventPhase, type ArenaSpec } from './arena';
+import { ARENA, ARENAS, inCircle, ventPhase, type ArenaId, type ArenaSpec } from './arena';
 import { applyAura, createTop, eruptPush, integrateTop, mobility, resolveCollision, resolvePillars, resolveRim, SPIN_FINISH_RATIO } from './physics';
-import { createRng, range, type Rng } from './rng';
+import type { StockParts } from './parts';
+import { createRng, range, type SeededRng } from './rng';
 import { runSpecial } from './specials';
-import type { FinishType, RoundResult, SimEvent, TopSpec, TopState, V2 } from './types';
+import { buildSpec } from './tops';
+import type { FinishType, RoundResult, SimEvent, TopId, TopSpec, TopState, V2 } from './types';
 
 /** 建立一回合對戰的參數 */
 export interface BattleOptions {
@@ -14,6 +16,28 @@ export interface BattleOptions {
   arena?: ArenaSpec;
   /** 兩顆陀螺的發射角度偏移（弧度，正值 = 從上方看逆時針轉），由拉發射台的方向決定；省略為 0 */
   aim?: [number, number];
+}
+
+/** 一顆陀螺在快照裡的狀態：規格不放進來，只記代號與零件，還原時重建 */
+export interface TopSnapshot extends Omit<TopState, 'spec'> {
+  specId: TopId;
+  parts: StockParts;
+}
+
+/**
+ * 模擬的完整狀態（可以 JSON 化）：還原後繼續推進的結果與原本相同。
+ * 線上對戰時伺服器定期送出，客戶端用來校正自己的預測。事件佇列不在快照裡（每一步都會取出）。
+ */
+export interface SimSnapshot {
+  arena: ArenaId;
+  time: number;
+  result: RoundResult | null;
+  /** 亂數產生器的內部狀態 */
+  rng: number;
+  ventCycle: number[];
+  lastSplash: number[];
+  lastDash: number[];
+  tops: [TopSnapshot, TopSnapshot];
 }
 
 /** 濺水事件的最短間隔（秒），避免每一步都發 */
@@ -42,7 +66,7 @@ export class BattleSim {
   time = 0;
   /** 回合結果；第一次出現終結時寫入，之後不再改變 */
   result: RoundResult | null = null;
-  private readonly rng: Rng;
+  private readonly rng: SeededRng;
   private events: SimEvent[] = [];
   /** 各熔岩噴口上一次噴發所在的週期編號（每個週期只轟一次） */
   private readonly ventCycle: number[];
@@ -62,6 +86,52 @@ export class BattleSim {
       createTop(0, specA, { x: -2.1 + j(), z: j() }, rotate({ x: 2.0 + j(), z: 0.7 + j() }, aim[0]), opts.launch[0]),
       createTop(1, specB, { x: 2.1 + j(), z: j() }, rotate({ x: -2.0 + j(), z: -0.7 + j() }, aim[1]), opts.launch[1]),
     ];
+  }
+
+  /** 目前狀態的快照（獨立的深複本，之後修改兩邊互不影響） */
+  snapshot(): SimSnapshot {
+    return {
+      arena: this.arena.id,
+      time: this.time,
+      result: this.result ? { ...this.result } : null,
+      rng: this.rng.state(),
+      ventCycle: [...this.ventCycle],
+      lastSplash: [...this.lastSplash],
+      lastDash: [...this.lastDash],
+      tops: this.tops.map((t) => {
+        const { spec, ...rest } = t;
+        return { ...structuredClone(rest), specId: spec.id, parts: { ...spec.parts } };
+      }) as [TopSnapshot, TopSnapshot],
+    };
+  }
+
+  /**
+   * 把狀態覆寫成快照的內容（同一個場地）。陀螺物件沿用原本的參照（畫面層持有的參照不失效），
+   * 規格依代號與零件重建（沒變時沿用）。未取出的事件一併清空。
+   */
+  restore(s: SimSnapshot): void {
+    if (s.arena !== this.arena.id) throw new Error(`快照的場地 ${s.arena} 與這場模擬 ${this.arena.id} 不同`);
+    this.time = s.time;
+    this.result = s.result ? { ...s.result } : null;
+    this.rng.setState(s.rng);
+    this.ventCycle.splice(0, this.ventCycle.length, ...s.ventCycle);
+    this.lastSplash.splice(0, 2, ...s.lastSplash);
+    this.lastDash.splice(0, 2, ...s.lastDash);
+    s.tops.forEach((snap, i) => {
+      const { specId, parts, ...rest } = snap;
+      const t = this.tops[i];
+      const same = t.spec.id === specId && t.spec.parts.disk === parts.disk && t.spec.parts.driver === parts.driver;
+      Object.assign(t, structuredClone(rest), { spec: same ? t.spec : buildSpec(specId, parts) });
+    });
+    this.events = [];
+  }
+
+  /** 從快照建立一場模擬（線上對戰的客戶端與測試用） */
+  static fromSnapshot(s: SimSnapshot): BattleSim {
+    const [a, b] = s.tops.map((t) => buildSpec(t.specId, t.parts));
+    const sim = new BattleSim(a, b, { seed: 0, launch: [1, 1], arena: ARENAS[s.arena] });
+    sim.restore(s);
+    return sim;
   }
 
   /** 設定推移方向（長度超過 1 會被截斷） */

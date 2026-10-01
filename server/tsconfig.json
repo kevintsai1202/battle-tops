@@ -1,0 +1,18 @@
+{
+  // 伺服器的型別檢查：Node 環境（沒有 DOM），涵蓋伺服器程式與它共用的模擬、鏡頭導演、網路協定
+  // （src/net 其餘檔案是瀏覽器端程式，用到 window，不納入）
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["src", "tests", "../src/sim", "../src/director", "../src/net/protocol.ts"]
+}

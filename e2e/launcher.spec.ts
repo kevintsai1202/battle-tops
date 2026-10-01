@@ -44,6 +44,8 @@ test('滑鼠往左下快速拖到底：拉條滿分、往右瞄準，拉條中�
   });
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 15_000 });
   const d = await dbg(page);
+  // 量到的拉條數值印出來：拉速受 headless 滑鼠事件間隔影響，失敗時可以對照歷次數值
+  console.log(`拉條量測：${JSON.stringify(d.launch.pull)}`);
   expect(d.launch.pull!.length).toBeGreaterThan(0.9);
   // headless 軟體渲染很慢，滑鼠事件間隔大，量到的拉速偏低；拉速換算本身由單元測試把關
   expect(d.launch.pull!.speed).toBeGreaterThan(0.1);

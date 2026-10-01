@@ -5,21 +5,27 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run --project unit",
     "e2e": "playwright test",
     "voice": "node --env-file-if-exists=.env scripts/gen-voice.mjs",
     "balance": "vitest run --project balance balance-report --reporter=verbose",
     "balance:parts": "vitest run --project balance parts-report --reporter=verbose",
-    "voice:check": "node --env-file-if-exists=.env scripts/check-voice.mjs"
+    "voice:check": "node --env-file-if-exists=.env scripts/check-voice.mjs",
+    "server:build": "vite build --config server/vite.config.ts",
+    "server:start": "node dist-server/index.cjs",
+    "typecheck:server": "tsc --noEmit -p server/tsconfig.json"
   },
   "dependencies": {
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@types/node": "^24.19.0",
     "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.2",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"

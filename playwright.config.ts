@@ -16,10 +16,24 @@ export default defineConfig({
       args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--autoplay-policy=no-user-gesture-required'],
     },
   },
-  webServer: process.env.BASE_URL ? undefined : {
-    command: 'npm run preview',
-    url: 'http://localhost:4173',
-    reuseExistingServer: true,
-    timeout: 60_000,
-  },
+  // 本機：遊戲預覽（4173）＋線上對戰伺服器（8787，online.spec.ts 用 ?server=ws://localhost:8787/ws 連）
+  webServer: process.env.BASE_URL
+    ? undefined
+    : [
+        {
+          command: 'npm run preview',
+          url: 'http://localhost:4173',
+          reuseExistingServer: true,
+          timeout: 60_000,
+        },
+        {
+          command: 'npm run server:build && node dist-server/index.cjs',
+          url: 'http://localhost:8787/health',
+          reuseExistingServer: true,
+          timeout: 60_000,
+          // 伺服器紀錄（建房、加入、重連、錯誤）印在測試輸出，線上對戰失敗時看得到伺服器端發生什麼
+          stdout: 'pipe',
+          env: { PORT: '8787' },
+        },
+      ],
 });

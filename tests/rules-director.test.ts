@@ -77,3 +77,64 @@ describe('鏡頭導演', () => {
     expect(d.shake).toBeLessThan(s0);
   });
 });
+
+describe('鏡頭導演：必殺凍結與線上強制切換', () => {
+  const clash = (intensity: number) => ({ pos: { x: 0.5, z: 0 }, normal: { x: 1, z: 0 }, intensity });
+  /** 以牆鐘時間推進導演 seconds 秒 */
+  function run(d: CameraDirector, seconds: number) {
+    const dt = 1 / 60;
+    for (let t = 0; t < seconds; t += dt) d.update(dt);
+  }
+
+  test('必殺 cut-in：1.1 秒內時間流速乘上 0.12，之後恢復（CPU 模式與伺服器共用）', () => {
+    const d = new CameraDirector();
+    d.notifySpecial();
+    d.update(1 / 60);
+    expect(d.specialFreeze).toBeGreaterThan(0);
+    expect(d.timeScale).toBeCloseTo(0.12, 6);
+    run(d, 1.2);
+    expect(d.specialFreeze).toBe(0);
+    expect(d.timeScale).toBe(1);
+  });
+
+  test('必殺凍結與撞擊特寫同時發生時流速相乘', () => {
+    const d = new CameraDirector();
+    d.notifyClash(clash(9));
+    run(d, 0.2);
+    const closeup = d.timeScale;
+    d.notifySpecial();
+    d.update(1 / 60);
+    expect(d.timeScale).toBeLessThan(closeup);
+    expect(d.timeScale).toBeCloseTo(0.07 * 0.12, 3);
+  });
+
+  test('forceCloseup：不看門檻與冷卻，直接進特寫（線上客戶端照伺服器的事件切換）', () => {
+    const d = new CameraDirector();
+    d.notifyClash(clash(9));
+    run(d, 1.5);
+    expect(d.mode).toBe('overview');
+    // 冷卻中、強度也低，一般的 notifyClash 不會觸發
+    expect(d.notifyClash(clash(1))).toBe(false);
+    d.forceCloseup(clash(1));
+    expect(d.mode).toBe('closeup');
+    expect(d.focus).toEqual({ x: 0.5, z: 0 });
+    d.update(1 / 60);
+    expect(d.timeScale).toBeLessThan(1);
+  });
+
+  test('forceFinish 等同 notifyFinish（線上客戶端用）', () => {
+    const d = new CameraDirector();
+    d.forceFinish({ x: 1, z: 2 });
+    expect(d.mode).toBe('finish');
+    expect(d.focus).toEqual({ x: 1, z: 2 });
+  });
+
+  test('reset 會清掉必殺凍結', () => {
+    const d = new CameraDirector();
+    d.notifySpecial();
+    d.reset();
+    d.update(1 / 60);
+    expect(d.specialFreeze).toBe(0);
+    expect(d.timeScale).toBe(1);
+  });
+});

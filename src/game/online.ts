@@ -1,0 +1,214 @@
+import { gameServerUrl, NetClient } from '../net/client';
+import { Predictor } from '../net/predict';
+import type { ArenaChoice, ClientMessage, ResultRow, ServerMessage } from '../net/protocol';
+import type { PullMetrics } from '../sim/launcher';
+import type { TeamLoadouts } from '../sim/parts';
+import type { TopId, V2 } from '../sim/types';
+
+/** 伺服器訊息的某一種 */
+export type Msg<T extends ServerMessage['t']> = Extract<ServerMessage, { t: T }>;
+
+/** 推移最多每秒送幾次、沒變化時的心跳間隔（毫秒） */
+const INPUT_MIN_GAP = 1000 / 30;
+const INPUT_HEARTBEAT = 1000;
+/** 推移變化小於這個量就不送 */
+const INPUT_EPS = 0.02;
+/**
+ * 預測最多往前推多少時間（毫秒）。主執行緒卡住時量到的往返時間會暴增（實測 headless 軟體算圖 7 秒），
+ * 照單全收每次校正要重算上百步、又讓主執行緒更慢；超過這個值的延遲就讓自己的陀螺顯示得晚一點。
+ */
+export const MAX_AHEAD_MS = 250;
+/** 模擬每秒步數 */
+const STEPS_PER_SEC = 120;
+/** 瀏覽器記住玩家名稱用的 localStorage 鍵 */
+const NAME_KEY = 'battle-tops.name';
+
+/** 讀取上次用的名稱 */
+export function loadName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** 記住名稱 */
+export function saveName(name: string): void {
+  try {
+    localStorage.setItem(NAME_KEY, name);
+  } catch {
+    // 儲存空間被封鎖：這次仍然生效，只是不會記住
+  }
+}
+
+/**
+ * 線上對戰的客戶端狀態（設計見 docs/online-design.md）：連線、房間、雙方隊伍、目前這一戰、預測器，
+ * 以及送出操作（推移節流、必殺與衝刺帶序號並先在本機預測）。畫面的反應由 Game 依伺服器訊息處理。
+ */
+export class OnlineSession {
+  readonly net: NetClient;
+  /** 自己的名稱 */
+  name: string;
+  /** 房號（進房後才有）與自己是不是房主 */
+  code: string | null = null;
+  host = false;
+  /** 最新的房間狀態、公開的隊伍、目前這一戰 */
+  lobby: Msg<'lobby'> | null = null;
+  teams: Msg<'teams'> | null = null;
+  battle: Msg<'battle'> | null = null;
+  /** 戰績與總分（自己的觀點） */
+  results: ResultRow[] = [];
+  score: [number, number] = [0, 0];
+  /** 自己這一戰的座位與預測器（開打後才有） */
+  seat: 0 | 1 = 0;
+  predictor: Predictor | null = null;
+  /** 對手斷線時的判負時間（本機毫秒；沒有暫停為 null） */
+  pausedUntil: number | null = null;
+  /** 還沒套用的最新快照（每幀最多校正一次，中間的快照直接略過：快照是完整狀態） */
+  private latestSnap: Msg<'snap'> | null = null;
+  private seq = 0;
+  private lastInput: V2 = { x: 0, z: 0 };
+  private lastInputAt = 0;
+
+  constructor(name: string, url = gameServerUrl()) {
+    this.name = name;
+    this.net = new NetClient(url);
+  }
+
+  /** 對手的名稱（還沒有對手時為「對手」） */
+  get opponentName(): string {
+    return this.lobby?.opponent?.name ?? '對手';
+  }
+
+  send(m: ClientMessage): void {
+    this.net.send(m);
+  }
+
+  create(): void {
+    this.send({ t: 'create', name: this.name });
+  }
+
+  join(code: string): void {
+    this.send({ t: 'join', code: code.toUpperCase(), name: this.name });
+  }
+
+  leave(): void {
+    this.send({ t: 'leave' });
+  }
+
+  setArena(arena: ArenaChoice): void {
+    this.send({ t: 'arena', arena });
+  }
+
+  sendTeam(picks: TopId[], loadouts: TeamLoadouts): void {
+    this.send({ t: 'team', picks, loadouts });
+  }
+
+  /** 發射：時機誤差（秒）、世界座標的瞄準角度、拉條量測（Space 時為 null） */
+  sendLaunch(error: number, aim: number, pull: PullMetrics | null): void {
+    this.send({ t: 'launch', error, aim, pull });
+  }
+
+  sendOvertime(top: TopId): void {
+    this.send({ t: 'overtime', top });
+  }
+
+  rematch(): void {
+    this.send({ t: 'rematch' });
+  }
+
+  /** 進房：記下房號與 token（斷線自動回房） */
+  onRoom(m: Msg<'room'>): void {
+    this.code = m.code;
+    this.host = m.host;
+    this.net.setResume(m.code, m.token);
+  }
+
+  /** 新的一戰：記下座位與賽況，預測器等開打後再建 */
+  onBattle(m: Msg<'battle'>): void {
+    this.battle = m;
+    this.seat = m.seat;
+    this.score = m.score;
+    this.results = m.results;
+    this.predictor = null;
+    this.latestSnap = null;
+  }
+
+  /** 開打：用伺服器的初始狀態建立預測器 */
+  onLaunched(m: Msg<'launched'>): void {
+    this.predictor = new Predictor(m.snap, this.seat);
+    this.latestSnap = null;
+  }
+
+  /** 快照：還沒有預測器就用它建立；否則記下來，等下一幀 flushSnap 再校正 */
+  onSnap(m: Msg<'snap'>): void {
+    if (!this.predictor) {
+      this.predictor = new Predictor(m.snap, this.seat);
+      return;
+    }
+    this.latestSnap = m;
+  }
+
+  /**
+   * 每幀呼叫一次：用最新的快照校正預測，往前推約一個往返時間（上限 MAX_AHEAD_MS；慢動作時依時間流速縮短）。
+   * 主執行緒卡住時累積的多個快照只校正一次。
+   */
+  flushSnap(): void {
+    const m = this.latestSnap;
+    if (!m || !this.predictor) return;
+    this.latestSnap = null;
+    const aheadMs = Math.min(this.net.clock.rtt, MAX_AHEAD_MS);
+    this.predictor.reconcile(m.snap, m.ack, Math.round((aheadMs / 1000) * STEPS_PER_SEC * m.ts));
+  }
+
+  /** 每幀：推移有明顯變化且距上次夠久才送，沒變化時每秒送一次心跳 */
+  input(control: V2, nowMs: number): void {
+    this.predictor?.setControl(control);
+    const changed = Math.hypot(control.x - this.lastInput.x, control.z - this.lastInput.z) > INPUT_EPS;
+    const gap = nowMs - this.lastInputAt;
+    if ((changed && gap >= INPUT_MIN_GAP) || gap >= INPUT_HEARTBEAT) {
+      this.send({ t: 'input', seq: ++this.seq, x: control.x, z: control.z });
+      this.lastInput = { ...control };
+      this.lastInputAt = nowMs;
+    }
+  }
+
+  /** 必殺：本機預測立即發動並送出 */
+  special(): void {
+    const t = this.predictor?.sim.tops[this.seat];
+    if (!t || !t.alive || t.specialUsed || t.special < 1) return;
+    const seq = ++this.seq;
+    this.predictor!.special(seq);
+    this.send({ t: 'special', seq });
+  }
+
+  /** 衝刺：本機預測立即套用並送出 */
+  dash(dir: V2): void {
+    if (!this.predictor) return;
+    const seq = ++this.seq;
+    this.predictor.dash(seq, dir);
+    this.send({ t: 'dash', seq, x: dir.x, z: dir.z });
+  }
+
+  /** 伺服器時間 → 本機時間（毫秒） */
+  toLocal(serverMs: number): number {
+    return this.net.clock.toLocal(serverMs);
+  }
+
+  /** 分享給朋友的連結（保留 server 參數，本機測試用） */
+  shareLink(): string {
+    const u = new URL(location.href);
+    const server = u.searchParams.get('server');
+    u.search = '';
+    u.hash = '';
+    u.searchParams.set('room', this.code ?? '');
+    if (server) u.searchParams.set('server', server);
+    return u.toString();
+  }
+
+  /** 離開線上對戰：通知伺服器並關閉連線 */
+  close(): void {
+    this.leave();
+    this.net.close();
+  }
+}

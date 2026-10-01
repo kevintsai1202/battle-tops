@@ -36,6 +36,8 @@ export class CameraRig {
   private side = 1;
   /** 目前場地（鏡頭焦點貼地用） */
   arena: ArenaSpec = ARENA;
+  /** 自己的座位：發射鏡頭從自己陀螺的背後拍（1 號座位在右側，鏡頭繞場地中心轉 180°） */
+  seat: 0 | 1 = 0;
 
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
@@ -75,6 +77,7 @@ export class CameraRig {
       // 發射前：從玩家身後低角度慢慢推近
       const p = ease(this.shotTime / 3);
       targetPos.set(-6.5 + p * 1.8, 2.8 - p * 0.9, -2.2 + p * 0.8);
+      if (this.seat === 1) targetPos.set(-targetPos.x, targetPos.y, -targetPos.z);
       targetLook.set(0, 0.2, 0);
       targetFov = 48;
       this.orbit = Math.atan2(targetPos.z, targetPos.x);

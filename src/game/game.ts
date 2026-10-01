@@ -17,14 +17,18 @@ import { DIFFICULTIES, type Difficulty, type DifficultyId } from '../sim/difficu
 import { keyLaunchRatio, measurePull, pullLaunchRatio, pullQuality, trimPullSamples, type PullMetrics, type PullSample } from '../sim/launcher';
 import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
 import { STOCK, type TeamLoadouts } from '../sim/parts';
-import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type TeamMatch } from '../sim/team';
+import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type Pairing, type TeamMatch } from '../sim/team';
 import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
 import { css, Hud, type ArenaChoice, type CordView } from '../ui/hud';
 import { SwipeControls, type StickVector } from '../ui/touch';
+import type { NetStatus } from '../net/client';
+import { perspectiveMatch } from '../net/perspective';
+import type { ServerMessage } from '../net/protocol';
+import { loadName, OnlineSession, saveName, type Msg } from './online';
 
-/** 遊戲階段 */
-export type GameState = 'title' | 'select' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result';
+/** 遊戲階段（online：線上房間畫面；waiting：線上等待對手組隊或挑延長賽） */
+export type GameState = 'title' | 'select' | 'overtime' | 'launch' | 'battle' | 'roundEnd' | 'result' | 'online' | 'waiting';
 
 /** 模擬固定步長 */
 const STEP = 1 / 120;
@@ -72,9 +76,15 @@ function specialVoice(spec: TopSpec): VoiceId {
   return (LEGACY_SPECIAL_VOICE[spec.id] ?? `p_special_${spec.id}`) as VoiceId;
 }
 
-/** 玩家陀螺的發射位置與基準初速方向（BattleSim 的開場配置，瞄準箭頭用） */
-const PLAYER_START = { x: -2.1, z: 0 };
-const PLAYER_LAUNCH_DIR = { x: 2.0, z: 0.7 };
+/** 各座位的發射位置與基準初速方向（BattleSim 的開場配置，瞄準箭頭用；0 號在左、1 號在右） */
+const SEAT_START: V2[] = [
+  { x: -2.1, z: 0 },
+  { x: 2.1, z: 0 },
+];
+const SEAT_LAUNCH_DIR: V2[] = [
+  { x: 2.0, z: 0.7 },
+  { x: -2.0, z: -0.7 },
+];
 
 /** 讀取上次選的場地（讀不到時用練習場） */
 function loadArena(): ArenaChoice {
@@ -161,8 +171,6 @@ export class Game {
   private launchBeat = 0;
   private launchPress: number | null = null;
   private launched = false;
-  /** 必殺 cut-in 期間的額外慢動作（牆鐘秒） */
-  private specialFreeze = 0;
   /** cut-in 橫幅剩餘顯示秒數（牆鐘） */
   private cutinLeft = 0;
   private lastDirectorMode = 'overview';
@@ -181,6 +189,14 @@ export class Game {
   private readonly touch: SwipeControls;
   /** 已渲染的影格數 */
   frames = 0;
+  /** 自己在模擬裡的座位（CPU 模式固定 0；線上對戰每一戰輪替） */
+  private me: 0 | 1 = 0;
+  /** 對手在畫面上的稱呼（CPU 模式為 CPU，線上為對手名稱） */
+  private oppLabel = 'CPU';
+  /** 線上對戰（CPU 模式為 null） */
+  private online: OnlineSession | null = null;
+  /** 這則快照裡伺服器判定為重擊（觸發特寫）的撞擊位置 */
+  private bigClashPos: V2[] = [];
 
   constructor(container: HTMLElement, opts: GameOptions) {
     this.opts = opts;
@@ -221,10 +237,7 @@ export class Game {
       void this.boot().then(() => this.startDemoMatch());
     } else {
       // 不等語音下載完：選角畫面立刻出現，語音在背景載入（選角通常比下載久）
-      this.hud.showTitle(() => {
-        void this.boot();
-        this.enterSelect();
-      });
+      this.toTitle();
     }
     this.gfx.renderer.setAnimationLoop(() => this.frame());
   }
@@ -235,6 +248,8 @@ export class Game {
    * 所以不 await；若仍是暫停狀態就顯示「點擊開啟聲音」，等下一次點擊或按鍵再恢復。
    */
   private boot(): Promise<void> {
+    // 回到標題再開始時不重複建立音訊
+    if (this.audio) return Promise.resolve();
     this.audio = new AudioEngine();
     const audio = this.audio;
     void audio.resume().catch(() => undefined);
@@ -293,6 +308,9 @@ export class Game {
 
   /** 組隊畫面：CPU 先組好（公開三顆、順序保密），玩家從全部陀螺挑三顆，並選難度與場地 */
   private enterSelect(): void {
+    this.me = 0;
+    this.rig.seat = 0;
+    this.oppLabel = 'CPU';
     this.setState('select');
     this.hud.hideHud();
     this.hud.clearBanner();
@@ -412,17 +430,25 @@ export class Game {
     this.lastBattle = pair.battle;
     this.playerSpec = this.playerSpecOf(pair.player);
     this.cpuSpec = TOP_SPECS[pair.cpu];
+    this.beginRound(pair, replay);
+  }
+
+  /**
+   * 一戰的開場（CPU 模式與線上共用）：換上雙方陀螺、HUD、大字與主播介紹，進入倒數發射。
+   * current：線上時由伺服器告知目前的對陣（對手的出場順序保密，無法從隊伍推算）。
+   */
+  private beginRound(pair: Pairing, replay: boolean, current?: Pairing): void {
+    const m = this.match!;
     this.clearArena();
     this.round++;
     this.director.reset();
     this.launchBeat = 0;
     this.launchPress = null;
     this.launched = false;
-    this.specialFreeze = 0;
     this.roundFlags = { hurt: false, taunt: false };
     this.audio?.setMusic(this.musicOn, true);
-    this.hud.showHud(this.playerSpec, this.cpuSpec);
-    this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh);
+    this.hud.showHud(this.playerSpec, this.cpuSpec, this.oppLabel);
+    this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh, current);
     this.hud.updateHud(
       [createTop(0, this.playerSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1), createTop(1, this.cpuSpec, { x: 0, z: 0 }, { x: 0, z: 0 }, 1)],
       m.score,
@@ -542,7 +568,8 @@ export class Game {
     const f = cam.getWorldDirection(new THREE.Vector3());
     const right = new THREE.Vector3(-f.z, 0, f.x);
     // 基準方向逆時針（正角度）轉動時的變化方向
-    const d = { x: -PLAYER_LAUNCH_DIR.z, z: PLAYER_LAUNCH_DIR.x };
+    const base = SEAT_LAUNCH_DIR[this.me];
+    const d = { x: -base.z, z: base.x };
     const sign = d.x * right.x + d.z * right.z >= 0 ? 1 : -1;
     return screenAim * sign;
   }
@@ -552,9 +579,11 @@ export class Game {
     const view = this.cordView();
     this.aimArrow.visible = view !== null && view.power > 0.02;
     if (!view) return;
-    const a = Math.atan2(PLAYER_LAUNCH_DIR.z, PLAYER_LAUNCH_DIR.x) + this.worldAim(view.aim);
-    const r = Math.hypot(PLAYER_START.x, PLAYER_START.z);
-    this.aimArrow.position.set(PLAYER_START.x, floorHeight(r, this.arena) + 0.05, PLAYER_START.z);
+    const base = SEAT_LAUNCH_DIR[this.me];
+    const start = SEAT_START[this.me];
+    const a = Math.atan2(base.z, base.x) + this.worldAim(view.aim);
+    const r = Math.hypot(start.x, start.z);
+    this.aimArrow.position.set(start.x, floorHeight(r, this.arena) + 0.05, start.z);
     // 箭頭幾何沿 +x；three.js 的 rotation.y 正值是從 +x 轉向 -z，與模擬的角度方向相反
     this.aimArrow.rotation.y = -a;
     this.aimArrow.scale.set(0.6 + view.power * 1.2, 1, 1);
@@ -568,6 +597,14 @@ export class Game {
     this.launched = true;
     this.hud.launchMeter(false);
     this.aimArrow.visible = false;
+    if (this.online) {
+      const pull = this.pullResult;
+      const aim = pull ? this.worldAim(pull.aim) : 0;
+      this.online.sendLaunch(error, aim, pull);
+      this.lastLaunch = { ratio: 0, label: '', cpu: 0, aim, pull };
+      this.hud.banner('シュート！', `等待${this.oppLabel}發射…`, { small: true, seconds: 1.2 });
+      return;
+    }
     const d = this.difficulty;
     const timing = launchSpinRatio(error, d.launch);
     const pull = this.pullResult;
@@ -585,13 +622,366 @@ export class Game {
     });
     this.views = this.sim.tops.map((t) => new TopView(this.gfx.scene, t.spec, this.arena));
     if (this.audio) {
-      this.hums = this.sim.tops.map((t, i) => this.audio!.createHum(this.world(t.pos, 0.2), i === 0 ? 1 : 0.8));
+      this.hums = this.sim.tops.map((t, i) => this.audio!.createHum(this.world(t.pos, 0.2), i === this.me ? 1 : 0.8));
       for (const t of this.sim.tops) this.audio.launch(this.world(t.pos, 0.3));
     }
     this.hud.banner(label, `${Math.round(ratio * 100)}% POWER`, { small: true, seconds: 1 });
     if (ratio >= 0.97) window.setTimeout(() => this.voice?.play('p_launch', 1), 900);
     this.acc = 0;
     this.setState('battle');
+  }
+
+
+  // ---------------- 線上對戰 ----------------
+
+  /** 標題畫面：點任意處開始 CPU 對戰，或按「線上對戰」；從分享連結（?room=）進來時直接進線上房間 */
+  private toTitle(): void {
+    this.setState('title');
+    this.clearArena();
+    this.hud.hideHud();
+    this.hud.clearBanner();
+    this.hud.hideResult();
+    this.hud.hideOnlineLobby();
+    this.hud.hideNetOverlay();
+    this.hud.hideOvertimePick();
+    document.body.classList.remove('selecting');
+    this.audio?.setMusic(this.musicOn, false);
+    const room = new URLSearchParams(location.search).get('room') ?? '';
+    this.hud.showTitle(
+      () => {
+        void this.boot();
+        if (room) this.enterOnline(room);
+        else this.enterSelect();
+      },
+      () => {
+        void this.boot();
+        this.enterOnline(room);
+      },
+    );
+  }
+
+  /** 線上房間畫面（message 為要顯示的錯誤訊息） */
+  private enterOnline(code: string, message = ''): void {
+    this.setState('online');
+    this.me = 0;
+    this.rig.seat = 0;
+    this.clearArena();
+    this.closeShowcase();
+    this.hud.hideHud();
+    this.hud.clearBanner();
+    this.hud.hideResult();
+    this.hud.hideNetOverlay();
+    this.hud.hideOvertimePick();
+    this.audio?.setMusic(this.musicOn, false);
+    this.hud.showOnlineLobby({
+      name: loadName(),
+      code,
+      onCreate: (name) => void this.onlineConnect(name, null),
+      onJoin: (c, name) => void this.onlineConnect(name, c),
+      onBack: () => this.leaveOnline(),
+    });
+    if (message) this.hud.setOnlineMessage(message, true);
+    if (this.online?.code) this.hud.setOnlineRoom(this.online.code, this.online.shareLink(), '等待對手加入…');
+  }
+
+  /** 連上對戰伺服器，再建立房間（code 為 null）或用房號加入 */
+  private async onlineConnect(rawName: string, code: string | null): Promise<void> {
+    const name = rawName.trim() || 'Player';
+    saveName(name);
+    if (!this.online) {
+      const o = new OnlineSession(name);
+      o.net.on((m) => this.onServer(m));
+      o.net.onStatus((st) => this.onNetStatus(st));
+      this.online = o;
+    }
+    const o = this.online;
+    o.name = name;
+    this.hud.setOnlineBusy(true);
+    this.hud.setOnlineMessage('連線中…');
+    try {
+      if (o.net.status !== 'open') await o.net.connect();
+    } catch {
+      this.hud.setOnlineBusy(false);
+      this.hud.setOnlineMessage('連不上對戰伺服器，請稍後再試', true);
+      this.online = null;
+      return;
+    }
+    this.hud.setOnlineMessage('');
+    if (code) o.join(code);
+    else o.create();
+  }
+
+  /** 離開線上對戰，回到標題 */
+  private leaveOnline(): void {
+    this.online?.close();
+    this.online = null;
+    this.me = 0;
+    this.rig.seat = 0;
+    this.oppLabel = 'CPU';
+    this.closeShowcase();
+    this.setPreview(null);
+    this.toTitle();
+  }
+
+  /** 連線狀態：自己斷線、重連中顯示覆蓋層（重連後伺服器會補送完整狀態） */
+  private onNetStatus(s: NetStatus): void {
+    if (!this.online) return;
+    if (s === 'reconnecting') this.hud.showNetOverlay('連線中斷，重新連線中…', '會自動回到房間');
+    else if (s === 'open' && this.state !== 'online' && !this.online.pausedUntil && this.state !== 'waiting') this.hud.hideNetOverlay();
+  }
+
+  /** 伺服器訊息分派 */
+  private onServer(m: ServerMessage): void {
+    const o = this.online;
+    if (!o) return;
+    switch (m.t) {
+      case 'room':
+        o.onRoom(m);
+        if (this.state === 'online') this.hud.setOnlineRoom(m.code, o.shareLink(), m.host ? '等待對手加入…' : '已加入，準備組隊…');
+        break;
+      case 'lobby':
+        this.onLobby(m);
+        break;
+      case 'teams':
+        o.teams = m;
+        this.setArena(ARENAS[m.arena]);
+        break;
+      case 'battle':
+        this.startOnlineRound(m);
+        break;
+      case 'launched':
+        this.onlineLaunched(m);
+        break;
+      case 'snap':
+        this.onlineSnap(m);
+        break;
+      case 'round':
+        o.score = m.score;
+        if (this.match) this.match.score = [m.score[0], m.score[1]];
+        break;
+      case 'overtime':
+        this.enterOnlineOvertime();
+        break;
+      case 'result':
+        this.onlineResult(m);
+        break;
+      case 'paused':
+        o.pausedUntil = o.toLocal(m.until);
+        break;
+      case 'resumed':
+        o.pausedUntil = null;
+        this.hud.hideNetOverlay();
+        break;
+      case 'closed':
+        o.net.close();
+        this.online = null;
+        this.enterOnline('', `房間已關閉：${m.reason}`);
+        break;
+      case 'error':
+        if (m.code === 'RESUME_FAILED') {
+          o.net.close();
+          this.online = null;
+          this.enterOnline('', m.message);
+        } else if (this.state === 'online') {
+          this.hud.setOnlineBusy(false);
+          this.hud.setOnlineMessage(m.message, true);
+        } else this.hud.banner('ERROR', m.message, { small: true, seconds: 2 });
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** 房間狀態：等人、組隊（對手狀態與房主選的場地）、結果畫面（再來一場） */
+  private onLobby(m: Msg<'lobby'>): void {
+    const o = this.online!;
+    o.lobby = m;
+    this.oppLabel = m.opponent?.name ?? '對手';
+    const op = m.opponent;
+    if (m.phase === 'lobby') {
+      // 還沒有對手，或對手離開了：回到房間畫面等人
+      if (this.state !== 'online') this.enterOnline('', op ? '' : this.state === 'title' ? '' : '對手離開了，等待新的對手加入');
+      this.hud.setOnlineRoom(o.code, o.shareLink(), '等待對手加入…');
+    } else if (m.phase === 'picking') {
+      if (this.state !== 'select' && this.state !== 'waiting') this.enterOnlineSelect(m);
+      else {
+        this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', !op ? '離開了' : !op.connected ? '連線中斷…' : op.ready ? '已完成組隊' : '選擇中…');
+        if (m.arena !== 'random' && this.state === 'select') this.setArena(ARENAS[m.arena]);
+      }
+    } else if (m.phase === 'result' && this.state === 'result') {
+      this.hud.setResultStatus(!op ? '對手已離開，無法再來一場' : op.ready ? `${op.name} 想再來一場` : m.me.ready ? '等待對手…' : '');
+    }
+  }
+
+  /** 線上組隊：沒有難度；客人看得到房主選的場地；送出隊伍後等待對手 */
+  private enterOnlineSelect(m: Msg<'lobby'>): void {
+    const o = this.online!;
+    this.hud.hideOnlineLobby();
+    this.hud.hideResult();
+    this.hud.hideNetOverlay();
+    this.setState('select');
+    this.hud.hideHud();
+    this.hud.clearBanner();
+    this.clearArena();
+    this.me = 0;
+    this.rig.seat = 0;
+    this.audio?.setMusic(this.musicOn, false);
+    if (m.arena !== 'random') this.setArena(ARENAS[m.arena]);
+    this.hud.showTeamSelect({
+      specs: TOP_SPECS,
+      cpuTeam: [],
+      difficulty: this.difficulty.id,
+      arena: m.arena,
+      online: { host: o.host, opponent: m.opponent?.name ?? '對手' },
+      onDifficulty: () => undefined,
+      onArena: (a) => {
+        if (!o.host) return;
+        o.setArena(a);
+        if (a !== 'random') this.setArena(ARENAS[a]);
+      },
+      onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
+      thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
+      onConfirm: (team, loadouts) => {
+        this.playerTeam = team;
+        this.playerLoadouts = loadouts;
+        this.closeShowcase();
+        o.sendTeam(team, loadouts);
+        this.setState('waiting');
+        this.hud.showNetOverlay('等待對手完成組隊…', `對手：${o.opponentName}`);
+      },
+    });
+    const op = m.opponent;
+    this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', op?.ready ? '已完成組隊' : '選擇中…');
+  }
+
+  /** 線上的一戰開場：座位、雙方規格與賽況由伺服器決定；倒數對齊伺服器的「ゴー」 */
+  private startOnlineRound(m: Msg<'battle'>): void {
+    const o = this.online!;
+    o.onBattle(m);
+    this.hud.hideNetOverlay();
+    this.hud.hideOvertimePick();
+    this.hud.hideResult();
+    document.body.classList.remove('selecting');
+    this.setPreview(null);
+    this.me = m.seat;
+    this.rig.seat = m.seat;
+    const mine = m.specs[m.seat];
+    const theirs = m.specs[m.seat === 0 ? 1 : 0];
+    this.playerSpec = buildSpec(mine.id, mine.parts);
+    this.cpuSpec = buildSpec(theirs.id, theirs.parts);
+    this.match = perspectiveMatch(o.teams?.mine ?? [mine.id], o.teams?.theirs ?? [theirs.id], m.results, m.score);
+    const pair: Pairing = { battle: m.battle, overtime: m.overtime, player: mine.id, cpu: theirs.id };
+    this.beginRound(pair, m.replay, pair);
+    // 介紹長度 = 到「ゴー」的剩餘時間 − 倒數三拍：雙方的倒數同時走到「ゴー」
+    this.launchLead = Math.max(0.2, (o.toLocal(m.goAt) - Date.now()) / 1000 - (GO_AT - COUNT_START));
+  }
+
+  /** 伺服器開打：用初始狀態建立預測與畫面 */
+  private onlineLaunched(m: Msg<'launched'>): void {
+    const o = this.online!;
+    o.onLaunched(m);
+    this.clearArena();
+    this.launched = true;
+    this.hud.launchMeter(false);
+    this.aimArrow.visible = false;
+    this.sim = o.predictor!.sim;
+    this.views = this.sim.tops.map((t) => new TopView(this.gfx.scene, t.spec, this.arena));
+    if (this.audio) {
+      this.hums = this.sim.tops.map((t, i) => this.audio!.createHum(this.world(t.pos, 0.2), i === this.me ? 1 : 0.8));
+      for (const t of this.sim.tops) this.audio.launch(this.world(t.pos, 0.3));
+    }
+    const ratio = m.launch[this.me];
+    const label = ratio >= 0.97 ? 'PERFECT!!' : ratio >= 0.85 ? 'GREAT!' : ratio >= 0.7 ? 'GOOD' : 'WEAK…';
+    this.lastLaunch = { ratio, label, cpu: m.launch[this.me === 0 ? 1 : 0], aim: m.aim[this.me], pull: this.lastLaunch.pull };
+    this.hud.banner(label, `${Math.round(ratio * 100)}% POWER`, { small: true, seconds: 1 });
+    if (ratio >= 0.97) window.setTimeout(() => this.voice?.play('p_launch', 1), 900);
+    this.acc = 0;
+    this.setState('battle');
+  }
+
+  /** 快照：校正預測、照伺服器切換鏡頭與慢動作、播放伺服器的事件 */
+  private onlineSnap(m: Msg<'snap'>): void {
+    const o = this.online!;
+    if (!this.sim) return;
+    o.onSnap(m);
+    this.bigClashPos = [];
+    for (const d of m.director) {
+      if (d.kind === 'closeup') {
+        this.director.forceCloseup(d);
+        this.bigClashPos.push(d.pos);
+      } else if (d.kind === 'finish') this.director.forceFinish(d.pos);
+      else this.director.notifySpecial();
+    }
+    for (const e of m.events) this.onEvent(e);
+  }
+
+  /** 線上對戰中每幀：送出推移、用最新快照校正、預測往前推（對手斷線暫停時凍結） */
+  private stepOnline(simDt: number, wallDt: number): void {
+    const o = this.online!;
+    const p = o.predictor;
+    if (!p) return;
+    const paused = o.pausedUntil !== null;
+    if (this.state === 'battle') o.input(paused ? { x: 0, z: 0 } : this.playerControl(), performance.now());
+    o.flushSnap();
+    if (!paused) p.advance(simDt);
+    p.decay(wallDt);
+  }
+
+  /** 畫面用的陀螺狀態：線上時位置加上預測校正的畫面偏移 */
+  private renderState(t: TopState, seat: 0 | 1): TopState {
+    const p = this.online?.predictor;
+    return p ? { ...t, pos: p.renderPos(seat) } : t;
+  }
+
+  /** 線上延長賽：從自己的隊伍挑一顆，雙方都挑完才開打 */
+  private enterOnlineOvertime(): void {
+    const o = this.online!;
+    this.setState('overtime');
+    this.clearArena();
+    this.hud.clearBanner();
+    this.hud.hideHud();
+    this.audio?.setMusic(this.musicOn, false);
+    this.voice?.play('overtime', 2);
+    const team = (o.teams?.mine ?? this.playerTeam).map((t) => this.playerSpecOf(t));
+    this.hud.showOvertimePick(
+      team,
+      (t) => this.setPreview(this.playerSpecOf(t)),
+      (t) => {
+        this.setPreview(null);
+        o.sendOvertime(t);
+        this.setState('waiting');
+        this.hud.showNetOverlay('等待對手挑選延長賽的陀螺…');
+      },
+    );
+  }
+
+  /** 線上比賽結束：結果畫面（再來一場要雙方都按；可以離開） */
+  private onlineResult(m: Msg<'result'>): void {
+    const o = this.online!;
+    this.counters.matches++;
+    this.setState('result');
+    this.hud.clearBanner();
+    this.hud.hideNetOverlay();
+    this.hud.hideOvertimePick();
+    o.pausedUntil = null;
+    this.audio?.setMusic(this.musicOn, false);
+    const win = m.winner === 'me';
+    this.voice?.play(win ? 'winner_player' : 'winner_rival', 2);
+    window.setTimeout(() => this.voice?.play(win ? 'p_win' : 'r_win', 2), 2700);
+    window.setTimeout(() => this.voice?.play(win ? 'r_lose' : 'p_lose', 2), 5600);
+    this.match = perspectiveMatch(o.teams?.mine ?? [], o.teams?.theirs ?? [], m.results, m.score, m.winner);
+    const forfeit = m.forfeit ? (win ? '・對手棄權' : '・判定棄權') : '';
+    this.hud.showResult(
+      win,
+      this.match,
+      TOP_SPECS,
+      `線上對戰・房號 ${o.code ?? ''}・場地：${this.arena.nameZh}${forfeit}`,
+      () => {
+        o.rematch();
+        this.hud.setResultStatus('等待對手…');
+      },
+      { opponent: o.opponentName, keepOpen: true, onLeave: () => this.leaveOnline() },
+    );
   }
 
   // ---------------- 輸入 ----------------
@@ -606,6 +996,11 @@ export class Game {
       if (this.state === 'launch') this.onLaunchPress();
       else this.trySpecial();
     }
+    // Shift＋方向鍵：朝推移方向衝刺（與手機快甩相同）。按一次衝一次：按住 Shift 時系統的自動重複 keydown 不算
+    if (k === 'shift' && !e.repeat && this.state === 'battle') {
+      const dir = this.playerControl();
+      if (dir.x !== 0 || dir.z !== 0) this.dashWorld(dir);
+    }
     if (k === 'm') {
       this.musicOn = !this.musicOn;
       this.audio?.setMusic(this.musicOn, this.state === 'battle');
@@ -619,15 +1014,23 @@ export class Game {
     document.body.classList.add('touch');
   }
 
-  /** 玩家發動必殺技（Space 或觸控按鈕） */
+  /** 玩家發動必殺技（Space 或三指觸控） */
   private trySpecial(): void {
-    if (this.state === 'battle' && this.sim && !this.opts.demo) this.sim.useSpecial(0);
+    if (this.state !== 'battle' || !this.sim || this.opts.demo) return;
+    if (this.online) this.online.special();
+    else this.sim.useSpecial(this.me);
   }
 
   /** 手機快甩：螢幕方向換成相對鏡頭的世界方向後衝刺 */
   private tryDash(d: StickVector): void {
+    this.dashWorld(this.screenToWorld(d.x, d.y));
+  }
+
+  /** 朝世界座標的方向衝刺（快甩與 Shift 共用） */
+  private dashWorld(dir: V2): void {
     if (this.state !== 'battle' || !this.sim || this.opts.demo) return;
-    this.sim.dash(0, this.screenToWorld(d.x, d.y));
+    if (this.online) this.online.dash(dir);
+    else this.sim.dash(this.me, dir);
   }
 
   /** 螢幕上的方向（x 往右、y 往前）換成相對鏡頭的世界方向 */
@@ -665,23 +1068,30 @@ export class Game {
     this.stateTime += wallDt;
 
     this.director.update(wallDt);
-    if (this.specialFreeze > 0) this.specialFreeze -= wallDt;
     if (this.cutinLeft > 0) {
       this.cutinLeft -= wallDt;
       if (this.cutinLeft <= 0) this.hud.hideCutin();
     }
     const battleLike = this.state === 'battle' || this.state === 'roundEnd';
-    const ts = battleLike ? this.director.timeScale * (this.specialFreeze > 0 ? 0.12 : 1) : 1;
+    // 時間流速：撞擊特寫、終結鏡頭與必殺 cut-in 凍結都由導演決定（線上對戰時伺服器用同一份邏輯）
+    const ts = battleLike ? this.director.timeScale : 1;
     const simDt = wallDt * ts;
 
     if (this.state === 'launch') this.updateLaunch();
-    if (battleLike && this.sim) this.stepSim(simDt);
+    if (battleLike && this.sim) {
+      if (this.online) this.stepOnline(simDt, wallDt);
+      else this.stepSim(simDt);
+    }
+    if (this.online?.pausedUntil) {
+      const left = Math.max(0, Math.ceil((this.online.pausedUntil - Date.now()) / 1000));
+      this.hud.showNetOverlay(`${this.oppLabel} 連線中斷`, `等待重新連線… ${left} 秒後判對手棄權`);
+    }
 
     // 特寫結束：時間恢復的音效
     if (this.lastDirectorMode === 'closeup' && this.director.mode !== 'closeup') this.audio?.slowmoOut();
     this.lastDirectorMode = this.director.mode;
 
-    if (this.state === 'roundEnd' && this.stateTime > 3.6) this.afterRound();
+    if (this.state === 'roundEnd' && this.stateTime > 3.6 && !this.online) this.afterRound();
     if (this.state === 'result' && this.opts.demo && this.stateTime > 4) {
       this.hud.hideResult();
       this.startDemoMatch();
@@ -694,7 +1104,7 @@ export class Game {
 
     // 畫面更新
     const tops = this.sim?.tops ?? [];
-    this.views.forEach((v, i) => tops[i] && v.update(tops[i], simDt, this.clock));
+    this.views.forEach((v, i) => tops[i] && v.update(this.renderState(tops[i], i as 0 | 1), simDt, this.clock));
     this.showcase?.update(wallDt);
     if (this.preview) {
       this.preview.state.angle += 260 * wallDt;
@@ -703,7 +1113,13 @@ export class Game {
     }
     this.effects.update(wallDt * Math.max(ts, 0.45), wallDt);
     const shot: Shot =
-      this.state === 'title' ? 'title' : this.state === 'select' || this.state === 'overtime' ? 'select' : this.state === 'launch' ? 'launch' : 'battle';
+      this.state === 'title' || this.state === 'online'
+        ? 'title'
+        : this.state === 'select' || this.state === 'overtime' || this.state === 'waiting'
+          ? 'select'
+          : this.state === 'launch'
+            ? 'launch'
+            : 'battle';
     this.rig.update(shot, this.director, tops, wallDt);
 
     const excitement = this.audio?.update(wallDt) ?? 0;
@@ -713,7 +1129,7 @@ export class Game {
       this.audio.setTimeScale(ts);
       this.hums.forEach((h, i) => tops[i] && h.set(this.world(tops[i].pos, 0.25), spinRatio(tops[i]), tops[i].alive));
     }
-    if (battleLike && this.sim) this.hud.updateHud(this.sim.tops, this.score);
+    if (battleLike && this.sim) this.hud.updateHud(this.hudTops(this.sim.tops), this.score);
     this.updateTouch();
 
     this.applyPost(ts);
@@ -728,16 +1144,18 @@ export class Game {
     while (this.acc >= STEP && guard++ < 40) {
       this.acc -= STEP;
       if (this.state === 'battle') {
+        const me = this.me;
+        const cpu = me === 0 ? 1 : 0;
         if (this.opts.demo) {
-          const ai0 = cpuThink(sim, 0, this.cpuRng);
-          sim.setControl(0, ai0.control);
-          if (ai0.special) sim.useSpecial(0);
+          const ai0 = cpuThink(sim, me, this.cpuRng);
+          sim.setControl(me, ai0.control);
+          if (ai0.special) sim.useSpecial(me);
         } else {
-          sim.setControl(0, this.playerControl());
+          sim.setControl(me, this.playerControl());
         }
-        const ai = cpuThink(sim, 1, this.cpuRng, this.difficulty.cpuSpecialRate);
-        sim.setControl(1, ai.control);
-        if (ai.special) sim.useSpecial(1);
+        const ai = cpuThink(sim, cpu, this.cpuRng, this.difficulty.cpuSpecialRate);
+        sim.setControl(cpu, ai.control);
+        if (ai.special) sim.useSpecial(cpu);
       }
       sim.step(STEP);
       for (const e of sim.drainEvents()) this.onEvent(e);
@@ -750,8 +1168,10 @@ export class Game {
     switch (e.type) {
       case 'clash': {
         this.counters.clashes++;
-        const big = this.director.notifyClash(e);
+        const big = this.online ? this.bigClashPos.some((p) => Math.hypot(p.x - e.pos.x, p.z - e.pos.z) < 1e-6) : this.director.notifyClash(e);
         const [a, b] = sim.tops;
+        const mine = sim.tops[this.me];
+        const theirs = sim.tops[this.me === 0 ? 1 : 0];
         this.effects.clash(e.pos, e.normal, e.intensity, a.spec.glow, b.spec.glow, big);
         this.views.forEach((v) => v.hit(e.normal, e.intensity));
         this.audio?.clash(this.world(e.pos, 0.25), e.intensity, big, e.sameSpin);
@@ -764,14 +1184,14 @@ export class Game {
         } else if (e.intensity > 3.2) {
           this.hud.onomatopoeia(scr.x, scr.y - 30, CLASH_WORDS[Math.floor(this.rng() * CLASH_WORDS.length)], 40 + e.intensity * 5, '#ff9a1a');
           if (e.intensity > 4.5 && this.rng() < 0.3) {
-            const playerAhead = spinRatio(a) >= spinRatio(b);
+            const playerAhead = spinRatio(mine) >= spinRatio(theirs);
             if (playerAhead) this.voice?.play('p_hit', 0);
             else if (!this.roundFlags.taunt) {
               this.roundFlags.taunt = this.voice?.play('r_taunt', 0) ?? false;
             }
           }
         }
-        if (!this.roundFlags.hurt && a.burst > 0.7 && a.alive) {
+        if (!this.roundFlags.hurt && mine.burst > 0.7 && mine.alive) {
           this.roundFlags.hurt = true;
           this.voice?.play('p_hurt', 1);
         }
@@ -805,13 +1225,13 @@ export class Game {
       case 'special': {
         this.counters.specials++;
         const t = sim.tops[e.id];
-        const isPlayer = e.id === 0;
+        const isPlayer = e.id === this.me;
         this.hud.cutin(t.spec, isPlayer);
         this.cutinLeft = 1.5;
         this.effects.special(t.pos, t.spec.glow);
         this.audio?.special(this.world(t.pos, 0.3));
         this.voice?.play(isPlayer ? specialVoice(t.spec) : 'r_special', 1);
-        this.specialFreeze = 1.1;
+        if (!this.online) this.director.notifySpecial();
         this.director.shake = Math.max(this.director.shake, 0.6);
         break;
       }
@@ -820,7 +1240,7 @@ export class Game {
         this.counters.finishes++;
         this.lastFinish = e.finish;
         const loser = sim.tops[e.loser];
-        this.director.notifyFinish(e.pos);
+        if (!this.online) this.director.notifyFinish(e.pos);
         this.effects.finish(e.pos, loser.spec.glow);
         this.audio?.finish(this.world(e.pos, 0.3));
         const res = sim.result;
@@ -828,8 +1248,8 @@ export class Game {
         if (res && res.winner === null) {
           this.hud.banner('DRAW', '引き分け！もう一度！', { seconds: 2.6 });
         } else {
-          const winnerIsPlayer = e.loser === 1;
-          this.hud.banner(info.en, `${winnerIsPlayer ? 'YOU' : 'CPU'} +${FINISH_POINTS[e.finish]}`, { blue: !winnerIsPlayer, seconds: 2.6 });
+          const winnerIsPlayer = e.loser !== this.me;
+          this.hud.banner(info.en, `${winnerIsPlayer ? 'YOU' : this.oppLabel} +${FINISH_POINTS[e.finish]}`, { blue: !winnerIsPlayer, seconds: 2.6 });
           window.setTimeout(() => this.voice?.play(info.voice, 2), 250);
         }
         this.setState('roundEnd');
@@ -907,6 +1327,11 @@ export class Game {
 
   // ---------------- 工具 ----------------
 
+  /** HUD 用的順序：[自己, 對手] */
+  private hudTops(tops: TopState[]): TopState[] {
+    return this.me === 0 ? tops : [tops[1], tops[0]];
+  }
+
   /** sim 座標轉世界座標 */
   private world(p: V2, lift: number): THREE.Vector3 {
     return new THREE.Vector3(p.x, floorHeight(Math.min(Math.hypot(p.x, p.z), this.arena.radius), this.arena) + lift, p.z);
@@ -925,7 +1350,7 @@ export class Game {
     const center = new THREE.Vector2(0.5, 0.5);
     let aberration = d.shake * 0.8;
     let radial = 0;
-    let lines = this.specialFreeze > 0 ? 0.8 : 0;
+    let lines = this.director.specialFreeze > 0 ? 0.8 : 0;
     let flash = 0;
     if (battleLike && d.mode !== 'overview') {
       const s = this.screenOf(d.focus).ndc;
@@ -956,7 +1381,7 @@ export class Game {
     const hint = this.touchHint;
     hint.hidden = !on;
     if (!on) return;
-    const me = this.sim?.tops[0];
+    const me = this.sim?.tops[this.me];
     const ready = !!me && me.alive && !me.specialUsed && me.special >= 1;
     if (hint.classList.contains('ready') !== ready) {
       hint.classList.toggle('ready', ready);
@@ -1005,8 +1430,21 @@ export class Game {
       arena: this.arena.id,
       arenaChoice: this.arenaChoice,
       pulling: this.pull !== null,
-      tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control })) ?? [],
+      me: this.me,
+      tops: this.sim?.tops.map((t) => ({ type: t.spec.type, spin: spinRatio(t), burst: t.burst, alive: t.alive, control: t.control, special: t.special, specialUsed: t.specialUsed })) ?? [],
       touchMode: this.touchMode,
+      online: this.online
+        ? {
+            code: this.online.code,
+            host: this.online.host,
+            status: this.online.net.status,
+            rtt: this.online.net.clock.rtt,
+            predictor: this.online.predictor !== null,
+            paused: this.online.pausedUntil !== null,
+            phase: this.online.lobby?.phase ?? null,
+            opponent: this.online.lobby?.opponent?.name ?? null,
+          }
+        : null,
       fov: this.gfx.camera.fov,
       swipe: this.touch.vector,
       flicks: this.touch.flicks,

@@ -16,6 +16,9 @@ export interface DirectorConfig {
   finishScale: number;
   /** 反白衝擊幀長度（牆鐘秒） */
   flashTime: number;
+  /** 必殺 cut-in 的凍結長度（牆鐘秒）與這段期間的時間流速倍率（和特寫、終結的流速相乘） */
+  specialFreezeTime: number;
+  specialFreezeScale: number;
 }
 
 const DEFAULTS: DirectorConfig = {
@@ -26,6 +29,8 @@ const DEFAULTS: DirectorConfig = {
   finishDuration: 2.8,
   finishScale: 0.2,
   flashTime: 0.09,
+  specialFreezeTime: 1.1,
+  specialFreezeScale: 0.12,
 };
 
 export type DirectorMode = 'overview' | 'closeup' | 'finish';
@@ -41,6 +46,7 @@ export interface ClashInfo {
  * 鏡頭導演：決定現在是全景、撞擊特寫或終結鏡頭，並輸出時間流速、衝擊幀與震動量。
  * 全部以牆鐘時間推進——模擬慢下來時，特寫的鏡頭環繞仍照常進行。
  * 只負責「決策」，實際鏡頭擺位由渲染層依 mode／focus／progress 計算。
+ * 線上對戰時伺服器也用同一份邏輯決定時間流速（必殺 cut-in 的凍結也在這裡），客戶端用 force* 照伺服器的事件切換。
  */
 export class CameraDirector {
   readonly config: DirectorConfig;
@@ -61,6 +67,8 @@ export class CameraDirector {
   modeTime = 0;
   /** 本次特寫觸發的累計次數（e2e 觀察用） */
   closeups = 0;
+  /** 必殺凍結剩餘的牆鐘秒數（0 = 沒有凍結） */
+  specialFreeze = 0;
   private clock = 0;
   private cooldownUntil = -Infinity;
 
@@ -73,6 +81,31 @@ export class CameraDirector {
     this.shake = Math.max(this.shake, Math.min(1, c.intensity / 12));
     if (this.mode !== 'overview') return false;
     if (c.intensity < this.config.closeupThreshold || this.clock < this.cooldownUntil) return false;
+    this.startCloseup(c);
+    return true;
+  }
+
+  /**
+   * 直接進入撞擊特寫，不看門檻、冷卻與目前模式（線上對戰的客戶端照伺服器的導演事件切換，
+   * 雙方的慢動作才會一致）。
+   */
+  forceCloseup(c: ClashInfo): void {
+    this.shake = Math.max(this.shake, Math.min(1, c.intensity / 12));
+    this.startCloseup(c);
+  }
+
+  /** 直接進入終結鏡頭（線上對戰的客戶端用，同 notifyFinish） */
+  forceFinish(pos: V2): void {
+    this.notifyFinish(pos);
+  }
+
+  /** 必殺 cut-in：接下來 specialFreezeTime 秒時間流速再乘上 specialFreezeScale */
+  notifySpecial(): void {
+    this.specialFreeze = this.config.specialFreezeTime;
+  }
+
+  /** 切進撞擊特寫 */
+  private startCloseup(c: ClashInfo): void {
     this.mode = 'closeup';
     this.modeTime = 0;
     this.focus = { ...c.pos };
@@ -80,7 +113,6 @@ export class CameraDirector {
     this.intensity = c.intensity;
     this.impactFlash = 1;
     this.closeups++;
-    return true;
   }
 
   /** 通知回合終結：切到終結鏡頭（優先於特寫） */
@@ -99,6 +131,7 @@ export class CameraDirector {
     this.impactFlash = 0;
     this.shake = 0;
     this.modeTime = 0;
+    this.specialFreeze = 0;
     this.cooldownUntil = this.clock + 1;
   }
 
@@ -134,6 +167,11 @@ export class CameraDirector {
     } else {
       this.timeScale = 1;
       this.impactFlash = 0;
+    }
+    // 必殺凍結：和目前模式的流速相乘
+    if (this.specialFreeze > 0) {
+      this.specialFreeze = Math.max(0, this.specialFreeze - dt);
+      if (this.specialFreeze > 0) this.timeScale *= cfg.specialFreezeScale;
     }
   }
 }

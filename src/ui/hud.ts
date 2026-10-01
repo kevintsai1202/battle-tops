@@ -2,7 +2,7 @@ import { ARENA_IDS, ARENAS, type ArenaId } from '../sim/arena';
 import { DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
 import { equip, release, STOCK, type TeamLoadouts } from '../sim/parts';
 import { spinRatio } from '../sim/physics';
-import { currentPairing, type TeamMatch } from '../sim/team';
+import { currentPairing, type Pairing, type TeamMatch } from '../sim/team';
 import { buildSpec, TOP_IDS, TYPE_LABEL } from '../sim/tops';
 import type { FinishType, TopId, TopSpec, TopState } from '../sim/types';
 import { $, chip, css, el, spinLabel, STAT_AXES, statScore } from './common';
@@ -79,6 +79,33 @@ export interface TeamSelectOptions {
   thumb: (spec: TopSpec, cb: (url: string) => void) => void;
   /** 出陣：隊伍（順序即出場順序）與換上的備用零件 */
   onConfirm: (team: TopId[], loadouts: TeamLoadouts) => void;
+  /**
+   * 線上對戰：隱藏難度；CPU 陣容的位置改成顯示對手狀態；只有房主能選場地（客人只看得到房主的選擇）。
+   * 之後的對手狀態與場地變化用 updateSelectOnline 更新。
+   */
+  online?: { host: boolean; opponent: string };
+}
+
+/** 線上房間畫面的參數 */
+export interface OnlineLobbyOptions {
+  /** 預設名稱與房號（從分享連結進來時帶入） */
+  name: string;
+  code: string;
+  onCreate: (name: string) => void;
+  onJoin: (code: string, name: string) => void;
+  onBack: () => void;
+}
+
+/** 結果畫面的額外選項（線上對戰用） */
+export interface ResultOptions {
+  /** 對手的稱呼（預設 CPU） */
+  opponent?: string;
+  /** 再來一場的按鈕文字 */
+  retryLabel?: string;
+  /** 按了再來一場後不關閉結果畫面（線上要等對手也按） */
+  keepOpen?: boolean;
+  /** 顯示「離開」按鈕 */
+  onLeave?: () => void;
 }
 
 /** 拉條畫面狀態（game 每幀傳進來） */
@@ -100,23 +127,109 @@ export class Hud {
   private selectKeys: ((e: KeyboardEvent) => void) | null = null;
   /** 組隊畫面的詳細資料（含絕招示範舞台） */
   private detail: DetailView | null = null;
+  /** 線上組隊時更新場地與對手狀態用（組隊畫面開著時才有） */
+  private selectOnline: { setArena: (a: ArenaChoice) => void } | null = null;
 
   /**
    * 顯示標題畫面，點擊後呼叫 onStart。
    * 用 click 而不是 pointerdown：觸控時瀏覽器在 pointerdown 之後才補送 click，
    * 若在 pointerdown 就切到組隊畫面，這個 click 會落在剛出現的陀螺小格上，誤選一顆。
    */
-  showTitle(onStart: () => void): void {
+  showTitle(onStart: () => void, onOnline?: () => void): void {
     const title = $('#title');
+    const online = $<HTMLButtonElement>('.to-online', title);
     title.hidden = false;
-    const go = () => {
+    online.hidden = !onOnline;
+    const stop = () => {
       title.removeEventListener('click', go);
       window.removeEventListener('keydown', go);
+      online.onclick = null;
       title.hidden = true;
+    };
+    const go = () => {
+      stop();
       onStart();
+    };
+    // 線上對戰按鈕：攔住事件，不要讓標題的「點任意處開始 CPU 對戰」也觸發
+    online.onclick = (e) => {
+      e.stopPropagation();
+      stop();
+      onOnline?.();
     };
     title.addEventListener('click', go);
     window.addEventListener('keydown', go);
+  }
+
+  /** 線上房間畫面：輸入名稱，建立房間或用房號加入 */
+  showOnlineLobby(o: OnlineLobbyOptions): void {
+    const root = $('#online');
+    const name = $<HTMLInputElement>('.ol-name input', root);
+    const code = $<HTMLInputElement>('.ol-code', root);
+    name.value = o.name;
+    code.value = o.code;
+    $('.ol-room', root).hidden = true;
+    $('.ol-form', root).hidden = false;
+    this.setOnlineMessage('');
+    this.setOnlineBusy(false);
+    $<HTMLButtonElement>('.ol-create', root).onclick = () => o.onCreate(name.value);
+    const join = () => {
+      const c = code.value.trim().toUpperCase();
+      if (c.length !== 4) return this.setOnlineMessage('房號是 4 個字（英文與數字）', true);
+      o.onJoin(c, name.value);
+    };
+    $<HTMLButtonElement>('.ol-join-btn', root).onclick = join;
+    code.onkeydown = (e) => {
+      if (e.key === 'Enter') join();
+    };
+    $<HTMLButtonElement>('.ol-back', root).onclick = () => o.onBack();
+    $<HTMLButtonElement>('.ol-copy', root).onclick = () => {
+      const link = $<HTMLInputElement>('.ol-link', root).value;
+      void navigator.clipboard?.writeText(link).then(
+        () => this.setOnlineMessage('已複製連結，傳給朋友開啟就能加入'),
+        () => this.setOnlineMessage('無法自動複製，請手動複製連結'),
+      );
+    };
+    root.hidden = false;
+    document.body.classList.add('selecting');
+  }
+
+  /** 線上房間畫面：進房後顯示房號、分享連結與狀態（code 為 null 時回到輸入畫面） */
+  setOnlineRoom(code: string | null, link = '', status = ''): void {
+    const root = $('#online');
+    $('.ol-room', root).hidden = code === null;
+    $('.ol-form', root).hidden = code !== null;
+    if (code === null) return;
+    $('.ol-code-big', root).textContent = code;
+    $<HTMLInputElement>('.ol-link', root).value = link;
+    $('.ol-status', root).textContent = status;
+  }
+
+  /** 線上房間畫面的提示文字（error 時標紅） */
+  setOnlineMessage(text: string, error = false): void {
+    const m = $('#online .ol-msg');
+    m.textContent = text;
+    m.classList.toggle('err', error);
+  }
+
+  /** 連線中時停用按鈕 */
+  setOnlineBusy(busy: boolean): void {
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#online .ol-form button')) b.disabled = busy;
+  }
+
+  hideOnlineLobby(): void {
+    $('#online').hidden = true;
+  }
+
+  /** 連線與等待的覆蓋層（對手斷線、重新連線中、等待對手組隊等） */
+  showNetOverlay(text: string, sub = ''): void {
+    const root = $('#net-overlay');
+    $('.no-text', root).textContent = text;
+    $('.no-sub', root).textContent = sub;
+    root.hidden = false;
+  }
+
+  hideNetOverlay(): void {
+    $('#net-overlay').hidden = true;
   }
 
   /**
@@ -129,6 +242,10 @@ export class Hud {
    */
   showTeamSelect(o: TeamSelectOptions): void {
     const root = $('#select');
+    const online = o.online ?? null;
+    // 線上：沒有難度；客人不能選場地
+    $('.difficulty', root).hidden = !!online;
+    root.classList.toggle('online', !!online);
     // 難度切換
     const diffBtns = [...root.querySelectorAll<HTMLButtonElement>('.difficulty button')];
     const setDiff = (d: DifficultyId) => {
@@ -151,6 +268,7 @@ export class Hud {
       const b = el('button', '', id === 'random' ? '隨機' : ARENAS[id].nameZh);
       b.type = 'button';
       b.dataset.id = id;
+      b.disabled = !!online && !online.host;
       b.onclick = () => {
         setArena(id);
         b.blur();
@@ -165,6 +283,16 @@ export class Hud {
       o.onArena(id);
     };
     setArena(arena);
+    // 線上：伺服器通知場地變化時只更新畫面（不再回報）
+    this.selectOnline = online
+      ? {
+          setArena: (id: ArenaChoice) => {
+            arena = id;
+            arenaBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === id));
+            $('.arena-desc', root).textContent = id === 'random' ? '開打時從五個場地隨機抽一個。' : ARENAS[id].descZh;
+          },
+        }
+      : null;
 
     const cards = $('.cards', root);
     /** 隊伍換上的備用零件 */
@@ -185,8 +313,10 @@ export class Hud {
       refreshThumb(idx);
     });
     this.detail = detail;
-    // CPU 陣容：依名鑑順序顯示，不洩漏出場順序
+    // CPU 陣容：依名鑑順序顯示，不洩漏出場順序；線上時改成對手狀態
     $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
+    $('.cpu-team .ct-label', root).textContent = online ? `對手：${online.opponent}` : 'CPU チーム';
+    $('.cpu-team small', root).textContent = online ? '選擇中…' : '出場順序保密';
     const go = $<HTMLButtonElement>('.go', root);
     const slots = $('.slots', root);
     let idx = 0;
@@ -242,6 +372,7 @@ export class Hud {
       this.selectKeys = null;
       root.hidden = true;
       this.detail = null;
+      this.selectOnline = null;
       document.body.classList.remove('selecting');
       o.onConfirm([...picks], { ...loadouts });
     };
@@ -297,9 +428,9 @@ export class Hud {
           refreshThumb(TOP_IDS.indexOf(t));
         }
         setIdx(idx);
-      } else if (k === '1' || k === '2' || k === '3') {
+      } else if ((k === '1' || k === '2' || k === '3') && !online) {
         setDiff(DIFFICULTY_IDS[Number(k) - 1]);
-      } else if (k === 'q' || k === 'e') {
+      } else if ((k === 'q' || k === 'e') && (!online || online.host)) {
         const i = arenaChoices.indexOf(arena) + (k === 'e' ? 1 : -1);
         setArena(arenaChoices[(i + arenaChoices.length) % arenaChoices.length]);
       }
@@ -309,6 +440,14 @@ export class Hud {
     // 組隊中隱藏對戰操作說明（手機上會蓋住出陣按鈕）
     document.body.classList.add('selecting');
     setIdx(0);
+  }
+
+  /** 線上組隊：更新場地（房主的選擇）與對手狀態 */
+  updateSelectOnline(arena: ArenaChoice, opponent: string, status: string): void {
+    this.selectOnline?.setArena(arena);
+    const root = $('#select');
+    $('.cpu-team .ct-label', root).textContent = `對手：${opponent}`;
+    $('.cpu-team small', root).textContent = status;
   }
 
   /** 組隊畫面絕招示範的畫布（組隊畫面沒開時為 null） */
@@ -372,8 +511,8 @@ export class Hud {
   }
 
   /** 對戰中的賽況：BATTLE n/3 或延長賽、場地名，以及雙方陣容小圖示（出戰中、已出戰與得分） */
-  setMatchInfo(m: TeamMatch, specs: Record<TopId, TopSpec>, arenaName: string): void {
-    const pair = currentPairing(m);
+  setMatchInfo(m: TeamMatch, specs: Record<TopId, TopSpec>, arenaName: string, current?: Pairing | null): void {
+    const pair = current === undefined ? currentPairing(m) : current;
     $('#hud .info').textContent = `${pair ? (pair.overtime ? '延長賽' : `BATTLE ${pair.battle}/3`) : 'FINAL'}・${arenaName}`;
     const side = (team: TopId[], who: 0 | 1) =>
       team.map((t) => {
@@ -394,13 +533,13 @@ export class Hud {
   }
 
   /** 顯示對戰 HUD 並填入名稱 */
-  showHud(a: TopSpec, b: TopSpec): void {
+  showHud(a: TopSpec, b: TopSpec, opponent = 'CPU'): void {
     const hud = $('#hud');
     hud.hidden = false;
     hud.style.setProperty('--p0', css(a.glow));
     hud.style.setProperty('--p1', css(b.glow));
     $('.panel[data-side="0"] .name', hud).textContent = `YOU ｜ ${a.nameJa}`;
-    $('.panel[data-side="1"] .name', hud).textContent = `${b.nameJa} ｜ CPU`;
+    $('.panel[data-side="1"] .name', hud).textContent = `${b.nameJa} ｜ ${opponent}`;
   }
 
   hideHud(): void {
@@ -506,8 +645,9 @@ export class Hud {
   }
 
   /** 結果畫面：勝負、總分與每一戰的對陣和終結方式 */
-  showResult(win: boolean, m: TeamMatch, specs: Record<TopId, TopSpec>, footnote: string, onRetry: () => void): void {
+  showResult(win: boolean, m: TeamMatch, specs: Record<TopId, TopSpec>, footnote: string, onRetry: () => void, opts: ResultOptions = {}): void {
     const root = $('#result');
+    const opp = opts.opponent ?? 'CPU';
     $('.headline', root).textContent = win ? 'YOU WIN!!' : 'YOU LOSE…';
     $('.final', root).textContent = `${m.score[0]} - ${m.score[1]}`;
     $('.diff', root).textContent = footnote;
@@ -517,16 +657,31 @@ export class Hud {
         return el(
           'li',
           r.winner === 0 ? 'w' : 'l',
-          `${label}　${specs[r.player].nameZh} VS ${specs[r.cpu].nameZh}　${FINISH_EN[r.finish]}　${r.winner === 0 ? 'YOU' : 'CPU'} +${r.points[r.winner]}`,
+          `${label}　${specs[r.player].nameZh} VS ${specs[r.cpu].nameZh}　${FINISH_EN[r.finish]}　${r.winner === 0 ? 'YOU' : opp} +${r.points[r.winner]}`,
         );
       }),
     );
     const btn = $<HTMLButtonElement>('.retry', root);
+    btn.textContent = opts.retryLabel ?? 'もう一度！／再來一場';
+    btn.disabled = false;
     btn.onclick = () => {
-      root.hidden = true;
+      if (!opts.keepOpen) root.hidden = true;
+      else btn.disabled = true;
       onRetry();
     };
+    const leave = $<HTMLButtonElement>('.leave', root);
+    leave.hidden = !opts.onLeave;
+    leave.onclick = () => {
+      root.hidden = true;
+      opts.onLeave?.();
+    };
+    this.setResultStatus('');
     root.hidden = false;
+  }
+
+  /** 結果畫面的狀態文字（線上再來一場的等待狀態） */
+  setResultStatus(text: string): void {
+    $('#result .rm-status').textContent = text;
   }
 
   hideResult(): void {

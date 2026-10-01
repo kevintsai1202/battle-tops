@@ -63,7 +63,8 @@
       <section id="title" class="screen">
         <h1>BATTLE TOPS</h1>
         <p class="en">爆転バトル ・ 戰鬥陀螺</p>
-        <p class="blink">クリックしてスタート ／ 點擊開始</p>
+        <p class="blink">クリックしてスタート ／ 點擊開始（CPU 對戰）</p>
+        <button type="button" class="to-online">オンライン対戦 ／ 線上對戰（找朋友）</button>
         <p class="note">請開啟聲音（建議戴耳機，3D 立體音效）</p>
         <p class="rotate-hint">📱 橫向遊玩效果較好</p>
       </section>
@@ -77,7 +78,7 @@
             <button type="button" data-id="hard">むずかしい<small>困難</small></button>
           </div>
           <div class="arena" role="group" aria-label="場地"></div>
-          <div class="cpu-team">CPU チーム <span class="chips"></span><small>出場順序保密</small></div>
+          <div class="cpu-team"><span class="ct-label">CPU チーム</span> <span class="chips"></span><small>出場順序保密</small></div>
         </div>
         <p class="arena-desc"></p>
         <div class="select-main">
@@ -97,15 +98,42 @@
         <p class="final"></p>
         <p class="diff"></p>
         <ol class="breakdown"></ol>
-        <button type="button" class="retry">もう一度！／再來一場</button>
+        <p class="rm-status"></p>
+        <div class="result-actions">
+          <button type="button" class="retry">もう一度！／再來一場</button>
+          <button type="button" class="leave" hidden>離開</button>
+        </div>
       </section>
+
+      <!-- 線上對戰的房間：輸入名稱，建立房間（拿到房號與分享連結）或用房號加入 -->
+      <section id="online" class="screen" hidden>
+        <h2>オンライン対戦<small>線上對戰：建立房間後把連結傳給朋友，或輸入朋友的房號</small></h2>
+        <div class="ol-panel">
+          <div class="ol-form">
+            <label class="ol-name">你的名稱 <input type="text" maxlength="12" autocomplete="nickname" /></label>
+            <button type="button" class="ol-create">建立房間</button>
+            <div class="ol-join"><input class="ol-code" maxlength="4" placeholder="房號（4 碼）" autocomplete="off" /><button type="button" class="ol-join-btn">加入</button></div>
+          </div>
+          <div class="ol-room" hidden>
+            <p class="ol-label">房號</p>
+            <div class="ol-code-big"></div>
+            <div class="ol-share"><input class="ol-link" readonly /><button type="button" class="ol-copy">複製連結</button></div>
+            <p class="ol-status"></p>
+          </div>
+          <p class="ol-msg"></p>
+          <button type="button" class="ol-back">返回</button>
+        </div>
+      </section>
+
+      <!-- 連線與等待的覆蓋層：對手斷線、重新連線中、等待對手組隊等 -->
+      <div id="net-overlay" hidden><div class="no-box"><p class="no-text"></p><p class="no-sub"></p></div></div>
 
       <div id="audio-hint" hidden>🔊 クリックで音声ON／點擊畫面開啟聲音</div>
       <!-- 手機觸控操作：畫面任意處滑動推移（圓圈 = 按下處、圓點 = 手指）、快甩衝刺、三指觸控必殺 -->
       <div id="swipe" hidden><div class="ring"></div><div class="dot"></div></div>
       <div id="touch-hint" hidden></div>
 
-      <div id="help"><span class="kb">WASD／方向鍵：推移陀螺　SPACE：必殺技　M：音樂開關</span><span class="tc">滑動：推移　快甩：衝刺　三指觸控：必殺技</span></div>
+      <div id="help"><span class="kb">WASD／方向鍵：推移陀螺　Shift＋方向：衝刺　SPACE：必殺技　M：音樂開關</span><span class="tc">滑動：推移　快甩：衝刺　三指觸控：必殺技</span></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
