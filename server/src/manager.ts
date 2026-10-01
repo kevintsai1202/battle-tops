@@ -1,4 +1,4 @@
-import { makeRoomCode } from '../../src/net/protocol';
+import { makeRoomCode, type RoomSummary } from '../../src/net/protocol';
 import { RECONNECT_MS, Room, type Conn, type RoomDeps, type Side } from './room';
 
 /** 房間數上限（主機記憶體吃緊，每個房間約數十 KB，保守設定） */
@@ -9,12 +9,15 @@ const EMPTY_TTL_MS = RECONNECT_MS + 30_000;
 const LOBBY_TTL_MS = 10 * 60_000;
 /** 結果畫面停留多久後關閉 */
 const RESULT_TTL_MS = 5 * 60_000;
+/** 房間列表最多列幾間等人中、幾間對戰中 */
+const LIST_WAITING = 20;
+const LIST_PLAYING = 10;
 
 /** 進入房間的結果 */
 export type EnterResult = { room: Room; side: Side } | { error: string; message: string };
 
 /**
- * 管理所有房間：建立（產生不重複的房號）、加入、重連、定期推進與清理閒置房間。
+ * 管理所有房間：建立（產生不重複的房號）、加入、快速加入、重連、房間列表、定期推進與清理閒置房間。
  */
 export class RoomManager {
   private readonly rooms = new Map<string, Room>();
@@ -31,17 +34,65 @@ export class RoomManager {
     return this.rooms.size;
   }
 
-  /** 建立房間並以房主身分進入 */
-  create(conn: Conn, name: string): EnterResult {
+  /** 建立房間並以房主身分進入（isPublic：是否列在房間列表） */
+  create(conn: Conn, name: string, isPublic = true): EnterResult {
     if (this.rooms.size >= MAX_ROOMS) return { error: 'FULL', message: '伺服器房間已滿，請稍後再試' };
     let code = makeRoomCode(this.deps.rng);
     for (let i = 0; this.rooms.has(code) && i < 20; i++) code = makeRoomCode(this.deps.rng);
     if (this.rooms.has(code)) return { error: 'FULL', message: '暫時無法建立房間，請再試一次' };
-    const room = new Room(code, this.deps);
+    const room = new Room(code, this.deps, isPublic);
     this.rooms.set(code, room);
     const side = room.addPlayer(conn, name)!;
-    this.deps.log?.(`[${code}] 建立房間（共 ${this.rooms.size} 間）`);
+    // 建立當下就記下開始等的時間：還沒推進過也能正確排序與計算等了多久
+    this.phaseSince.set(room, { phase: room.phase, since: this.deps.now() });
+    this.deps.log?.(`[${code}] 建立${isPublic ? '公開' : '不公開'}房間（共 ${this.rooms.size} 間）`);
     return { room, side };
+  }
+
+  /** 快速加入：加入等最久的公開房間（房主在線、還沒有客人）；沒有就建一間公開房間 */
+  quick(conn: Conn, name: string): EnterResult {
+    let best: Room | null = null;
+    let bestSince = Infinity;
+    for (const room of this.rooms.values()) {
+      if (!room.isPublic || room.summary()?.status !== 'waiting') continue;
+      const since = this.sinceOf(room);
+      if (since < bestSince) {
+        best = room;
+        bestSince = since;
+      }
+    }
+    if (best) {
+      const side = best.addPlayer(conn, name);
+      if (side !== null) {
+        this.deps.log?.(`[${best.code}] 快速加入（陣營 ${side}）`);
+        return { room: best, side };
+      }
+    }
+    return this.create(conn, name, true);
+  }
+
+  /** 房間列表：公開的等人中房間（等最久的在前，最多 LIST_WAITING 間），接著是對戰中的（最多 LIST_PLAYING 間） */
+  list(): RoomSummary[] {
+    const now = this.deps.now();
+    const waiting: { since: number; row: RoomSummary }[] = [];
+    const playing: RoomSummary[] = [];
+    for (const room of this.rooms.values()) {
+      if (!room.isPublic) continue;
+      const s = room.summary();
+      if (!s) continue;
+      if (s.status === 'waiting') {
+        const since = this.sinceOf(room);
+        waiting.push({ since, row: { ...s, waited: Math.max(0, Math.round((now - since) / 1000)) } });
+      } else if (playing.length < LIST_PLAYING) playing.push({ ...s, waited: 0 });
+    }
+    waiting.sort((a, b) => a.since - b.since);
+    return [...waiting.slice(0, LIST_WAITING).map((w) => w.row), ...playing];
+  }
+
+  /** 房間進入目前階段的時間；階段剛變、還沒推進過時視為現在（列表與快速加入共用，兩邊的判斷一致） */
+  private sinceOf(room: Room): number {
+    const ps = this.phaseSince.get(room);
+    return ps && ps.phase === room.phase ? ps.since : this.deps.now();
   }
 
   /** 用房號加入 */

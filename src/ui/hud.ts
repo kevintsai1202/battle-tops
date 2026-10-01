@@ -91,9 +91,23 @@ export interface OnlineLobbyOptions {
   /** 預設名稱與房號（從分享連結進來時帶入） */
   name: string;
   code: string;
-  onCreate: (name: string) => void;
+  /** 建立房間（isPublic：是否列在房間列表） */
+  onCreate: (name: string, isPublic: boolean) => void;
+  /** 用房號加入（輸入房號或點房間列表） */
   onJoin: (code: string, name: string) => void;
+  /** 快速加入 */
+  onQuick: (name: string) => void;
   onBack: () => void;
+}
+
+/** 房間列表的一列（與 src/net/protocol.ts 的 RoomSummary 相同） */
+export interface RoomRow {
+  code: string;
+  host: string;
+  guest: string | null;
+  arena: ArenaId | 'random';
+  status: 'waiting' | 'playing';
+  waited: number;
 }
 
 /** 結果畫面的額外選項（線上對戰用） */
@@ -129,6 +143,10 @@ export class Hud {
   private detail: DetailView | null = null;
   /** 線上組隊時更新場地與對手狀態用（組隊畫面開著時才有） */
   private selectOnline: { setArena: (a: ArenaChoice) => void } | null = null;
+  /** 線上房間畫面正在連線（按鈕停用中） */
+  private onlineBusy = false;
+  /** 目前畫在房間列表上的內容（沒變就不重畫） */
+  private roomsKey = '';
 
   /**
    * 顯示標題畫面，點擊後呼叫 onStart。
@@ -171,7 +189,17 @@ export class Hud {
     $('.ol-form', root).hidden = false;
     this.setOnlineMessage('');
     this.setOnlineBusy(false);
-    $<HTMLButtonElement>('.ol-create', root).onclick = () => o.onCreate(name.value);
+    const priv = $<HTMLInputElement>('.ol-private input', root);
+    priv.checked = false;
+    $<HTMLButtonElement>('.ol-create', root).onclick = () => o.onCreate(name.value, !priv.checked);
+    $<HTMLButtonElement>('.ol-quick', root).onclick = () => o.onQuick(name.value);
+    // 房間列表：點等人中的房間就加入（列表會定時重畫，所以用事件委派）
+    $('.ol-rooms', root).onclick = (e) => {
+      const row = (e.target as HTMLElement).closest<HTMLButtonElement>('button.ol-room-row');
+      if (row && !row.disabled && row.dataset.code) o.onJoin(row.dataset.code, name.value);
+    };
+    this.roomsKey = '';
+    this.setRoomList([], '連線中…');
     const join = () => {
       const c = code.value.trim().toUpperCase();
       if (c.length !== 4) return this.setOnlineMessage('房號是 4 個字（英文與數字）', true);
@@ -211,9 +239,47 @@ export class Hud {
     m.classList.toggle('err', error);
   }
 
-  /** 連線中時停用按鈕 */
+  /** 連線中時停用按鈕（含房間列表的列） */
   setOnlineBusy(busy: boolean): void {
+    this.onlineBusy = busy;
     for (const b of document.querySelectorAll<HTMLButtonElement>('#online .ol-form button')) b.disabled = busy;
+  }
+
+  /**
+   * 房間列表：等人中的列是按鈕（點一下加入），對戰中的列灰色、不能點；note 為列表標題旁的狀態文字。
+   * 名稱是別的玩家取的，一律用 textContent 放進畫面（不當成 HTML）；內容沒變就不重畫（避免手指按下時列被換掉）。
+   */
+  setRoomList(rooms: RoomRow[], note: string): void {
+    const root = $('#online');
+    $('.ol-list-note', root).textContent = note;
+    const key = JSON.stringify(rooms);
+    if (key === this.roomsKey) return;
+    this.roomsKey = key;
+    const list = $('.ol-rooms', root);
+    list.replaceChildren();
+    if (!rooms.some((r) => r.status === 'waiting')) {
+      const empty = el('p', 'ol-empty');
+      empty.textContent = '目前沒有等人的房間：按「快速加入」會幫你開一間公開房間等人';
+      list.append(empty);
+    }
+    for (const r of rooms) {
+      const waiting = r.status === 'waiting';
+      const row = waiting ? el('button', 'ol-room-row') : el('div', 'ol-room-row playing');
+      row.dataset.code = r.code;
+      if (row instanceof HTMLButtonElement) {
+        row.type = 'button';
+        row.disabled = this.onlineBusy;
+      } else row.setAttribute('aria-disabled', 'true');
+      const who = el('span', 'rr-host');
+      who.textContent = waiting ? r.host : `${r.host} vs ${r.guest ?? ''}`;
+      const meta = el('span', 'rr-meta');
+      const arena = r.arena === 'random' ? '隨機場地' : ARENAS[r.arena].nameZh;
+      meta.textContent = `${arena}・${waiting ? waitedLabel(r.waited) : '對戰中'}`;
+      const go = el('span', 'rr-go');
+      go.textContent = waiting ? '加入 ▶' : '—';
+      row.append(who, meta, go);
+      list.append(row);
+    }
   }
 
   hideOnlineLobby(): void {
@@ -440,6 +506,18 @@ export class Hud {
     // 組隊中隱藏對戰操作說明（手機上會蓋住出陣按鈕）
     document.body.classList.add('selecting');
     setIdx(0);
+  }
+
+  /**
+   * 收起組隊畫面（沒有出陣就離開時：線上房間關閉、對手離開、回到標題）：
+   * 拿掉鍵盤操作、放掉詳細資料與線上狀態。正常出陣由組隊畫面自己收起。
+   */
+  hideTeamSelect(): void {
+    if (this.selectKeys) window.removeEventListener('keydown', this.selectKeys);
+    this.selectKeys = null;
+    $('#select').hidden = true;
+    this.detail = null;
+    this.selectOnline = null;
   }
 
   /** 線上組隊：更新場地（房主的選擇）與對手狀態 */
@@ -690,6 +768,11 @@ export class Hud {
 }
 
 /** 瞄準角度的文字（例如「→ 12°」） */
+/** 房間列表的等待時間文字：一分鐘內用秒、之後用分鐘 */
+function waitedLabel(sec: number): string {
+  return sec < 60 ? `等了 ${sec} 秒` : `等了 ${Math.floor(sec / 60)} 分鐘`;
+}
+
 function aimText(aim: number): string {
   const deg = Math.round((aim * 180) / Math.PI);
   if (Math.abs(deg) < 3) return '正面';

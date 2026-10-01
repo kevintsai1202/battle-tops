@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MAX_AHEAD_MS, OnlineSession, type Msg } from '../../src/game/online';
 import { ARENAS } from '../../src/sim/arena';
 import { BattleSim } from '../../src/sim/battle';
@@ -73,5 +73,95 @@ describe('線上連線：快照校正', () => {
     const spy = vi.spyOn(o.predictor!, 'reconcile');
     o.flushSnap();
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+/** 測試用：不真的連線的 OnlineSession，攔下送出的訊息；status 為連線狀態 */
+function offline(status: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' = 'open') {
+  const o = new OnlineSession('A', 'ws://unused.invalid/ws');
+  o.net.status = status;
+  const send = vi.spyOn(o.net, 'send').mockImplementation(() => undefined);
+  const connect = vi.spyOn(o.net, 'connect').mockResolvedValue(undefined);
+  // 真的 close 會碰 window（Node 測試環境沒有）
+  vi.spyOn(o.net, 'close').mockImplementation(() => undefined);
+  /** 模擬連線狀態改變（會通知訂閱者） */
+  const setStatus = (st: typeof status) => (o.net as unknown as { setStatus(x: string): void }).setStatus(st);
+  return { o, send, connect, setStatus };
+}
+
+describe('線上連線：房間列表', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test('開始瀏覽：已連線就立刻查一次、之後每 3 秒查一次；停止後不再查', () => {
+    vi.useFakeTimers();
+    const { o, send } = offline('open');
+    o.startBrowsing();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenLastCalledWith({ t: 'list' });
+    vi.advanceTimersByTime(3000);
+    expect(send).toHaveBeenCalledTimes(2);
+    o.stopBrowsing();
+    vi.advanceTimersByTime(9000);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  test('還沒連上：開始瀏覽就發起連線，連上的當下立刻查；斷了（closed）下一輪重試連線', () => {
+    vi.useFakeTimers();
+    const { o, send, connect, setStatus } = offline('idle');
+    o.startBrowsing();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(send).not.toHaveBeenCalled();
+    setStatus('open');
+    expect(send).toHaveBeenLastCalledWith({ t: 'list' });
+    setStatus('closed');
+    vi.advanceTimersByTime(3000);
+    expect(connect).toHaveBeenCalledTimes(2);
+    // 自動重連中（NetClient 自己會重試）不另外發起連線
+    setStatus('reconnecting');
+    vi.advanceTimersByTime(3000);
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  test('進房後停止瀏覽；離開（close）後也不再查、不再重試連線', () => {
+    vi.useFakeTimers();
+    const { o, send, connect } = offline('open');
+    o.startBrowsing();
+    o.onRoom({ t: 'room', code: 'ABCD', token: 'x'.repeat(24), host: true, public: true });
+    vi.advanceTimersByTime(9000);
+    expect(send).toHaveBeenCalledTimes(1);
+    const b = offline('closed');
+    b.o.startBrowsing();
+    b.o.close();
+    vi.advanceTimersByTime(9000);
+    expect(b.connect).toHaveBeenCalledTimes(1);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  test('收到房間列表：記下內容與收到次數；建房帶公開設定、快速加入帶名稱', () => {
+    const { o, send } = offline('open');
+    const rooms = [{ code: 'ABCD', host: 'Bob', guest: null, arena: 'practice' as const, status: 'waiting' as const, waited: 3 }];
+    o.onRooms({ t: 'rooms', rooms });
+    expect(o.rooms).toEqual(rooms);
+    expect(o.roomsSeen).toBe(1);
+    o.create(false);
+    expect(send).toHaveBeenLastCalledWith({ t: 'create', name: 'A', public: false });
+    o.quick();
+    expect(send).toHaveBeenLastCalledWith({ t: 'quick', name: 'A' });
+  });
+
+  test('連線：已連上直接完成；同時呼叫兩次只開一條連線；重連中就等它連上', async () => {
+    const a = offline('open');
+    await a.o.connect();
+    expect(a.connect).not.toHaveBeenCalled();
+    const b = offline('closed');
+    await Promise.all([b.o.connect(), b.o.connect()]);
+    expect(b.connect).toHaveBeenCalledTimes(1);
+    const c = offline('reconnecting');
+    const done = c.o.connect();
+    c.setStatus('open');
+    await done;
+    expect(c.connect).not.toHaveBeenCalled();
   });
 });

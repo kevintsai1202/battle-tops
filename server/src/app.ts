@@ -95,13 +95,24 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
         case 'ping':
           conn.send({ t: 'pong', c: msg.c, s: now() });
           return;
+        case 'list':
+          conn.send({ t: 'rooms', rooms: manager.list() });
+          return;
         case 'create':
         case 'join':
+        case 'quick':
         case 'resume': {
           // 換房間前先離開原本的房間
           if (session) session.room.handle(session.side, { t: 'leave' });
           session = null;
-          const r = msg.t === 'create' ? manager.create(conn, msg.name) : msg.t === 'join' ? manager.join(msg.code, conn, msg.name) : manager.resume(msg.code, msg.token, conn);
+          const r =
+            msg.t === 'create'
+              ? manager.create(conn, msg.name, msg.public)
+              : msg.t === 'join'
+                ? manager.join(msg.code, conn, msg.name)
+                : msg.t === 'quick'
+                  ? manager.quick(conn, msg.name)
+                  : manager.resume(msg.code, msg.token, conn);
           if ('error' in r) conn.send({ t: 'error', code: r.error, message: r.message });
           else session = r;
           return;

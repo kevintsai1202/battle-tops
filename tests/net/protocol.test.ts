@@ -40,7 +40,7 @@ describe('客戶端訊息檢查', () => {
 
   test('房號轉大寫後檢查、名稱會清理', () => {
     expect(parseClientMessage(JSON.stringify({ t: 'join', code: 'abcd', name: '  阿明 ' }))).toEqual({ t: 'join', code: 'ABCD', name: '阿明' });
-    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'Kevin' }))).toEqual({ t: 'create', name: 'Kevin' });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'Kevin' }))).toEqual({ t: 'create', name: 'Kevin', public: true });
   });
 
   test('推移：非有限數字丟掉；長度超過 1 正規化成 1', () => {
@@ -105,5 +105,15 @@ describe('隊伍檢查', () => {
       loadouts: {},
     });
     expect(parseClientMessage(JSON.stringify({ t: 'team', picks: ['blaze', 'blaze', 'gale'], loadouts: {} }))).toBeNull();
+  });
+});
+
+describe('房間列表與快速加入', () => {
+  test('list、quick 與建房的公開設定：沒帶 public（舊版網頁）或不是 false 都視為公開', () => {
+    expect(parseClientMessage(JSON.stringify({ t: 'list' }))).toEqual({ t: 'list' });
+    expect(parseClientMessage(JSON.stringify({ t: 'quick', name: ' 小明 ' }))).toEqual({ t: 'quick', name: '小明' });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A' }))).toEqual({ t: 'create', name: 'A', public: true });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', public: false }))).toEqual({ t: 'create', name: 'A', public: false });
+    expect(parseClientMessage(JSON.stringify({ t: 'create', name: 'A', public: 'no' }))).toEqual({ t: 'create', name: 'A', public: true });
   });
 });

@@ -7,7 +7,8 @@ import { Bot } from '../server/tests/bot';
  * 用 CPU 邏輯以真實時間打完整一場 3 對 3（約 2～4 分鐘），確認：
  * - 來源白名單放行 GitHub Pages 的網址；建房、加入、組隊正常。
  * - 雙方的結果互為鏡像（勝負相反、總分對調、每戰對陣一致），沒有錯誤訊息。
- * 並印出往返延遲與對戰中的快照間隔（伺服器每 50 ms 送一次）。
+ * - 房間列表查得到；列表上沒有別人在等時，兩個機器人快速加入會配進同一間（有人在等就略過，避免配到真實玩家）。
+ * 打完整場用不公開的房間，真實玩家的房間列表看不到機器人。並印出往返延遲與對戰中的快照間隔（伺服器每 50 ms 送一次）。
  * 執行（PowerShell 7）：
  *   npx vitest run --project balance live-server-report --reporter=verbose
  *   改測其他伺服器：$env:GAME_SERVER = 'ws://localhost:8787/ws'; npx vitest run --project balance live-server-report --reporter=verbose; Remove-Item Env:GAME_SERVER
@@ -39,7 +40,7 @@ test('線上伺服器：兩個機器人以真實時間打完整一場', async ()
       rtt.push(performance.now() - t0);
     }
 
-    host.send({ t: 'create', name: '機器人A' });
+    host.send({ t: 'create', name: '機器人A', public: false });
     const room = await host.waitFor('room', () => true, 10_000);
     guest.send({ t: 'join', code: room.code, name: '機器人B' });
     await guest.waitFor('room', () => true, 10_000);
@@ -76,6 +77,30 @@ test('線上伺服器：兩個機器人以真實時間打完整一場', async ()
     // 伺服器每 50 ms 送一次快照：中位數應接近 50
     expect(pct(gaps, 0.5)).toBeGreaterThan(30);
     expect(pct(gaps, 0.5)).toBeLessThan(80);
+
+    // 房間列表與快速加入（新開兩個機器人）
+    const q1 = new Bot(SERVER, 3, ORIGIN);
+    const q2 = new Bot(SERVER, 4, ORIGIN);
+    try {
+      await Promise.all([q1.open(), q2.open()]);
+      q1.send({ t: 'list' });
+      const list = await q1.waitFor('rooms', () => true, 10_000);
+      const others = list.rooms.filter((r) => r.status === 'waiting');
+      console.log(`房間列表：等人中 ${others.length} 間、對戰中 ${list.rooms.length - others.length} 間`);
+      if (others.length) console.log('有人在等，略過快速加入檢查（避免配到真實玩家）');
+      else {
+        q1.send({ t: 'quick', name: '機器人Q1' });
+        const r1 = await q1.waitFor('room', () => true, 10_000);
+        q2.send({ t: 'quick', name: '機器人Q2' });
+        const r2 = await q2.waitFor('room', () => true, 10_000);
+        console.log(`快速加入：${r1.code}（房主）← ${r2.code}`);
+        expect(r1.host).toBe(true);
+        expect(r2).toMatchObject({ code: r1.code, host: false });
+      }
+    } finally {
+      q1.close();
+      q2.close();
+    }
   } finally {
     host.close();
     guest.close();

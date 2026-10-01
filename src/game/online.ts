@@ -1,6 +1,6 @@
 import { gameServerUrl, NetClient } from '../net/client';
 import { Predictor } from '../net/predict';
-import type { ArenaChoice, ClientMessage, ResultRow, ServerMessage } from '../net/protocol';
+import type { ArenaChoice, ClientMessage, ResultRow, RoomSummary, ServerMessage } from '../net/protocol';
 import type { PullMetrics } from '../sim/launcher';
 import type { TeamLoadouts } from '../sim/parts';
 import type { TopId, V2 } from '../sim/types';
@@ -20,6 +20,8 @@ const INPUT_EPS = 0.02;
 export const MAX_AHEAD_MS = 250;
 /** 模擬每秒步數 */
 const STEPS_PER_SEC = 120;
+/** 瀏覽房間列表時多久查一次（毫秒） */
+export const BROWSE_EVERY = 3000;
 /** 瀏覽器記住玩家名稱用的 localStorage 鍵 */
 const NAME_KEY = 'battle-tops.name';
 
@@ -49,9 +51,10 @@ export class OnlineSession {
   readonly net: NetClient;
   /** 自己的名稱 */
   name: string;
-  /** 房號（進房後才有）與自己是不是房主 */
+  /** 房號（進房後才有）、自己是不是房主、房間是否公開在列表上 */
   code: string | null = null;
   host = false;
+  isPublic = true;
   /** 最新的房間狀態、公開的隊伍、目前這一戰 */
   lobby: Msg<'lobby'> | null = null;
   teams: Msg<'teams'> | null = null;
@@ -64,8 +67,17 @@ export class OnlineSession {
   predictor: Predictor | null = null;
   /** 對手斷線時的判負時間（本機毫秒；沒有暫停為 null） */
   pausedUntil: number | null = null;
+  /** 房間列表（最新一次查詢的結果）與收到的次數 */
+  rooms: RoomSummary[] = [];
+  roomsSeen = 0;
   /** 還沒套用的最新快照（每幀最多校正一次，中間的快照直接略過：快照是完整狀態） */
   private latestSnap: Msg<'snap'> | null = null;
+  /** 瀏覽房間列表的定時器（沒在瀏覽時為 null） */
+  private browseTimer: ReturnType<typeof setInterval> | null = null;
+  /** 進行中的連線（避免同時開兩條） */
+  private connecting: Promise<void> | null = null;
+  /** 已經離開線上對戰（不再重試連線） */
+  private closed = false;
   private seq = 0;
   private lastInput: V2 = { x: 0, z: 0 };
   private lastInputAt = 0;
@@ -73,6 +85,75 @@ export class OnlineSession {
   constructor(name: string, url = gameServerUrl()) {
     this.name = name;
     this.net = new NetClient(url);
+    this.net.onStatus((st) => {
+      // 連線有結果了：下次要連線時重新發起
+      if (st === 'open' || st === 'closed') this.connecting = null;
+      // 瀏覽中一連上就立刻查，不用等下一輪
+      if (st === 'open' && this.browseTimer !== null) this.requestRooms();
+    });
+  }
+
+  /**
+   * 連線：已連上直接完成；閒置或已斷就發起連線（同時呼叫只開一條）；
+   * 連線中、自動重連中就等狀態變成 open（變成 closed 視為失敗）。
+   */
+  connect(): Promise<void> {
+    const st = this.net.status;
+    if (st === 'open') return Promise.resolve();
+    if (this.connecting) return this.connecting;
+    if (st === 'idle' || st === 'closed') {
+      this.connecting = this.net.connect().finally(() => {
+        this.connecting = null;
+      });
+      return this.connecting;
+    }
+    return new Promise((ok, fail) => {
+      const off = this.net.onStatus((s) => {
+        if (s === 'open') {
+          off();
+          ok();
+        } else if (s === 'closed') {
+          off();
+          fail(new Error('連不上對戰伺服器'));
+        }
+      });
+    });
+  }
+
+  /** 開始瀏覽房間列表：立刻查一次，之後每 BROWSE_EVERY 毫秒查一次；沒連上就發起連線（斷了下一輪重試） */
+  startBrowsing(): void {
+    if (this.browseTimer !== null || this.closed) return;
+    this.browseTimer = setInterval(() => this.browseTick(), BROWSE_EVERY);
+    this.browseTick();
+  }
+
+  /** 停止瀏覽房間列表 */
+  stopBrowsing(): void {
+    if (this.browseTimer !== null) clearInterval(this.browseTimer);
+    this.browseTimer = null;
+  }
+
+  /** 是否正在瀏覽房間列表 */
+  get browsing(): boolean {
+    return this.browseTimer !== null;
+  }
+
+  /** 瀏覽的一輪：連線中就查列表；閒置或已斷就重試連線（自動重連中交給 NetClient） */
+  private browseTick(): void {
+    const st = this.net.status;
+    if (st === 'open') this.requestRooms();
+    else if ((st === 'idle' || st === 'closed') && !this.closed) this.connect().catch(() => undefined);
+  }
+
+  /** 查詢房間列表 */
+  requestRooms(): void {
+    if (this.net.status === 'open') this.send({ t: 'list' });
+  }
+
+  /** 收到房間列表 */
+  onRooms(m: Msg<'rooms'>): void {
+    this.rooms = m.rooms;
+    this.roomsSeen++;
   }
 
   /** 對手的名稱（還沒有對手時為「對手」） */
@@ -84,8 +165,14 @@ export class OnlineSession {
     this.net.send(m);
   }
 
-  create(): void {
-    this.send({ t: 'create', name: this.name });
+  /** 建立房間；isPublic 為是否列在房間列表 */
+  create(isPublic = true): void {
+    this.send({ t: 'create', name: this.name, public: isPublic });
+  }
+
+  /** 快速加入：加入等最久的公開房間，沒有就建一間公開房間 */
+  quick(): void {
+    this.send({ t: 'quick', name: this.name });
   }
 
   join(code: string): void {
@@ -117,11 +204,13 @@ export class OnlineSession {
     this.send({ t: 'rematch' });
   }
 
-  /** 進房：記下房號與 token（斷線自動回房） */
+  /** 進房：記下房號、是否公開與 token（斷線自動回房），停止瀏覽房間列表 */
   onRoom(m: Msg<'room'>): void {
     this.code = m.code;
     this.host = m.host;
+    this.isPublic = m.public;
     this.net.setResume(m.code, m.token);
+    this.stopBrowsing();
   }
 
   /** 新的一戰：記下座位與賽況，預測器等開打後再建 */
@@ -206,8 +295,10 @@ export class OnlineSession {
     return u.toString();
   }
 
-  /** 離開線上對戰：通知伺服器並關閉連線 */
+  /** 離開線上對戰：停止瀏覽、通知伺服器並關閉連線（之後不再重試連線） */
   close(): void {
+    this.closed = true;
+    this.stopBrowsing();
     this.leave();
     this.net.close();
   }

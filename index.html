@@ -107,12 +107,21 @@
 
       <!-- 線上對戰的房間：輸入名稱，建立房間（拿到房號與分享連結）或用房號加入 -->
       <section id="online" class="screen" hidden>
-        <h2>オンライン対戦<small>線上對戰：建立房間後把連結傳給朋友，或輸入朋友的房號</small></h2>
+        <h2>オンライン対戦<small>線上對戰：從房間列表點一下就加入，或按「快速加入」自動配對</small></h2>
         <div class="ol-panel">
           <div class="ol-form">
             <label class="ol-name">你的名稱 <input type="text" maxlength="12" autocomplete="nickname" /></label>
-            <button type="button" class="ol-create">建立房間</button>
+            <button type="button" class="ol-quick">快速加入</button>
+            <div class="ol-create-row">
+              <button type="button" class="ol-create">建立房間</button>
+              <label class="ol-private"><input type="checkbox" />不公開</label>
+            </div>
             <div class="ol-join"><input class="ol-code" maxlength="4" placeholder="房號（4 碼）" autocomplete="off" /><button type="button" class="ol-join-btn">加入</button></div>
+            <!-- 房間列表：等人中的可以點一下加入，對戰中的灰色顯示 -->
+            <div class="ol-list">
+              <p class="ol-list-head">房間列表<small class="ol-list-note"></small></p>
+              <div class="ol-rooms"></div>
+            </div>
           </div>
           <div class="ol-room" hidden>
             <p class="ol-label">房號</p>

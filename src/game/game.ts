@@ -638,6 +638,7 @@ export class Game {
   private toTitle(): void {
     this.setState('title');
     this.clearArena();
+    this.hud.hideTeamSelect();
     this.hud.hideHud();
     this.hud.clearBanner();
     this.hud.hideResult();
@@ -660,13 +661,14 @@ export class Game {
     );
   }
 
-  /** 線上房間畫面（message 為要顯示的錯誤訊息） */
+  /** 線上房間畫面（message 為要顯示的錯誤訊息）：還沒進房就瀏覽房間列表；房主等人中就顯示房號與分享連結 */
   private enterOnline(code: string, message = ''): void {
     this.setState('online');
     this.me = 0;
     this.rig.seat = 0;
     this.clearArena();
     this.closeShowcase();
+    this.hud.hideTeamSelect();
     this.hud.hideHud();
     this.hud.clearBanner();
     this.hud.hideResult();
@@ -676,39 +678,83 @@ export class Game {
     this.hud.showOnlineLobby({
       name: loadName(),
       code,
-      onCreate: (name) => void this.onlineConnect(name, null),
-      onJoin: (c, name) => void this.onlineConnect(name, c),
+      onCreate: (name, isPublic) => void this.onlineConnect(name, { kind: 'create', isPublic }),
+      onJoin: (c, name) => void this.onlineConnect(name, { kind: 'join', code: c }),
+      onQuick: (name) => void this.onlineConnect(name, { kind: 'quick' }),
       onBack: () => this.leaveOnline(),
     });
     if (message) this.hud.setOnlineMessage(message, true);
-    if (this.online?.code) this.hud.setOnlineRoom(this.online.code, this.online.shareLink(), '等待對手加入…');
+    const o = this.online;
+    if (o?.code) this.hud.setOnlineRoom(o.code, o.shareLink(), this.waitingText(o));
+    else this.browseRooms();
   }
 
-  /** 連上對戰伺服器，再建立房間（code 為 null）或用房號加入 */
-  private async onlineConnect(rawName: string, code: string | null): Promise<void> {
-    const name = rawName.trim() || 'Player';
-    saveName(name);
+  /** 取得線上連線（還沒有就建立，並訂閱伺服器訊息與連線狀態） */
+  private ensureOnline(name: string): OnlineSession {
     if (!this.online) {
       const o = new OnlineSession(name);
       o.net.on((m) => this.onServer(m));
       o.net.onStatus((st) => this.onNetStatus(st));
       this.online = o;
     }
+    return this.online;
+  }
+
+  /** 瀏覽房間列表：連上伺服器並定時查詢（連不上時列表標題顯示狀態，下一輪自動重試） */
+  private browseRooms(): void {
+    const o = this.ensureOnline(loadName() || 'Player');
+    o.startBrowsing();
+    this.renderRooms();
+  }
+
+  /** 畫房間列表與連線狀態（只在線上房間畫面、還沒進房時） */
+  private renderRooms(): void {
     const o = this.online;
+    if (!o || this.state !== 'online' || o.code) return;
+    const st = o.net.status;
+    const note =
+      st === 'open'
+        ? o.roomsSeen
+          ? '每 3 秒自動更新'
+          : '讀取中…'
+        : st === 'reconnecting'
+          ? '連線中斷，重新連線中…'
+          : st === 'closed'
+            ? '連不上對戰伺服器，稍後自動重試…'
+            : '連線中…';
+    this.hud.setRoomList(o.rooms, note);
+  }
+
+  /** 房主等人時的提示（公開房間會列在房間列表） */
+  private waitingText(o: OnlineSession): string {
+    return o.isPublic ? '等待對手加入…（已列在房間列表，別人點一下就能加入）' : '等待對手加入…（不公開：把房號或連結傳給朋友）';
+  }
+
+  /** 連上對戰伺服器後建立房間、用房號加入或快速加入（連不上時保留連線，房間列表會自動重試） */
+  private async onlineConnect(
+    rawName: string,
+    action: { kind: 'create'; isPublic: boolean } | { kind: 'join'; code: string } | { kind: 'quick' },
+  ): Promise<void> {
+    const name = rawName.trim() || 'Player';
+    saveName(name);
+    const o = this.ensureOnline(name);
     o.name = name;
     this.hud.setOnlineBusy(true);
     this.hud.setOnlineMessage('連線中…');
     try {
-      if (o.net.status !== 'open') await o.net.connect();
+      await o.connect();
     } catch {
+      if (this.online !== o) return;
       this.hud.setOnlineBusy(false);
       this.hud.setOnlineMessage('連不上對戰伺服器，請稍後再試', true);
-      this.online = null;
       return;
     }
+    // 連線途中按了「返回」
+    if (this.online !== o) return;
     this.hud.setOnlineMessage('');
-    if (code) o.join(code);
-    else o.create();
+    if (action.kind === 'join') o.join(action.code);
+    else if (action.kind === 'quick') o.quick();
+    else o.create(action.isPublic);
   }
 
   /** 離開線上對戰，回到標題 */
@@ -723,11 +769,19 @@ export class Game {
     this.toTitle();
   }
 
-  /** 連線狀態：自己斷線、重連中顯示覆蓋層（重連後伺服器會補送完整狀態） */
+  /**
+   * 連線狀態：還沒進房（瀏覽房間列表）時顯示在列表標題；進房後斷線、重連中顯示覆蓋層，
+   * 連回來就收起（伺服器會補送完整狀態；等對手組隊與對手斷線暫停的覆蓋層由各自的流程收起）。
+   */
   private onNetStatus(s: NetStatus): void {
-    if (!this.online) return;
+    const o = this.online;
+    if (!o) return;
+    if (!o.code) {
+      this.renderRooms();
+      return;
+    }
     if (s === 'reconnecting') this.hud.showNetOverlay('連線中斷，重新連線中…', '會自動回到房間');
-    else if (s === 'open' && this.state !== 'online' && !this.online.pausedUntil && this.state !== 'waiting') this.hud.hideNetOverlay();
+    else if (s === 'open' && !o.pausedUntil && this.state !== 'waiting') this.hud.hideNetOverlay();
   }
 
   /** 伺服器訊息分派 */
@@ -735,9 +789,13 @@ export class Game {
     const o = this.online;
     if (!o) return;
     switch (m.t) {
+      case 'rooms':
+        o.onRooms(m);
+        this.renderRooms();
+        break;
       case 'room':
         o.onRoom(m);
-        if (this.state === 'online') this.hud.setOnlineRoom(m.code, o.shareLink(), m.host ? '等待對手加入…' : '已加入，準備組隊…');
+        if (this.state === 'online') this.hud.setOnlineRoom(m.code, o.shareLink(), m.host ? this.waitingText(o) : '已加入，準備組隊…');
         break;
       case 'lobby':
         this.onLobby(m);
@@ -801,7 +859,7 @@ export class Game {
     if (m.phase === 'lobby') {
       // 還沒有對手，或對手離開了：回到房間畫面等人
       if (this.state !== 'online') this.enterOnline('', op ? '' : this.state === 'title' ? '' : '對手離開了，等待新的對手加入');
-      this.hud.setOnlineRoom(o.code, o.shareLink(), '等待對手加入…');
+      this.hud.setOnlineRoom(o.code, o.shareLink(), this.waitingText(o));
     } else if (m.phase === 'picking') {
       if (this.state !== 'select' && this.state !== 'waiting') this.enterOnlineSelect(m);
       else {
@@ -1443,6 +1501,10 @@ export class Game {
             paused: this.online.pausedUntil !== null,
             phase: this.online.lobby?.phase ?? null,
             opponent: this.online.lobby?.opponent?.name ?? null,
+            public: this.online.isPublic,
+            browsing: this.online.browsing,
+            roomsSeen: this.online.roomsSeen,
+            rooms: this.online.rooms,
           }
         : null,
       fov: this.gfx.camera.fov,

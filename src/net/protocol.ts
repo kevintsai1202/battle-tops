@@ -36,10 +36,14 @@ const NAME_MAX = 12;
 
 /** 客戶端送出的訊息 */
 export type ClientMessage =
-  /** 建立房間（自己是房主） */
-  | { t: 'create'; name: string }
+  /** 建立房間（自己是房主）；public 為是否列在房間列表（不公開時只能用房號或連結加入） */
+  | { t: 'create'; name: string; public: boolean }
   /** 用房號加入 */
   | { t: 'join'; code: string; name: string }
+  /** 快速加入：加入等最久的公開房間，沒有就建一間公開房間 */
+  | { t: 'quick'; name: string }
+  /** 查詢房間列表 */
+  | { t: 'list' }
   /** 斷線後用 token 重連 */
   | { t: 'resume'; code: string; token: string }
   /** 房主選場地 */
@@ -68,6 +72,16 @@ export type ClientMessage =
 /** 房間階段：大廳（等人、選場地）、組隊、比賽中、延長賽挑選、結果 */
 export type RoomPhase = 'lobby' | 'picking' | 'match' | 'overtimePick' | 'result';
 
+/** 房間列表的一列：等人中（可加入）或對戰中（灰色、不能加入）；waited 為等人中已經等了幾秒（對戰中為 0） */
+export interface RoomSummary {
+  code: string;
+  host: string;
+  guest: string | null;
+  arena: ArenaChoice;
+  status: 'waiting' | 'playing';
+  waited: number;
+}
+
 /** 一位玩家在房間裡的狀態（ready：組隊時＝已送出隊伍、結果畫面時＝要再來一場） */
 export interface PlayerInfo {
   name: string;
@@ -94,8 +108,10 @@ export type DirectorEvent =
 
 /** 伺服器送出的訊息 */
 export type ServerMessage =
-  /** 進入房間：房號、重連用 token、自己是不是房主 */
-  | { t: 'room'; code: string; token: string; host: boolean }
+  /** 進入房間：房號、重連用 token、自己是不是房主、房間是否公開在列表上 */
+  | { t: 'room'; code: string; token: string; host: boolean; public: boolean }
+  /** 房間列表（回應 list）：等人中的在前（等最久的最前面），接著是對戰中的 */
+  | { t: 'rooms'; rooms: RoomSummary[] }
   /** 房間狀態（大廳、組隊、結果畫面的雙方狀態與場地） */
   | { t: 'lobby'; phase: RoomPhase; arena: ArenaChoice; host: boolean; me: PlayerInfo; opponent: PlayerInfo | null }
   /** 雙方隊伍公開：自己的依出場順序、對手的依名鑑順序（出場順序保密）；arena 為實際場地（隨機已抽出） */
@@ -208,7 +224,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
   switch (m.t) {
     case 'create':
-      return { t: 'create', name: sanitizeName(m.name) };
+      // 沒帶 public（舊版網頁）或不是 false 都視為公開
+      return { t: 'create', name: sanitizeName(m.name), public: m.public !== false };
+    case 'quick':
+      return { t: 'quick', name: sanitizeName(m.name) };
+    case 'list':
+      return { t: 'list' };
     case 'join': {
       const code = typeof m.code === 'string' ? m.code.toUpperCase() : '';
       return isRoomCode(code) ? { t: 'join', code, name: sanitizeName(m.name) } : null;

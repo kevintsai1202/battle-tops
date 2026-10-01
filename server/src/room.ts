@@ -1,5 +1,5 @@
 import { CameraDirector } from '../../src/director/director';
-import type { ArenaChoice, ClientMessage, DirectorEvent, PlayerInfo, ResultRow, RoomPhase, ServerMessage, SpecRef } from '../../src/net/protocol';
+import type { ArenaChoice, ClientMessage, DirectorEvent, PlayerInfo, ResultRow, RoomPhase, RoomSummary, ServerMessage, SpecRef } from '../../src/net/protocol';
 import { ARENA_IDS, ARENAS, type ArenaSpec } from '../../src/sim/arena';
 import { BattleSim } from '../../src/sim/battle';
 import { DIFFICULTIES } from '../../src/sim/difficulty';
@@ -75,6 +75,20 @@ export function seatOf(side: Side, hostSeat: Seat): Seat {
   return (side === 0 ? hostSeat : 1 - hostSeat) as Seat;
 }
 
+/**
+ * 房間列表的狀態判斷（純函式）：等人中＝大廳、房主在線、還沒有客人（可以加入）；
+ * 對戰中＝雙方都在且至少一人在線（組隊、比賽、延長賽挑選、結果畫面，灰色顯示）；其他情況不列出（null）。
+ */
+export function listingStatus(
+  phase: RoomPhase,
+  host: { connected: boolean } | null,
+  guest: { connected: boolean } | null,
+): 'waiting' | 'playing' | null {
+  if (!host) return null;
+  if (!guest) return phase === 'lobby' && host.connected ? 'waiting' : null;
+  return phase !== 'lobby' && (host.connected || guest.connected) ? 'playing' : null;
+}
+
 /** 一位玩家 */
 interface Player {
   name: string;
@@ -126,6 +140,8 @@ interface Battle {
 
 export class Room {
   readonly code: string;
+  /** 是否公開在房間列表（不公開時只能用房號或連結加入） */
+  readonly isPublic: boolean;
   private readonly deps: RoomDeps;
   phase: RoomPhase = 'lobby';
   private arenaChoice: ArenaChoice = 'practice';
@@ -141,8 +157,9 @@ export class Room {
   lastActive: number;
   private isClosed = false;
 
-  constructor(code: string, deps: RoomDeps) {
+  constructor(code: string, deps: RoomDeps, isPublic = true) {
     this.code = code;
+    this.isPublic = isPublic;
     this.deps = deps;
     this.lastActive = deps.now();
   }
@@ -155,6 +172,15 @@ export class Room {
   /** 目前連線中的人數 */
   get connected(): number {
     return this.players.filter((p) => p?.conn).length;
+  }
+
+  /** 房間列表用的摘要（不該列出時為 null；等了幾秒由 RoomManager 依階段開始的時間補上） */
+  summary(): Omit<RoomSummary, 'waited'> | null {
+    if (this.isClosed) return null;
+    const [h, g] = this.players;
+    const status = listingStatus(this.phase, h ? { connected: h.conn !== null } : null, g ? { connected: g.conn !== null } : null);
+    if (!status || !h) return null;
+    return { code: this.code, host: h.name, guest: g?.name ?? null, arena: this.arenaChoice, status };
   }
 
   /** 測試用：立刻送出快照（模擬「還沒推進就到了送快照的時間」） */
@@ -190,7 +216,7 @@ export class Room {
       launch: null,
       goneAt: null,
     };
-    this.send(side, { t: 'room', code: this.code, token: this.players[side]!.token, host: side === 0 });
+    this.send(side, { t: 'room', code: this.code, token: this.players[side]!.token, host: side === 0, public: this.isPublic });
     if (side === 1 && this.phase === 'lobby') this.phase = 'picking';
     this.broadcastLobby();
     return side;
@@ -591,7 +617,7 @@ export class Room {
   /** 補送完整狀態（重連時） */
   private sendState(side: Side): void {
     const p = this.players[side]!;
-    this.send(side, { t: 'room', code: this.code, token: p.token, host: side === 0 });
+    this.send(side, { t: 'room', code: this.code, token: p.token, host: side === 0, public: this.isPublic });
     this.send(side, this.lobbyMessage(side));
     const m = this.match;
     if (m && this.phase !== 'picking') {

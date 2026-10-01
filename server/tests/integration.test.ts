@@ -37,7 +37,7 @@ async function bot(seed: number, origin?: string): Promise<Bot> {
 /** 建房、加入、雙方送出隊伍 */
 async function setup(): Promise<[Bot, Bot]> {
   const host = await bot(1);
-  host.send({ t: 'create', name: '房主' });
+  host.send({ t: 'create', name: '房主', public: true });
   const room = await host.waitFor('room');
   const guest = await bot(2);
   guest.send({ t: 'join', code: room.code, name: '客人' });
@@ -102,7 +102,7 @@ describe('伺服器整合', () => {
     a.send({ t: 'join', code: 'ZZZZ', name: 'x' });
     expect((await a.waitFor('error')).code).toBe('NOT_FOUND');
     const h = await bot(5);
-    h.send({ t: 'create', name: 'h' });
+    h.send({ t: 'create', name: 'h', public: true });
     const { code } = await h.waitFor('room');
     const g = await bot(6);
     g.send({ t: 'join', code, name: 'g' });
@@ -110,6 +110,24 @@ describe('伺服器整合', () => {
     const third = await bot(7);
     third.send({ t: 'join', code, name: 't' });
     expect((await third.waitFor('error')).code).toBe('ROOM_FULL');
+  });
+
+  test('快速加入：兩個機器人先後按，配進同一間；查詢列表看得到等人中、再變成對戰中', async () => {
+    const a = await bot(21);
+    a.send({ t: 'quick', name: '甲' });
+    const ra = await a.waitFor('room');
+    expect(ra).toMatchObject({ host: true, public: true });
+    const viewer = await bot(23);
+    viewer.send({ t: 'list' });
+    const l1 = await viewer.waitFor('rooms');
+    expect(l1.rooms).toEqual([expect.objectContaining({ code: ra.code, host: '甲', guest: null, status: 'waiting' })]);
+    const b = await bot(22);
+    b.send({ t: 'quick', name: '乙' });
+    const rb = await b.waitFor('room');
+    expect(rb).toMatchObject({ code: ra.code, host: false });
+    viewer.send({ t: 'list' });
+    const l2 = await viewer.waitFor('rooms', (m) => m !== l1);
+    expect(l2.rooms).toEqual([expect.objectContaining({ code: ra.code, host: '甲', guest: '乙', status: 'playing' })]);
   });
 
   test('處理訊息時丟出例外：只記錄錯誤，伺服器與這條連線照常服務', async () => {
