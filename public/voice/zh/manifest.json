@@ -1,35 +1,35 @@
 {
   "countdown_3": {
     "file": "countdown_3.mp3",
-    "text": "[excited] 三！",
+    "text": "[excited] Three!",
     "speaker": "announcer",
     "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
-    "hash": "e424a2831c02d530",
-    "seconds": 0.395
+    "hash": "54ebbaaff70f0b7c",
+    "seconds": 0.485
   },
   "countdown_2": {
     "file": "countdown_2.mp3",
-    "text": "[excited] 二！",
+    "text": "[excited] Two!",
     "speaker": "announcer",
     "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
-    "hash": "7b8234e964f4dc5f",
-    "seconds": 0.442
+    "hash": "e0124e3ae86c546b",
+    "seconds": 0.368
   },
   "countdown_1": {
     "file": "countdown_1.mp3",
-    "text": "[excited] 一！",
+    "text": "[excited] One!",
     "speaker": "announcer",
     "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
-    "hash": "ec4d9efc7b04343e",
-    "seconds": 0.363
+    "hash": "c8a6b30f6c2512a5",
+    "seconds": 0.386
   },
   "go_shoot": {
     "file": "go_shoot.mp3",
-    "text": "[shouting][excited] 發射吧——！！",
+    "text": "[shouting][excited] Go Shoot!!",
     "speaker": "player",
     "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
-    "hash": "88f17d5a4ac258f1",
-    "seconds": 0.777
+    "hash": "63410adeb5885b2c",
+    "seconds": 0.704
   },
   "clash_1": {
     "file": "clash_1.mp3",

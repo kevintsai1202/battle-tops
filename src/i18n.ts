@@ -1,7 +1,7 @@
 /**
  * 介面語言切換。
  * - ja：日文版（原本的日式熱血風格：日文標題與日語語音，夾帶中文說明）
- * - zh：全中文版（畫面全中文、中文語音；按鍵名稱維持英文）
+ * - zh：全中文版（畫面全中文、中文語音；按鍵名稱與發射口號「Go Shoot」維持英文）
  * 起始語言：網址參數 lang 優先，其次是上次選的（localStorage），都沒有就用日文。
  * 只有兩種模式顯示不同的字才放進字串表 TEXT；本來就是中文的字直接寫在程式裡。
  * 這個模組在 import 時不碰 window／document，單元測試（Node）可以直接載入。
@@ -40,9 +40,9 @@ export const TEXT = {
   'audio.hint': { ja: '🔊 クリックで音声ON／點擊畫面開啟聲音', zh: '🔊 點擊畫面開啟聲音' },
   'launch.hintKb': {
     ja: '滑鼠按住往下拖（拉條），在「ゴー」的瞬間放手！左右拖可瞄準・SPACE：簡易發射（最高 85%）',
-    zh: '滑鼠按住往下拖（拉條），在「發射」的瞬間放手！左右拖可瞄準・SPACE：簡易發射（最高 85%）',
+    zh: '滑鼠按住往下拖（拉條），在「Go Shoot」的瞬間放手！左右拖可瞄準・SPACE：簡易發射（最高 85%）',
   },
-  'launch.hintTc': { ja: '手指按住往下滑（拉條），在「ゴー」的瞬間放手！左右滑可瞄準', zh: '手指按住往下滑（拉條），在「發射」的瞬間放手！左右滑可瞄準' },
+  'launch.hintTc': { ja: '手指按住往下滑（拉條），在「ゴー」的瞬間放手！左右滑可瞄準', zh: '手指按住往下滑（拉條），在「Go Shoot」的瞬間放手！左右滑可瞄準' },
   'launch.power': { ja: 'POWER', zh: '力道' },
   'launch.powerAim': { ja: 'POWER {p}%　{aim}', zh: '力道 {p}%　{aim}' },
   'hud.rpm': { ja: 'RPM', zh: '轉/分' },
@@ -50,7 +50,7 @@ export const TEXT = {
   'hud.readyKey': { ja: '必殺 READY ▶', zh: '必殺就緒 ▶' },
   'hud.ready': { ja: '必殺 READY', zh: '必殺就緒' },
   'hud.you': { ja: 'YOU ｜ {name}', zh: '你 ｜ {name}' },
-  'touch.ready': { ja: '必殺 READY！三指觸控發動', zh: '必殺就緒！三指觸控發動' },
+  'touch.ready': { ja: '必殺 READY！點右下角的按鈕（或三指觸控）', zh: '必殺就緒！點右下角的按鈕（或三指觸控）' },
   you: { ja: 'YOU', zh: '你' },
   cpu: { ja: 'CPU', zh: '電腦' },
   vs: { ja: 'VS', zh: '對' },
@@ -60,7 +60,8 @@ export const TEXT = {
   'banner.final': { ja: 'FINAL BATTLE', zh: '最終決戰' },
   'banner.overtime': { ja: 'OVERTIME', zh: '延長賽' },
   'banner.replay': { ja: '（再戦）', zh: '（重賽）' },
-  'banner.go': { ja: 'ゴー・シュート!!', zh: '發射！！' },
+  // 發射的口號：台灣與日本原作一樣喊英文「Go Shoot」（全中文版唯一保留的英文遊戲用語，使用者決定）
+  'banner.go': { ja: 'ゴー・シュート!!', zh: 'GO SHOOT!!' },
   'banner.shoot': { ja: 'シュート！', zh: '發射！' },
   'banner.error': { ja: 'ERROR', zh: '錯誤' },
   'banner.draw': { ja: 'DRAW', zh: '平手' },

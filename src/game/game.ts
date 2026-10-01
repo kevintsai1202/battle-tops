@@ -23,8 +23,8 @@ import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
 import { css, Hud, type ArenaChoice, type CordView } from '../ui/hud';
 import { SwipeControls, type StickVector } from '../ui/touch';
-import { TutorialOverlay } from '../ui/tutorial';
-import { PULL_MIN, shouldOfferTutorial, STEPS, TUTORIAL_KEY, TutorialFlow, type TutorialCtx, type TutorialEvent, type TutorialInput } from '../tutorial/flow';
+import { TutorialOverlay, type GuideFrame, type ScreenPoint } from '../ui/tutorial';
+import { PULL_MIN, shouldOfferTutorial, STEPS, targetOf, TUTORIAL_KEY, TutorialFlow, type TutorialCtx, type TutorialEvent, type TutorialInput } from '../tutorial/flow';
 import type { NetStatus } from '../net/client';
 import { perspectiveMatch } from '../net/perspective';
 import type { ServerMessage } from '../net/protocol';
@@ -212,7 +212,8 @@ export class Game {
    * flow 步驟流程、ui 教學畫面、pushTime 對戰中推移的累計秒數、next「下一步」按鈕的訊號（用一次就清掉）、
    * holdUntil 發射倒數暫停到這個時間（解說講完才開始倒數）、firstOrder 第 2 步一開始的出場順序、
    * narrated 這一步的解說播過了沒、narrateAt 最早何時播（等主播講完）、guideReady 解說音檔載好了沒、
-   * restoreDifficulty 教學結束後還原的難度（教學固定用簡單）。
+   * restoreDifficulty 教學結束後還原的難度（教學固定用簡單）、
+   * demoLaunch 這次倒數暫停時要不要播發射示範（重來的那一次不播）、demoTime 示範播了幾秒、demoShown 發射台目前由示範控制。
    */
   private tut: {
     flow: TutorialFlow;
@@ -225,6 +226,9 @@ export class Game {
     narrateAt: number;
     guideReady: boolean;
     restoreDifficulty: Difficulty;
+    demoLaunch: boolean;
+    demoTime: number;
+    demoShown: boolean;
   } | null = null;
   /** 這則快照裡伺服器判定為重擊（觸發特寫）的撞擊位置 */
   private bigClashPos: V2[] = [];
@@ -246,6 +250,14 @@ export class Game {
     this.aimArrow.visible = false;
     this.gfx.scene.add(this.aimArrow);
     this.touch = new SwipeControls({ onSpecial: () => this.trySpecial(), onFlick: (d) => this.tryDash(d) });
+    // 必殺按鈕（手機、必殺集滿時才出現）：按下就發動；事件不往外傳，不會被當成滑動推移或多指觸控
+    const specialBtn = document.getElementById('special-btn')!;
+    specialBtn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.trySpecial();
+    });
+    for (const ev of ['touchstart', 'click'] as const) specialBtn.addEventListener(ev, (e) => e.stopPropagation());
     if (coarse) this.enableTouchMode();
     this.effects = new Effects(this.gfx.scene);
     this.effects.arena = this.arena;
@@ -767,6 +779,9 @@ export class Game {
       narrateAt: 0,
       guideReady: false,
       restoreDifficulty: this.difficulty,
+      demoLaunch: false,
+      demoTime: 0,
+      demoShown: false,
     };
     this.tut = tut;
     this.difficulty = DIFFICULTIES.easy;
@@ -801,8 +816,9 @@ export class Game {
     const me = this.sim?.tops[this.me];
     const cpu = this.sim?.tops[this.me === 0 ? 1 : 0];
     if (step.id === 'launch') {
-      // 解說講完才開始倒數（narrate 依解說長度改成實際的時間）
+      // 解說講完才開始倒數（narrate 依解說長度改成實際的時間）；倒數暫停時先在發射台上示範一次
       t.holdUntil = this.clock + 60;
+      this.startLaunchDemo();
     } else if (step.id === 'special' && me) {
       // 讓玩家馬上可以試：必殺量表直接集滿（這一戰已經放過也重新給一次）
       me.special = 1;
@@ -823,7 +839,41 @@ export class Game {
     const id = t.flow.step.voice[this.tutorialInput()];
     this.voice.guide(id);
     t.narrated = true;
-    if (t.flow.step.id === 'launch' && this.state === 'launch') t.holdUntil = this.clock + this.voice.guideDuration(id) + 0.3;
+    if (t.flow.step.id === 'launch' && this.state === 'launch') {
+      t.holdUntil = this.clock + this.voice.guideDuration(id) + 0.3;
+      // 重聽時也重播示範
+      this.startLaunchDemo();
+    }
+  }
+
+  /** 發射示範從頭播（開場介紹的大字收起，不和發射台疊在一起） */
+  private startLaunchDemo(): void {
+    const t = this.tut;
+    if (!t) return;
+    t.demoLaunch = true;
+    t.demoTime = 0;
+    this.hud.clearBanner();
+  }
+
+  /**
+   * 發射示範的一幀（3.2 秒一輪，用真的發射台畫面）：0.3 秒按下 → 往下拉到畫面短邊的 45%，外圈同時收縮 →
+   * 2.0 秒外圈對上內圈時放手、跳出 GO SHOOT → 手指回到起點。回傳手指（游標）的位置與狀態。
+   * 倒數暫停中 updateLaunch 不會畫發射台（還沒到倒數），這裡獨占 launchMeter。
+   */
+  private launchDemoFrame(time: number): ScreenPoint & { pressed: boolean; go: boolean } {
+    const LOOP = 3.2;
+    const PRESS = 0.3;
+    const RELEASE = 2.0;
+    const k = time % LOOP;
+    const from = { x: window.innerWidth / 2, y: window.innerHeight * 0.3 };
+    const len = Math.min(window.innerWidth, window.innerHeight) * 0.45;
+    const pull = Math.max(0, Math.min(1, (k - PRESS) / (RELEASE - PRESS)));
+    const eased = 1 - (1 - pull) * (1 - pull);
+    const pressed = k >= PRESS && k < RELEASE;
+    const to = { x: from.x, y: from.y + len * eased };
+    this.hud.launchMeter(true, k / RELEASE, pressed ? { from, to, power: eased, aim: 0 } : null);
+    const hand = k < RELEASE + 0.8 ? to : from;
+    return { x: hand.x, y: hand.y, pressed, go: k >= RELEASE && k < RELEASE + 0.8 };
   }
 
   /** 流程的結果：前進就顯示下一步；發射沒拉條就重來這一戰；全部完成就結束教學 */
@@ -843,6 +893,8 @@ export class Game {
   private restartTutorialRound(delay: number): void {
     const t = this.tut;
     if (!t) return;
+    // 重來的那一次不再示範（只提示在哪裡按住往下拉）
+    t.demoLaunch = false;
     t.holdUntil = this.clock + delay + 4;
     window.setTimeout(() => {
       if (this.tut !== t) return;
@@ -865,18 +917,21 @@ export class Game {
     return [...document.querySelectorAll<HTMLElement>('#arrange .ar-slot')].map((e) => e.dataset.id).join(',');
   }
 
-  /** 每幀：整理教學需要的狀態給流程判斷，播解說，更新聚光圈 */
+  /** 每幀：整理教學需要的狀態給流程判斷，播解說，更新聚光圈與大畫面指引 */
   private updateTutorial(wallDt: number): void {
     const t = this.tut;
     if (!t) return;
+    let pushing = false;
     if (this.state === 'battle' && this.sim) {
       const c = this.playerControl();
-      if (c.x !== 0 || c.z !== 0) t.pushTime += wallDt;
+      pushing = c.x !== 0 || c.z !== 0;
+      if (pushing) t.pushTime += wallDt;
     }
     if (this.state === 'arrange' && t.firstOrder === null && document.querySelector('#arrange .ar-slot')) t.firstOrder = this.arrangeOrderKey();
     const ctx: TutorialCtx = {
       state: this.state,
-      picks: document.querySelectorAll('#select .card.picked').length,
+      input: this.tutorialInput(),
+      picked: [...document.querySelectorAll<HTMLElement>('#select .card.picked')].map((e) => e.dataset.id ?? ''),
       orderChanged: this.state === 'arrange' && t.firstOrder !== null && this.arrangeOrderKey() !== t.firstOrder,
       partChanged: [...document.querySelectorAll('#arrange .ar-slot small')].some((e) => e.textContent?.includes('換了零件')),
       pulled: (this.lastLaunch.pull?.length ?? 0) >= PULL_MIN,
@@ -888,8 +943,37 @@ export class Game {
     };
     t.next = false;
     this.onTutorialEvent(t.flow.update(ctx));
-    if (this.tut === t && !t.narrated && t.guideReady && this.clock >= t.narrateAt) this.narrate();
-    this.tut?.ui.update(wallDt);
+    if (this.tut !== t) return;
+    if (!t.narrated && t.guideReady && this.clock >= t.narrateAt) this.narrate();
+    t.ui.update(wallDt, this.guideFrame(t, ctx, wallDt, pushing));
+  }
+
+  /**
+   * 大畫面指引需要的資料：要框住的元素、雙方陀螺在螢幕上的位置、發射示範或按住的位置、玩家是否正在操作。
+   * 發射那一步：倒數暫停中播示範（真的發射台＋手指），倒數開始後提示在哪裡按住往下拉；示範結束時收起發射台。
+   */
+  private guideFrame(t: NonNullable<Game['tut']>, ctx: TutorialCtx, wallDt: number, pushing: boolean): GuideFrame {
+    const step = t.flow.step;
+    const frame: GuideFrame = { target: targetOf(step, ctx), busy: this.pull !== null || pushing };
+    if (this.sim && (this.state === 'battle' || this.state === 'roundEnd')) {
+      const me = this.screenOf(this.sim.tops[this.me].pos);
+      const op = this.screenOf(this.sim.tops[this.me === 0 ? 1 : 0].pos);
+      frame.player = { x: me.x, y: me.y };
+      frame.opponent = { x: op.x, y: op.y };
+    }
+    const holding = this.state === 'launch' && this.clock < t.holdUntil;
+    if (step.id === 'launch' && holding && t.demoLaunch) {
+      t.demoTime += wallDt;
+      t.demoShown = true;
+      frame.launchDemo = this.launchDemoFrame(t.demoTime);
+    } else {
+      if (t.demoShown) {
+        t.demoShown = false;
+        this.hud.launchMeter(false);
+      }
+      if (step.id === 'launch' && this.state === 'launch' && !holding) frame.pressAt = { x: window.innerWidth / 2, y: window.innerHeight * 0.3 };
+    }
+    return frame;
   }
 
   /** 線上房間畫面（message 為要顯示的錯誤訊息）：還沒進房就瀏覽房間列表；房主等人中就顯示房號與分享連結 */
@@ -1349,7 +1433,7 @@ export class Game {
     document.body.classList.add('touch');
   }
 
-  /** 玩家發動必殺技（Space 或三指觸控） */
+  /** 玩家發動必殺技（Space、手機的必殺按鈕或三指觸控） */
   private trySpecial(): void {
     if (this.state !== 'battle' || !this.sim || this.opts.demo) return;
     if (this.online) this.online.special();
@@ -1745,14 +1829,16 @@ export class Game {
     this.touch.setEnabled(on);
     const hint = this.touchHint;
     hint.hidden = !on;
-    if (!on) return;
     const me = this.sim?.tops[this.me];
-    const ready = !!me && me.alive && !me.specialUsed && me.special >= 1;
+    const ready = on && !!me && me.alive && !me.specialUsed && me.special >= 1;
+    // 必殺按鈕：手機對戰中、必殺集滿時才出現
+    document.getElementById('special-btn')!.hidden = !ready;
+    if (!on) return;
     if (hint.classList.contains('ready') !== ready) {
       hint.classList.toggle('ready', ready);
-      hint.textContent = ready ? tr('touch.ready') : '滑動：推移　快甩：衝刺　三指：必殺';
+      hint.textContent = ready ? tr('touch.ready') : '滑動：推移　快甩：衝刺　必殺：按鈕或三指';
     } else if (!hint.textContent) {
-      hint.textContent = '滑動：推移　快甩：衝刺　三指：必殺';
+      hint.textContent = '滑動：推移　快甩：衝刺　必殺：按鈕或三指';
     }
   }
 
@@ -1803,6 +1889,7 @@ export class Game {
             index: this.tut.flow.index,
             guard: this.tut.flow.guard,
             holding: this.state === 'launch' && this.clock < this.tut.holdUntil,
+            demo: this.tut.demoShown,
             pushTime: this.tut.pushTime,
           }
         : null,

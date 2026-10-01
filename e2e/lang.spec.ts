@@ -14,7 +14,7 @@ import { confirmArrange, pickTeam, pickTops } from './team.helpers';
 /** 日文假名（平假名、片假名、長音符；中黑點「・」是中文介面也用的標點，不算） */
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
 /** 中文版允許出現的英文：鍵盤按鍵名稱 */
-const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|Enter|Backspace|Esc|Q|E|M)\b/g;
+const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|Enter|Backspace|Esc|Q|E|M|GO SHOOT|Go Shoot)\b/g;
 /** 檢查英文字的區塊：對戰中的大字、HUD、擬聲字、必殺 cut-in、發射台、延長賽、結果畫面 */
 const BATTLE_AREAS = ['banner', 'hud', 'fx-layer', 'cutin', 'launch', 'overtime', 'result'];
 /** 線上對戰預設連本機伺服器；對線上網址跑時用環境變數 GAME_SERVER 指定（與 online.spec 相同） */
@@ -188,9 +188,9 @@ test('桌機：切到中文並記住；組隊、發射、延長賽、對戰到�
   await page.screenshot({ path: 'e2e/screenshots/93-lang-overtime-zh.png' });
   await page.locator('#overtime .card').first().click();
 
-  // 倒數到「發射！！」時按 Space
-  await page.locator('#banner .bn', { hasText: '發射' }).waitFor({ timeout: 45_000 });
-  await expect(page.locator('#launch .hint .kb')).toContainText('在「發射」的瞬間放手');
+  // 倒數到「GO SHOOT!!」時按 Space（中文版照台灣與日本原作的習慣喊英文）
+  await page.locator('#banner .bn', { hasText: 'GO SHOOT' }).waitFor({ timeout: 45_000 });
+  await expect(page.locator('#launch .hint .kb')).toContainText('在「Go Shoot」的瞬間放手');
   await page.keyboard.press('Space');
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   await expect(page.locator('#banner .bn-sub')).toContainText('力道');
@@ -296,7 +296,7 @@ test.describe('手機橫向', () => {
     await confirmArrange(page, true);
 
     await expect(page.locator('#hud .panel[data-side="0"] .name')).toHaveText('你 ｜ 幻星獵戶');
-    await expect(page.locator('#launch .hint .tc')).toHaveText('手指按住往下滑（拉條），在「發射」的瞬間放手！左右滑可瞄準');
+    await expect(page.locator('#launch .hint .tc')).toHaveText('手指按住往下滑（拉條），在「Go Shoot」的瞬間放手！左右滑可瞄準');
     await expectNoKanaVisible(page, '手機對戰畫面');
     await page.screenshot({ path: 'e2e/screenshots/98-lang-mobile-hud.png' });
     expect(errors).toEqual([]);

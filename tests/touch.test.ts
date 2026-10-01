@@ -124,16 +124,55 @@ describe('手勢追蹤：拖曳、快甩、三指必殺', () => {
     expect(g.down(3, 300, 100, 1)).toEqual([{ type: 'special' }]);
   });
 
-  test('拖曳中加上兩指發動必殺：原本拖曳的手指繼續控制；之後放開不算快甩', () => {
+  test('拖曳中加上兩指發動必殺：第二指一放下就停止推移，到全部手指放開前都不推；放開不算快甩', () => {
     const g = make();
     g.down(1, 200, 200, 0);
     g.move(1, 260, 200, 0.2);
+    expect(g.vector().x).toBeGreaterThan(0.5);
     g.down(2, 400, 100, 0.3);
+    expect(g.vector()).toEqual({ x: 0, y: 0 });
+    expect(g.handle).toBeNull();
     expect(g.down(3, 450, 100, 0.32)).toEqual([{ type: 'special' }]);
     g.move(1, 200, 140, 0.4);
-    expect(g.vector().y).toBeGreaterThan(0.5);
+    expect(g.vector()).toEqual({ x: 0, y: 0 });
+    // 另外兩指先放開，原本的手指還按著：仍然不推（要全部放開再按）
+    g.up(2, 400, 100, 0.42);
+    g.up(3, 450, 100, 0.43);
     g.move(1, 200, 60, 0.45);
+    expect(g.vector()).toEqual({ x: 0, y: 0 });
     expect(g.up(1, 200, 20, 0.47).some((e) => e.type === 'flick')).toBe(false);
+    // 全部放開後重新按下就能推
+    g.down(4, 200, 200, 1);
+    g.move(4, 260, 200, 1.2);
+    expect(g.vector().x).toBeGreaterThan(0.5);
+  });
+
+  test('三指陸續放下（前一指先滑了一點）：陀螺不會被推動', () => {
+    const g = make();
+    g.down(1, 200, 200, 0);
+    g.move(1, 230, 205, 0.05);
+    // 按下後 0.12 秒內不推（給其他手指放下的時間）
+    expect(g.vector(0.08)).toEqual({ x: 0, y: 0 });
+    g.down(2, 300, 200, 0.09);
+    expect(g.down(3, 400, 200, 0.11)).toEqual([{ type: 'special' }]);
+    g.move(1, 260, 210, 0.2);
+    expect(g.vector(0.3)).toEqual({ x: 0, y: 0 });
+  });
+
+  test('單指按下 0.12 秒後才開始推移（按著不動時依現在時間判斷）', () => {
+    const g = make();
+    g.down(1, 200, 200, 0);
+    g.move(1, 260, 200, 0.05);
+    expect(g.vector(0.1)).toEqual({ x: 0, y: 0 });
+    expect(g.vector(0.13).x).toBeGreaterThan(0.5);
+  });
+
+  test('等待推移的 0.12 秒不影響快甩：按下到放手不到 0.1 秒的快速甩動仍算快甩', () => {
+    const g = make();
+    g.down(1, 100, 200, 0);
+    g.move(1, 160, 200, 0.03);
+    const flick = g.up(1, 185, 200, 0.06).find((e) => e.type === 'flick');
+    expect(flick && flick.type === 'flick' && flick.dir.x).toBeCloseTo(1, 6);
   });
 
   test('多出來的手指不會變成拖曳原點：拖曳手指放開後，移動其他手指不會推移', () => {
@@ -146,7 +185,7 @@ describe('手勢追蹤：拖曳、快甩、三指必殺', () => {
     // 其他手指放開後，重新單指按下又能拖曳
     g.up(2, 400, 100, 0.4);
     g.down(5, 200, 200, 0.5);
-    g.move(5, 260, 200, 0.6);
+    g.move(5, 260, 200, 0.7);
     expect(g.vector().x).toBeGreaterThan(0.5);
   });
 

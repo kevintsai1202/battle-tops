@@ -26,6 +26,13 @@ test('直向手機：提示橫向遊玩、組隊與 HUD 不超出、場地視角
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   await expectInViewport(page, '.panel');
   await expectInViewport(page, '#touch-hint');
+  // 必殺集滿時右下角的必殺按鈕在畫面內，不蓋到下方的觸控提示
+  await page.evaluate(() => ((window as any).__game.sim.tops[0].special = 1));
+  await expect(page.locator('#special-btn')).toBeVisible();
+  await expectInViewport(page, '#special-btn');
+  const btn = (await page.locator('#special-btn').boundingBox())!;
+  const tip = (await page.locator('#touch-hint').boundingBox())!;
+  expect(btn.y + btn.height <= tip.y || tip.x + tip.width <= btn.x, '必殺按鈕蓋到觸控提示').toBe(true);
   // 全景鏡頭時 FOV 應被加大（16:9 設計值 50°）
   await page.waitForFunction(() => (window as any).__game.debug().director.mode === 'overview');
   await page.waitForTimeout(1500);

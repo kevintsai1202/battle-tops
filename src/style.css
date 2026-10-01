@@ -773,6 +773,48 @@ body.touch .tc {
 }
 
 /* 觸控說明：平常是操作提示，必殺集滿時改成「三指觸控」並發光 */
+/* 手機的必殺按鈕：必殺集滿時出現在右下角（右手拇指的位置），發光脈動 */
+#special-btn {
+  position: absolute;
+  right: max(18px, calc(env(safe-area-inset-right) + 12px));
+  bottom: max(64px, calc(env(safe-area-inset-bottom) + 52px));
+  width: 92px;
+  height: 92px;
+  border: 3px solid #fff3c4;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd23a, #ff7a1a 55%, #c2185b);
+  color: #fff;
+  font-family: var(--display);
+  font-size: 22px;
+  text-shadow: 0 2px 0 #5a0a2a;
+  box-shadow:
+    0 0 24px #ff9a3a,
+    0 6px 0 #7a1238;
+  pointer-events: auto;
+  touch-action: none;
+  animation: special-btn-pulse 0.8s ease-in-out infinite alternate;
+}
+
+#special-btn:active {
+  transform: translateY(4px) scale(0.96);
+  box-shadow:
+    0 0 30px #ffd23a,
+    0 2px 0 #7a1238;
+}
+
+@keyframes special-btn-pulse {
+  from {
+    box-shadow:
+      0 0 14px #ff9a3a,
+      0 6px 0 #7a1238;
+  }
+  to {
+    box-shadow:
+      0 0 34px #ffd23a,
+      0 6px 0 #7a1238;
+  }
+}
+
 #touch-hint {
   position: absolute;
   left: 50%;
@@ -2550,6 +2592,11 @@ html:lang(zh) {
   text-decoration: underline;
 }
 
+/* 教學中：遊戲本身的發射台說明字收起（教學面板已經說明） */
+body.tutoring #launch .hint {
+  display: none;
+}
+
 /* 教學畫面：整層不擋點擊，只有面板接收操作 */
 #tutorial {
   position: fixed;
@@ -2705,440 +2752,233 @@ html:lang(zh) {
   white-space: nowrap;
 }
 
-/* ---- 示範動畫（每種是一組元素，動作全由 CSS 動畫負責） ---- */
+/* ---- 面板裡的說明圖（只有計分那一步的三種終結） ---- */
 #tutorial .tut-demo {
   position: relative;
-  flex: 0 0 120px;
-  height: 84px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
-#tutorial .tut-demo .finger {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 20px;
-  height: 20px;
-  margin: -10px 0 0 -10px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 0 10px #7ff0ff;
-}
-
-#tutorial .tut-demo .ripple {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 40px;
-  height: 40px;
-  margin: -20px 0 0 -20px;
-  border: 2px solid #7ff0ff;
-  border-radius: 50%;
-  opacity: 0;
-}
-
-/* 點一下 */
-#tutorial .demo-tap .finger,
-#tutorial .demo-threeTap .finger {
-  animation: tut-tap 1.4s ease-in-out infinite;
-}
-
-#tutorial .demo-tap .ripple,
-#tutorial .demo-threeTap .ripple {
-  animation: tut-ripple 1.4s ease-out infinite;
-}
-
-@keyframes tut-tap {
-  0%,
-  100% {
-    transform: translate(10px, -14px);
-  }
-  40%,
-  55% {
-    transform: translate(0, 0) scale(0.85);
-  }
-}
-
-@keyframes tut-ripple {
-  0%,
-  40% {
-    transform: scale(0.3);
-    opacity: 0;
-  }
-  45% {
-    opacity: 1;
-  }
-  90%,
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-}
-
-/* 拉發射台：外圈縮到內圈，手指按住往下拉，對上時放手、跳出「發射！」 */
-#tutorial .demo-drag .ring-in,
-#tutorial .demo-drag .ring-out {
-  position: absolute;
-  left: 50%;
-  top: 22px;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
-  border-radius: 50%;
-}
-
-#tutorial .demo-drag .ring-in {
-  border: 3px solid #ffd23a;
-}
-
-#tutorial .demo-drag .ring-out {
-  border: 2px solid #7ff0ff;
-  animation: tut-ring 2.4s linear infinite;
-}
-
-#tutorial .demo-drag .cord {
-  position: absolute;
-  left: 50%;
-  top: 30px;
-  width: 2px;
-  margin-left: -1px;
+/* ---- 大畫面指引（手指、游標、鍵帽、箭頭；位置與動作由 tutorial.ts 每幀計算，全部不接收指標） ---- */
+#tutorial .tut-guide {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
   height: 0;
-  background: #ffffff;
-  animation: tut-cord 2.4s ease-in infinite;
 }
 
-#tutorial .demo-drag .finger {
-  top: 30px;
-  animation: tut-pull 2.4s ease-in infinite;
-}
-
-#tutorial .demo-drag .go {
+#tutorial .tut-hand {
   position: absolute;
-  right: 6px;
-  bottom: 4px;
-  font-family: var(--display);
-  color: #ff7a1a;
-  font-size: 14px;
-  opacity: 0;
-  animation: tut-go 2.4s linear infinite;
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 12px rgba(127, 240, 255, 0.75));
+  will-change: transform, opacity;
 }
 
-@keyframes tut-ring {
-  0% {
-    transform: scale(2.6);
-  }
-  70%,
-  100% {
-    transform: scale(1);
-  }
+#tutorial .tut-hand svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-@keyframes tut-pull {
-  0%,
-  10% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  68% {
-    transform: translateY(40px);
-    opacity: 1;
-  }
-  74%,
-  100% {
-    transform: translateY(40px) scale(1.3);
-    opacity: 0;
-  }
+#tutorial .tut-hand.pressed {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 16px rgba(255, 210, 58, 0.95));
 }
 
-@keyframes tut-cord {
-  0%,
-  10% {
-    height: 0;
-    opacity: 1;
-  }
-  68% {
-    height: 40px;
-    opacity: 1;
-  }
-  74%,
-  100% {
-    height: 40px;
-    opacity: 0;
-  }
-}
-
-@keyframes tut-go {
-  0%,
-  68% {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  74%,
-  92% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-/* 滑動推移：手指繞著按下處移動 */
-#tutorial .demo-swipe .origin {
+/* 按下時在指尖放一圈波紋 */
+#tutorial .tut-ripple {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 46px;
-  height: 46px;
-  margin: -23px 0 0 -23px;
-  border: 2px dashed rgba(127, 240, 255, 0.7);
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  border: 3px solid #7ff0ff;
   border-radius: 50%;
+  animation: tut-ripple-big 0.7s ease-out forwards;
 }
 
-#tutorial .demo-swipe .finger {
-  animation: tut-swipe 2.4s ease-in-out infinite;
-}
-
-@keyframes tut-swipe {
-  0%,
-  100% {
-    transform: translate(0, 0);
+@keyframes tut-ripple-big {
+  from {
+    transform: scale(0.3);
+    opacity: 1;
   }
-  25% {
-    transform: translate(26px, -10px);
-  }
-  50% {
-    transform: translate(0, 18px);
-  }
-  75% {
-    transform: translate(-26px, -10px);
+  to {
+    transform: scale(1.7);
+    opacity: 0;
   }
 }
 
-/* 快甩衝刺：手指快速甩出，留下殘影 */
-#tutorial .demo-flick .finger {
-  animation: tut-flick 1.6s cubic-bezier(0.7, 0, 0.3, 1) infinite;
-}
-
-#tutorial .demo-flick .trail {
+/* 倒數中：手指下方的「按住往下拉」 */
+#tutorial .tut-press-hint {
   position: absolute;
-  left: 22%;
-  top: 50%;
-  width: 56%;
-  height: 4px;
-  margin-top: -2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, #7ff0ff);
-  opacity: 0;
-  animation: tut-trail 1.6s linear infinite;
+  left: -80px;
+  top: 66px;
+  width: 160px;
+  text-align: center;
+  font-family: var(--display);
+  font-size: 18px;
+  color: #ffe35a;
+  text-shadow:
+    0 0 10px #ffb000,
+    0 2px 0 #1a0a30;
 }
 
-@keyframes tut-flick {
-  0%,
-  30% {
-    transform: translateX(-34px);
-    opacity: 1;
-  }
-  45% {
-    transform: translateX(34px);
-    opacity: 1;
-  }
-  60%,
-  100% {
-    transform: translateX(34px);
-    opacity: 0;
-  }
-}
-
-@keyframes tut-trail {
-  0%,
-  32% {
-    opacity: 0;
-  }
-  42% {
-    opacity: 1;
-  }
-  70%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* 鍵帽 */
-#tutorial .tut-demo .key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 4px;
-  border: 1px solid #9fdcff;
-  border-radius: 5px;
-  background: #182640;
-  color: #dff8ff;
-  font-size: 13px;
-  box-shadow: 0 3px 0 #0a1424;
-}
-
-#tutorial .demo-keysMove .keypad {
-  position: absolute;
-  left: 50%;
-  top: 8px;
+/* 鍵帽（電腦）：放在自己的陀螺下方 */
+#tutorial .tut-keys {
+  position: fixed;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(8, 14, 34, 0.78);
+  border: 1px solid rgba(127, 240, 255, 0.5);
+}
+
+#tutorial .tut-keypad {
   display: grid;
-  grid-template-columns: repeat(3, 26px);
+  grid-template-columns: repeat(3, 48px);
   grid-template-areas:
     '. up .'
     'left down right';
-  gap: 3px;
+  gap: 5px;
 }
 
-#tutorial .demo-keysMove .k-up {
+#tutorial .tut-keypad .k-up {
   grid-area: up;
-  animation: tut-key 2s infinite;
 }
 
-#tutorial .demo-keysMove .k-right {
-  grid-area: right;
-  animation: tut-key 2s 0.5s infinite;
-}
-
-#tutorial .demo-keysMove .k-down {
-  grid-area: down;
-  animation: tut-key 2s 1s infinite;
-}
-
-#tutorial .demo-keysMove .k-left {
+#tutorial .tut-keypad .k-left {
   grid-area: left;
-  animation: tut-key 2s 1.5s infinite;
 }
 
-#tutorial .demo-keysMove .alt {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 4px;
-  text-align: center;
-  font-size: 11px;
-  color: #9fb4d0;
+#tutorial .tut-keypad .k-down {
+  grid-area: down;
 }
 
-@keyframes tut-key {
-  0%,
-  22% {
-    background: #7ff0ff;
-    color: #06142e;
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #0a1424;
-  }
-  25%,
-  100% {
-    background: #182640;
-    color: #dff8ff;
-    transform: none;
-  }
+#tutorial .tut-keypad .k-right {
+  grid-area: right;
 }
 
-#tutorial .demo-keysDash .keyrow {
-  position: absolute;
-  left: 50%;
-  top: 14px;
-  transform: translateX(-50%);
+#tutorial .tut-keyrow {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
-#tutorial .demo-keysDash .k-hold {
+#tutorial .tut-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 46px;
+  padding: 0 10px;
+  border: 2px solid #9fdcff;
+  border-radius: 9px;
+  background: #182640;
+  color: #dff8ff;
+  font-family: var(--display);
+  font-size: 20px;
+  box-shadow: 0 5px 0 #0a1424;
+  transition:
+    transform 0.08s,
+    background 0.08s;
+}
+
+#tutorial .tut-key.on {
   background: #7ff0ff;
   color: #06142e;
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #0a1424;
 }
 
-#tutorial .demo-keysDash .plus {
+#tutorial .tut-key.k-wide {
+  min-width: 84px;
+  font-size: 18px;
+}
+
+#tutorial .tut-key.k-space {
+  min-width: 200px;
+  font-size: 18px;
+  letter-spacing: 0.2em;
+}
+
+#tutorial .tut-key.k-shift.on,
+#tutorial .tut-key.k-space.on {
+  background: #ffc94a;
+  color: #2a1700;
+}
+
+#tutorial .tut-plus {
+  color: #9fb4d0;
+  font-size: 20px;
+}
+
+#tutorial .tut-keys-alt {
+  font-size: 12px;
   color: #9fb4d0;
 }
 
-#tutorial .tut-demo .k-wide {
-  min-width: 44px;
+/* 終結：從自己的陀螺指向對手的箭頭 */
+#tutorial .tut-arrow {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
-#tutorial .demo-keysDash .k-press {
-  animation: tut-press 1.4s infinite;
+#tutorial .tut-arrow line {
+  stroke: #ffd23a;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 16 10;
+  animation: tut-march 0.6s linear infinite;
+  filter: drop-shadow(0 0 6px #ffb000);
 }
 
-@keyframes tut-press {
-  0%,
-  35%,
-  100% {
-    transform: none;
+@keyframes tut-march {
+  to {
+    stroke-dashoffset: -26;
   }
-  40%,
-  55% {
-    transform: translateY(2px);
-    background: #ffc94a;
-    color: #2a1700;
-    box-shadow: 0 1px 0 #0a1424;
-  }
 }
 
-#tutorial .demo-keysDash .dash-line {
-  position: absolute;
-  left: 30%;
-  bottom: 14px;
-  width: 40%;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, #ffd23a);
-  animation: tut-trail 1.4s 0.4s linear infinite;
+#tutorial .tut-arrow text {
+  fill: #ffd23a;
+  font-family: var(--display);
+  font-size: 22px;
+  paint-order: stroke;
+  stroke: #1a0a30;
+  stroke-width: 5px;
 }
 
-#tutorial .demo-keySpace .k-space {
-  position: absolute;
+/* 發射示範：放手的瞬間在發射台中央跳出 GO SHOOT */
+#tutorial .tut-go {
+  position: fixed;
   left: 50%;
-  top: 14px;
-  min-width: 84px;
-  transform: translateX(-50%);
-  animation: tut-press-x 1.4s infinite;
+  top: 46%;
+  transform: translate(-50%, -50%) skew(-8deg);
+  font-family: var(--display);
+  font-size: clamp(30px, 6vw, 56px);
+  color: #ffd23a;
+  -webkit-text-stroke: 2px #1a0a30;
+  text-shadow: 0 0 22px #ff7a1a;
+  white-space: nowrap;
+  animation: tut-go-pop 0.8s ease-out;
 }
 
-@keyframes tut-press-x {
-  0%,
-  35%,
-  100% {
-    transform: translateX(-50%);
+@keyframes tut-go-pop {
+  from {
+    transform: translate(-50%, -50%) skew(-8deg) scale(0.5);
   }
-  40%,
-  55% {
-    transform: translate(-50%, 2px);
-    background: #ffc94a;
-    color: #2a1700;
+  30% {
+    transform: translate(-50%, -50%) skew(-8deg) scale(1.15);
   }
-}
-
-#tutorial .demo-keySpace .burst {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  width: 30px;
-  height: 30px;
-  margin-left: -15px;
-  border: 3px solid #ff7a1a;
-  border-radius: 50%;
-  opacity: 0;
-  animation: tut-ripple 1.4s ease-out infinite;
-}
-
-/* 三指觸控：三根手指同時點下 */
-#tutorial .demo-threeTap .f1,
-#tutorial .demo-threeTap .r1 {
-  left: 28%;
-}
-
-#tutorial .demo-threeTap .f3,
-#tutorial .demo-threeTap .r3 {
-  left: 72%;
+  to {
+    transform: translate(-50%, -50%) skew(-8deg) scale(1);
+  }
 }
 
 /* 三種終結：停轉倒下、飛出場外、爆裂 */
@@ -3325,11 +3165,6 @@ html:lang(zh) {
     line-height: 1.4;
   }
 
-  #tutorial .tut-demo {
-    flex-basis: 96px;
-    height: 64px;
-  }
-
   #tutorial .demo-finishes {
     height: 74px;
   }
@@ -3354,10 +3189,12 @@ html:lang(zh) {
   }
 }
 
-/* 減少動態效果：示範動畫與聚光圈不循環 */
+/* 減少動態效果：說明圖、聚光圈、箭頭與 GO SHOOT 不循環（手指由 tutorial.ts 停在要點的地方） */
 @media (prefers-reduced-motion: reduce) {
   #tutorial .tut-demo *,
-  #tutorial .tut-spot {
+  #tutorial .tut-spot,
+  #tutorial .tut-arrow line,
+  #tutorial .tut-go {
     animation-duration: 0s !important;
     animation-iteration-count: 1 !important;
   }

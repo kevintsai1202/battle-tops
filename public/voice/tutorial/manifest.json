@@ -1,11 +1,11 @@
 {
   "tut_pick": {
     "file": "tut_pick.mp3",
-    "text": "[happy] 歡迎來到戰鬥陀螺！我們先來組隊：從名鑑裡點選三顆陀螺，點的順序就是出場順序。",
+    "text": "[happy] 歡迎來到戰鬥陀螺！我們先來組隊：跟著手指點選三顆陀螺，點的順序就是出場順序。想選別的陀螺也可以喔！",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "178b21022ee62cbb",
-    "seconds": 7.868
+    "hash": "5e6bd190fd042962",
+    "seconds": 9.911
   },
   "tut_next": {
     "file": "tut_next.mp3",
@@ -41,19 +41,19 @@
   },
   "tut_launch_kb": {
     "file": "tut_launch_kb.mp3",
-    "text": "[excited] 發射的時候，用滑鼠在畫面上按住往下拉，等外圈縮到和內圈一樣大的瞬間放手！往左或往右拉，可以瞄準方向。",
+    "text": "[excited] 先看一次示範：用滑鼠在畫面上按住往下拉，等外圈縮到和內圈一樣大的瞬間放手！往左或往右拉，可以瞄準方向。接下來換你試試看！",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "42ba1cfb4f66149c",
-    "seconds": 10.328
+    "hash": "ebc7e04b85673a77",
+    "seconds": 12.197
   },
   "tut_launch_tc": {
     "file": "tut_launch_tc.mp3",
-    "text": "[excited] 發射的時候，手指在畫面上按住往下滑，等外圈縮到和內圈一樣大的瞬間放手！往左或往右滑，可以瞄準方向。",
+    "text": "[excited] 先看一次示範：手指在畫面上按住往下滑，等外圈縮到和內圈一樣大的瞬間放手！往左或往右滑，可以瞄準方向。接下來換你試試看！",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "fa2552442124ab20",
-    "seconds": 9.789
+    "hash": "edb0df0aaece2271",
+    "seconds": 12.443
   },
   "tut_retry": {
     "file": "tut_retry.mp3",
@@ -105,19 +105,19 @@
   },
   "tut_special_tc": {
     "file": "tut_special_tc.mp3",
-    "text": "[excited] 必殺量表集滿了！三根手指同時點一下畫面，發動必殺技！",
+    "text": "[excited] 必殺量表集滿了！點右下角發光的必殺按鈕，發動必殺技！三根手指同時點一下畫面也可以。",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "97859564ea20c7ff",
-    "seconds": 5.31
+    "hash": "a94d0a43426cb991",
+    "seconds": 8.445
   },
   "tut_finish": {
     "file": "tut_finish.mp3",
-    "text": "[excited] 最後是分出勝負！把對手撞出場外、撞到爆裂，或是讓它停止轉動，都能終結對手。",
+    "text": "[excited] 最後是分出勝負！朝箭頭的方向撞過去，把對手撞出場外、撞到爆裂，或是讓它停止轉動，都能終結對手。",
     "speaker": "guide",
     "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
-    "hash": "0b91555dd01ec916",
-    "seconds": 7.499
+    "hash": "26057b467dcea07a",
+    "seconds": 9.685
   },
   "tut_points": {
     "file": "tut_points.mp3",

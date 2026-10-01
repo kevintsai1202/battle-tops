@@ -3,6 +3,8 @@ import lines from '../audio/tutorial-lines.json';
 /**
  * 操作教學的步驟流程（純邏輯，不碰 DOM 與 three.js，可單元測試）。
  * 四章十二步：組隊兩步 → 拉發射台 → 推移、衝刺、必殺 → 計分與終結方式。
+ * 每一步在實際的遊戲畫面上指引：聚光圈框住要點的那一個元素，大手指（觸控）或滑鼠游標（電腦）
+ * 在那個位置示範點按、往下拉、滑動等動作（畫面在 src/ui/tutorial.ts）。
  * 遊戲每幀把目前狀態（TutorialCtx）餵給 update，玩家真的做到了才進下一步；
  * 說明型的步驟（info）要按「下一步／完成」。發射沒有拉條時要求重來（回傳 'retry'）。
  */
@@ -16,15 +18,29 @@ export type GuideId = keyof typeof lines.lines;
 /** 章節 */
 export type Chapter = 'team' | 'launch' | 'control' | 'score';
 
-/** 示範動畫的種類（src/ui/tutorial.ts 畫出來） */
-export type DemoKind = 'tap' | 'drag' | 'swipe' | 'flick' | 'keysMove' | 'keysDash' | 'keySpace' | 'threeTap' | 'finishes' | 'none';
+/**
+ * 大畫面上的指引（src/ui/tutorial.ts 畫出來）：
+ * - tap：手指或游標移到目標上點一下
+ * - drag：拉發射台（先示範一次，倒數開始後提示在哪裡按住往下拉）
+ * - swipe／flick：在自己的陀螺旁邊示範滑動推移／快甩衝刺（觸控）
+ * - keysMove／keysDash／keySpace：在自己的陀螺旁邊顯示要按的大鍵帽（電腦）
+ * - arrow：從自己的陀螺指向對手的箭頭（撞過去）
+ * - none：只有面板說明
+ */
+export const GUIDE_KINDS = ['tap', 'drag', 'swipe', 'flick', 'keysMove', 'keysDash', 'keySpace', 'arrow', 'none'] as const;
+export type GuideKind = (typeof GUIDE_KINDS)[number];
+
+/** 選陀螺那一步依序指的推薦三顆（攻擊、防禦、持久各一顆，都在名鑑第一排）；玩家選別顆也算 */
+export const RECOMMENDED = ['blaze', 'turtle', 'gale'] as const;
 
 /** 遊戲每幀提供的狀態（數字是累計值，流程自己記每一步開始時的基準） */
 export interface TutorialCtx {
   /** 遊戲狀態（select、arrange、launch、battle、roundEnd…） */
   state: string;
-  /** 組隊第 1 步已選幾顆 */
-  picks: number;
+  /** 輸入方式（電腦或手機）：有些步驟兩邊要指的地方不同（例如必殺：電腦框量表、手機指必殺按鈕） */
+  input: TutorialInput;
+  /** 組隊第 1 步已選的陀螺代號 */
+  picked: string[];
   /** 第 2 步調換過出場順序、換過零件 */
   orderChanged: boolean;
   partChanged: boolean;
@@ -50,10 +66,12 @@ export interface StepDef {
   /** 解說語音與字幕（電腦版、手機版） */
   voice: Record<TutorialInput, GuideId>;
   text: Record<TutorialInput, string>;
-  /** 示範動畫 */
-  demo: Record<TutorialInput, DemoKind>;
-  /** 要用聚光圈標出的元素（CSS 選擇器） */
-  target?: string;
+  /** 大畫面上的指引 */
+  guide: Record<TutorialInput, GuideKind>;
+  /** 面板裡的說明圖（只有計分那一步：三種終結的小動畫） */
+  illustration?: 'finishes';
+  /** 要用聚光圈框住、手指指著的元素（CSS 選擇器）；依狀態決定時給函式（見 targetOf） */
+  target?: string | ((ctx: TutorialCtx) => string | undefined);
   /** 說明型：要按按鈕才前進 */
   info?: boolean;
   /** 做到了沒：ctx 是目前狀態，base 是進入這一步時的狀態 */
@@ -63,19 +81,30 @@ export interface StepDef {
 /** 台詞去掉方括號的語氣標記，當字幕 */
 const say = (id: GuideId) => lines.lines[id].text.replace(/\[[^\]]*\]/g, '').trim();
 
-/** 建立一步：電腦版與手機版用同一句時 kb、tc 給同一個 id */
+/** 建立一步：電腦版與手機版用同一句（或同一種指引）時直接給一個值 */
 function step(
   id: string,
   chapter: Chapter,
   title: string,
   voice: GuideId | Record<TutorialInput, GuideId>,
-  demo: DemoKind | Record<TutorialInput, DemoKind>,
+  guide: GuideKind | Record<TutorialInput, GuideKind>,
   done: StepDef['done'],
-  extra: Partial<Pick<StepDef, 'target' | 'info'>> = {},
+  extra: Partial<Pick<StepDef, 'target' | 'info' | 'illustration'>> = {},
 ): StepDef {
   const v = typeof voice === 'string' ? { kb: voice, tc: voice } : voice;
-  const d = typeof demo === 'string' ? { kb: demo, tc: demo } : demo;
-  return { id, chapter, title, voice: v, text: { kb: say(v.kb), tc: say(v.tc) }, demo: d, done, ...extra };
+  const g = typeof guide === 'string' ? { kb: guide, tc: guide } : guide;
+  return { id, chapter, title, voice: v, text: { kb: say(v.kb), tc: say(v.tc) }, guide: g, done, ...extra };
+}
+
+/** 選陀螺：推薦的三顆裡還沒選的第一顆（都選了就沒有目標） */
+function nextRecommended(ctx: TutorialCtx): string | undefined {
+  const id = RECOMMENDED.find((t) => !ctx.picked.includes(t));
+  return id ? `#select .card[data-id="${id}"]` : undefined;
+}
+
+/** 這一步現在要框住、指著的元素 */
+export function targetOf(s: StepDef, ctx: TutorialCtx): string | undefined {
+  return typeof s.target === 'function' ? s.target(ctx) : s.target;
 }
 
 /** 對戰中推移多久才算學會（秒） */
@@ -88,25 +117,26 @@ export const PULL_MIN = 0.25;
 
 /** 全部步驟（依序） */
 export const STEPS: StepDef[] = [
-  step('pick', 'team', '組隊：選三顆陀螺', 'tut_pick', 'tap', (c) => c.picks >= 3, { target: '#select .cards' }),
+  step('pick', 'team', '組隊：選三顆陀螺', 'tut_pick', 'tap', (c) => c.picked.length >= 3, { target: nextRecommended }),
   step('next', 'team', '組隊：下一步', 'tut_next', 'tap', (c) => c.state === 'arrange', { target: '#select .go' }),
-  step('order', 'team', '調整出場順序', 'tut_order', 'tap', (c) => c.orderChanged, { target: '#arrange .ar-slots' }),
-  step('parts', 'team', '換盤與軸', 'tut_parts', 'tap', (c) => c.partChanged, { target: '#arrange .ar-detail .d-parts' }),
+  step('order', 'team', '調整出場順序', 'tut_order', 'tap', (c) => c.orderChanged, { target: '#arrange .ar-slot:nth-child(2) .ar-up' }),
+  step('parts', 'team', '換盤與軸', 'tut_parts', 'tap', (c) => c.partChanged, { target: '#arrange .ar-detail select[data-slot="driver"]' }),
   step('ready', 'team', '出陣', 'tut_ready', 'tap', (c) => c.state === 'launch', { target: '#arrange .ar-ready' }),
   step('launch', 'launch', '拉發射台', { kb: 'tut_launch_kb', tc: 'tut_launch_tc' }, 'drag', (c) => c.state === 'battle' && c.pulled),
   step('push', 'control', '推移陀螺', { kb: 'tut_push_kb', tc: 'tut_push_tc' }, { kb: 'keysMove', tc: 'swipe' }, (c, b) => c.pushTime - b.pushTime >= PUSH_GOAL),
   step('dash', 'control', '衝刺', { kb: 'tut_dash_kb', tc: 'tut_dash_tc' }, { kb: 'keysDash', tc: 'flick' }, (c, b) => c.dashes > b.dashes),
-  step('special', 'control', '必殺技', { kb: 'tut_special_kb', tc: 'tut_special_tc' }, { kb: 'keySpace', tc: 'threeTap' }, (c, b) => c.specials > b.specials, {
-    target: '#hud .panel[data-side="0"] .special',
+  step('special', 'control', '必殺技', { kb: 'tut_special_kb', tc: 'tut_special_tc' }, { kb: 'keySpace', tc: 'tap' }, (c, b) => c.specials > b.specials, {
+    // 電腦框住必殺量表；手機指著集滿時右下角出現的必殺按鈕
+    target: (c) => (c.input === 'tc' ? '#special-btn' : '#hud .panel[data-side="0"] .special'),
   }),
-  step('finish', 'score', '終結對手', 'tut_finish', 'finishes', (c) => c.finished),
-  step('points', 'score', '終結方式與得分', 'tut_points', 'finishes', (c) => c.next, { info: true, target: '#hud .score' }),
+  step('finish', 'score', '終結對手', 'tut_finish', 'arrow', (c) => c.finished),
+  step('points', 'score', '終結方式與得分', 'tut_points', 'none', (c) => c.next, { info: true, target: '#hud .score', illustration: 'finishes' }),
   step('match', 'score', '三對三賽制', 'tut_match', 'none', (c) => c.next, { info: true, target: '#hud .lineup' }),
 ];
 
 /** 空白狀態（還沒開始） */
 export function emptyCtx(): TutorialCtx {
-  return { state: '', picks: 0, orderChanged: false, partChanged: false, pulled: false, pushTime: 0, dashes: 0, specials: 0, finished: false, next: false };
+  return { state: '', input: 'kb', picked: [], orderChanged: false, partChanged: false, pulled: false, pushTime: 0, dashes: 0, specials: 0, finished: false, next: false };
 }
 
 /** update 的結果：前進到下一步、發射沒拉條要重來、全部完成 */

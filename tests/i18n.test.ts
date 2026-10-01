@@ -12,8 +12,8 @@ import indexHtml from '../index.html?raw';
 
 /** 日文假名（平假名、片假名、長音符；中黑點「・」是中文介面也用的標點，不算） */
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
-/** 中文版允許出現的英文：鍵盤按鍵名稱 */
-const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|Enter|Backspace|Esc|Q|E|M)\b/g;
+/** 中文版允許出現的英文：鍵盤按鍵名稱，以及發射的口號「Go Shoot」（台灣與日本原作的習慣，使用者決定保留） */
+const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|Enter|Backspace|Esc|Q|E|M|GO SHOOT|Go Shoot)\b/g;
 
 afterEach(() => setLang('ja', false));
 
@@ -74,7 +74,7 @@ describe('字串表', () => {
     expect(tr('info.battle', { n: 2 })).toBe('BATTLE 2/3');
     setLang('zh', false);
     expect(tr('info.battle', { n: 2 })).toBe('第 2／3 戰');
-    expect(tr('banner.go')).toBe('發射！！');
+    expect(tr('banner.go')).toBe('GO SHOOT!!');
   });
 
   test('擬聲字：中文版沒有假名', () => {

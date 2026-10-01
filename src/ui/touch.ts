@@ -56,14 +56,20 @@ const FLICK_MIN_DIST = 0.1;
 const FLICK_MIN_SPEED = 2;
 /** 同時幾隻手指算三指觸控 */
 const SPECIAL_FINGERS = 3;
+/**
+ * 手指按下後多久才開始推移（秒）：三指觸控時手指不會完全同時落下，先落下的那一指稍微滑動就會推動陀螺；
+ * 等這一下讓其他手指落下（落下後整次觸控都不推移）。只影響推移，不影響快甩的判定。
+ */
+export const PUSH_DELAY = 0.12;
 
 /**
  * 手勢追蹤（純邏輯，不碰 DOM，方便單元測試）：
  * - 單指按住拖曳：按下的位置是浮動原點，往哪拖就往哪推，拖越遠越用力，放開停止。
  * - 快甩：放手前 0.1 秒內甩得夠快夠遠 → 衝刺（看放手前的速度，不看拖了多久）。
  * - 三指觸控：第三隻手指按下的瞬間發動必殺（不等放開），直到全部手指放開前只發一次。
- * 規則：只有「畫面上沒有其他手指時按下的那一指」會變成拖曳手指；拖曳期間只要出現過第二指，
- * 放手就不算快甩（避免三指必殺或雙指操作時誤觸衝刺）。
+ * 規則：只有「畫面上沒有其他手指時按下的那一指」會變成拖曳手指；拖曳手指按下後 PUSH_DELAY 秒才開始推移。
+ * 拖曳期間只要出現過第二指，就停止推移（浮動原點的圓圈也收起），直到全部手指放開為止，放手也不算快甩
+ * （避免三指必殺時陀螺被先落下的手指帶動，或雙指操作時誤觸衝刺）。
  */
 export class GestureTracker {
   private readonly opts: GestureOptions;
@@ -76,8 +82,11 @@ export class GestureTracker {
   private finger: Pt = { x: 0, y: 0 };
   /** 拖曳手指最近的取樣點（快甩判定用） */
   private samples: { t: number; x: number; y: number }[] = [];
-  /** 這次拖曳期間出現過第二隻手指 */
+  /** 這次拖曳期間出現過第二隻手指（全部手指放開才清掉；出現後不推移） */
   private multi = false;
+  /** 拖曳手指按下的時間與最近一次觸控事件的時間（秒） */
+  private downT = 0;
+  private lastT = 0;
   /** 這一輪（從第一指按下到全部放開）已經發動過三指必殺 */
   private specialFired = false;
 
@@ -90,9 +99,9 @@ export class GestureTracker {
     return this.dragId !== null;
   }
 
-  /** 浮動原點與拖曳手指的位置（畫面指示用；沒在拖時為 null） */
+  /** 浮動原點與拖曳手指的位置（畫面指示用；沒在拖、或出現第二指後為 null） */
   get handle(): { origin: Pt; finger: Pt } | null {
-    return this.dragId === null ? null : { origin: this.origin, finger: this.finger };
+    return this.dragId === null || this.multi ? null : { origin: this.origin, finger: this.finger };
   }
 
   /** 更新尺度（畫面大小改變時） */
@@ -105,12 +114,14 @@ export class GestureTracker {
   down(id: number, x: number, y: number, t: number): GestureEvent[] {
     const out: GestureEvent[] = [];
     this.fingers.set(id, { x, y });
+    this.lastT = t;
     if (this.fingers.size === 1 && this.dragId === null) {
       this.dragId = id;
       this.origin = { x, y };
       this.finger = { x, y };
       this.samples = [{ t, x, y }];
       this.multi = false;
+      this.downT = t;
     } else if (this.dragId !== null) {
       this.multi = true;
     }
@@ -125,6 +136,7 @@ export class GestureTracker {
   move(id: number, x: number, y: number, t: number): void {
     if (!this.fingers.has(id)) return;
     this.fingers.set(id, { x, y });
+    this.lastT = t;
     if (id !== this.dragId) return;
     this.finger = { x, y };
     this.origin = followOrigin(this.origin, this.finger, this.opts.radius);
@@ -138,6 +150,7 @@ export class GestureTracker {
     const out: GestureEvent[] = [];
     if (!this.fingers.has(id)) return out;
     this.fingers.delete(id);
+    this.lastT = t;
     if (id === this.dragId) {
       // 放手的位置和最後一次移動相同時不另外記（放手事件可能晚一點才送到，不該把速度算低）
       const prev = this.samples[this.samples.length - 1];
@@ -147,7 +160,10 @@ export class GestureTracker {
       this.dragId = null;
       this.samples = [];
     }
-    if (this.fingers.size === 0) this.specialFired = false;
+    if (this.fingers.size === 0) {
+      this.specialFired = false;
+      this.multi = false;
+    }
     return out;
   }
 
@@ -158,7 +174,10 @@ export class GestureTracker {
       this.dragId = null;
       this.samples = [];
     }
-    if (this.fingers.size === 0) this.specialFired = false;
+    if (this.fingers.size === 0) {
+      this.specialFired = false;
+      this.multi = false;
+    }
   }
 
   /** 清空所有手指（離開對戰畫面時） */
@@ -170,9 +189,12 @@ export class GestureTracker {
     this.specialFired = false;
   }
 
-  /** 目前的推移向量（沒在拖時為 0） */
-  vector(): StickVector {
-    if (this.dragId === null) return { x: 0, y: 0 };
+  /**
+   * 目前的推移向量：沒在拖、出現過第二指、或按下還不到 PUSH_DELAY 秒時為 0。
+   * now 為現在的時間（秒；手指按著不動時沒有新事件，遊戲每幀傳入）；省略時用最近一次觸控事件的時間。
+   */
+  vector(now = this.lastT): StickVector {
+    if (this.dragId === null || this.multi || now - this.downT < PUSH_DELAY) return { x: 0, y: 0 };
     return dragVector(this.finger.x - this.origin.x, this.finger.y - this.origin.y, this.opts.radius, this.opts.deadzone);
   }
 
@@ -213,7 +235,7 @@ export interface SwipeHandlers {
 }
 
 /**
- * 手機觸控操作（取代原本的虛擬搖桿與必殺按鈕）：在畫面任意處滑動控制方向、快甩衝刺、三指觸控發動必殺。
+ * 手機觸控操作：在畫面任意處滑動控制方向、快甩衝刺、三指觸控發動必殺（必殺集滿時另有按鈕，見 game.ts 的 updateTouch）。
  * 只處理觸控（pointerType === 'touch'），只在對戰中啟用；畫面上用淡淡的圓圈標出浮動原點與手指。
  * 手指自己記 pointerId，不用 setPointerCapture（合成事件的 pointerId 不一定有效，會拋錯）。
  */
@@ -280,9 +302,9 @@ export class SwipeControls {
     this.tracker.setScale(s, Math.max(40, Math.min(90, s * 0.16)));
   }
 
-  /** 目前的推移向量（沒啟用或沒在拖時為 0） */
+  /** 目前的推移向量（沒啟用或沒在拖時為 0；按著不動時用現在的時間判斷是否已過 PUSH_DELAY） */
   get vector(): StickVector {
-    return this.enabled ? this.tracker.vector() : { x: 0, y: 0 };
+    return this.enabled ? this.tracker.vector(performance.now() / 1000) : { x: 0, y: 0 };
   }
 
   /** 啟用或停用（只在對戰中啟用）；停用時放掉所有手指 */

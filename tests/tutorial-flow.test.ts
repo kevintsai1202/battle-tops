@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import lines from '../src/audio/tutorial-lines.json';
-import { emptyCtx, shouldOfferTutorial, STEPS, TutorialFlow, type TutorialCtx } from '../src/tutorial/flow';
+import { emptyCtx, GUIDE_KINDS, RECOMMENDED, shouldOfferTutorial, STEPS, targetOf, TutorialFlow, type TutorialCtx } from '../src/tutorial/flow';
 
 /**
  * 操作教學的步驟流程（純邏輯）：一步一步檢查玩家是否真的做到，做到才進下一步。
@@ -32,6 +32,15 @@ describe('教學步驟', () => {
     }
   });
 
+  test('每一步都有大畫面上的指引（電腦與手機），面板裡只有計分那一步留著三種終結的說明圖', () => {
+    for (const s of STEPS) {
+      for (const input of ['kb', 'tc'] as const) expect(GUIDE_KINDS, `${s.id} ${input}`).toContain(s.guide[input]);
+    }
+    expect(STEPS.filter((s) => s.illustration).map((s) => s.id)).toEqual(['points']);
+    // 要點選的步驟都有聚光圈目標
+    for (const id of ['pick', 'next', 'order', 'parts', 'ready', 'special']) expect(STEPS.find((s) => s.id === id)!.target, id).toBeDefined();
+  });
+
   test('只有說明型的步驟要按按鈕才前進', () => {
     expect(STEPS.filter((s) => s.info).map((s) => s.id)).toEqual(['points', 'match']);
   });
@@ -41,8 +50,8 @@ describe('教學流程', () => {
   test('做到了才進下一步，一路走到完成', () => {
     const f = new TutorialFlow();
     const seq: [Partial<TutorialCtx>, string][] = [
-      [{ state: 'select', picks: 2 }, 'pick'],
-      [{ state: 'select', picks: 3 }, 'next'],
+      [{ state: 'select', picked: ['blaze', 'wolf'] }, 'pick'],
+      [{ state: 'select', picked: ['blaze', 'wolf', 'gale'] }, 'next'],
       [{ state: 'arrange' }, 'order'],
       [{ state: 'arrange', orderChanged: true }, 'parts'],
       [{ state: 'arrange', orderChanged: true, partChanged: true }, 'ready'],
@@ -112,6 +121,36 @@ describe('教學流程', () => {
     for (const id of ['launch', 'push', 'dash', 'special']) expect(at(id).guard, id).toBe(true);
     for (const id of ['pick', 'ready', 'finish', 'points', 'match']) expect(at(id).guard, id).toBe(false);
     for (const id of ['launch', 'push', 'dash', 'special', 'finish', 'points']) expect(at(id).cpuPassive, id).toBe(true);
+  });
+});
+
+describe('大畫面指引的目標', () => {
+  const pick = STEPS.find((s) => s.id === 'pick')!;
+
+  test('選陀螺：依序指推薦的三顆裡還沒選的第一顆', () => {
+    expect(RECOMMENDED).toEqual(['blaze', 'turtle', 'gale']);
+    expect(targetOf(pick, ctx())).toBe('#select .card[data-id="blaze"]');
+    expect(targetOf(pick, ctx({ picked: ['blaze'] }))).toBe('#select .card[data-id="turtle"]');
+    // 選了別顆也算：只指還沒選的推薦陀螺
+    expect(targetOf(pick, ctx({ picked: ['wolf', 'blaze'] }))).toBe('#select .card[data-id="turtle"]');
+    expect(targetOf(pick, ctx({ picked: ['turtle'] }))).toBe('#select .card[data-id="blaze"]');
+    expect(targetOf(pick, ctx({ picked: ['blaze', 'turtle', 'gale'] }))).toBeUndefined();
+  });
+
+  test('其他步驟的目標是固定的元素', () => {
+    const at = (id: string) => targetOf(STEPS.find((s) => s.id === id)!, ctx());
+    expect(at('next')).toBe('#select .go');
+    expect(at('order')).toBe('#arrange .ar-slot:nth-child(2) .ar-up');
+    expect(at('parts')).toBe('#arrange .ar-detail select[data-slot="driver"]');
+    expect(at('ready')).toBe('#arrange .ar-ready');
+    expect(at('launch')).toBeUndefined();
+  });
+
+  test('必殺：電腦框住必殺量表，手機指著集滿時出現的必殺按鈕', () => {
+    const special = STEPS.find((s) => s.id === 'special')!;
+    expect(targetOf(special, ctx({ input: 'kb' }))).toBe('#hud .panel[data-side="0"] .special');
+    expect(targetOf(special, ctx({ input: 'tc' }))).toBe('#special-btn');
+    expect(special.guide).toEqual({ kb: 'keySpace', tc: 'tap' });
   });
 });
 

@@ -3,7 +3,8 @@ import { dbg, expectInViewport, expectNoHorizontalScroll, swipe } from './mobile
 import { arrangeOrder } from './team.helpers';
 
 /**
- * 手機橫向（Pixel 7 模擬、觸控）：點選流程、滑動拉發射台、三指觸控必殺、滑動推移、快甩衝刺、版面不超出畫面。
+ * 手機橫向（Pixel 7 模擬、觸控）：點選流程、滑動拉發射台、三指觸控必殺（三指放下時陀螺不會被推動）、
+ * 必殺集滿時的必殺按鈕（點一下發動、不會帶動推移）、滑動推移、快甩衝刺、版面不超出畫面。
  * 觸控用 CDP 送真實觸控事件（touchStart → touchMove → touchEnd），走瀏覽器原生的 touch → pointer 路徑。
  */
 test.use({ ...devices['Pixel 7 landscape'] });
@@ -59,21 +60,57 @@ test('橫向手機：觸控組隊、拉條發射、三指必殺、滑動推移�
   await expectInViewport(page, '.panel');
   await expectInViewport(page, '#touch-hint');
 
-  // 三指觸控必殺（放在剛開打時，避免回合先結束）：量表灌滿 → 提示變成 READY → 三根手指同時按下
+  // 必殺集滿前沒有必殺按鈕
+  await expect(page.locator('#special-btn')).toBeHidden();
+  // 三指觸控必殺（放在剛開打時，避免回合先結束）：量表灌滿 → 提示變成 READY、右下角出現必殺按鈕 →
+  // 三根手指陸續按下（第一指先滑一點）：發動必殺，而且陀螺沒有被先落下的手指推動
   await page.evaluate(() => ((window as any).__game.sim.tops[0].special = 1));
   await expect(page.locator('#touch-hint')).toHaveClass(/ready/);
+  await expect(page.locator('#special-btn')).toBeVisible();
+  await expectInViewport(page, '#special-btn');
   const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 300, y: 200, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 340, y: 205, id: 1 }] });
   await cdp.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [
-      { x: 300, y: 200, id: 1 },
+      { x: 340, y: 205, id: 1 },
       { x: 450, y: 220, id: 2 },
       { x: 600, y: 200, id: 3 },
     ],
   });
   await expect.poll(async () => (await dbg(page)).counters.specials).toBeGreaterThan(0);
+  // 三指按著時不推移（推移向量、玩家陀螺的推移都是 0），浮動原點的圓圈也收起
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      { x: 380, y: 160, id: 1 },
+      { x: 450, y: 220, id: 2 },
+      { x: 600, y: 200, id: 3 },
+    ],
+  });
+  const held3 = await dbg(page);
+  expect(held3.swipe).toEqual({ x: 0, y: 0 });
+  expect(held3.tops[0].control).toEqual({ x: 0, z: 0 });
+  await expect(page.locator('#swipe')).toBeHidden();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect(page.locator('#touch-hint')).not.toHaveClass(/ready/);
+  await expect(page.locator('#special-btn')).toBeHidden();
+
+  // 必殺按鈕：再把量表灌滿（除錯，模擬下一戰）→ 點右下角的按鈕發動；按鈕不會帶動推移
+  const specials = (await dbg(page)).counters.specials;
+  await page.evaluate(() => {
+    const t = (window as any).__game.sim.tops[0];
+    t.special = 1;
+    t.specialUsed = false;
+  });
+  await expect(page.locator('#special-btn')).toBeVisible();
+  await page.screenshot({ path: 'e2e/screenshots/31a-mobile-special-button.png' });
+  await page.locator('#special-btn').tap();
+  await expect.poll(async () => (await dbg(page)).counters.specials).toBe(specials + 1);
+  await expect(page.locator('#special-btn')).toBeHidden();
+  expect((await dbg(page)).swipe).toEqual({ x: 0, y: 0 });
+  await expect(page.locator('#swipe')).toBeHidden();
 
   // 單指按住往上拖：推移向量往前，玩家陀螺收到推移；放開後歸零
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 300, y: 220, id: 4 }] });

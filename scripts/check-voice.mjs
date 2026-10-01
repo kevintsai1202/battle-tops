@@ -35,7 +35,11 @@ function normalize(s) {
     .replace(/[ー－―—\-・･\s、。，,.！!？?…「」『』（）()〜~：:；;]/g, '')
     .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
     .replace(/[0-9]/g, (d) => '〇一二三四五六七八九'[Number(d)])
-    .toLowerCase();
+    .toLowerCase()
+    // 中文版的倒數喊英文（Three! Two! One!），Whisper 常寫成阿拉伯數字：英文數字也換成中文數字再比
+    .replace(/three/g, '三')
+    .replace(/two/g, '二')
+    .replace(/one/g, '一');
 }
 
 /** Levenshtein 編輯距離（以 code point 為單位）。 */

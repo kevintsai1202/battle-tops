@@ -1,15 +1,15 @@
 {
-  "_comment": "中文台詞表（熱血口吻）：台詞 id 與角色和日文版 voice-lines.json 相同。遊戲（src/audio/voice.ts）與生成腳本（scripts/gen-voice.mjs --lang zh）共用。方括號是 Fish Audio s2 系列的語氣標記，播放 fallback 時會被去掉。必殺技名與畫面上的中文必殺名一致（src/sim/tops.ts 的 special.nameZh）。",
+  "_comment": "中文台詞表（熱血口吻）：台詞 id 與角色和日文版 voice-lines.json 相同。遊戲（src/audio/voice.ts）與生成腳本（scripts/gen-voice.mjs --lang zh）共用。方括號是 Fish Audio s2 系列的語氣標記，播放 fallback 時會被去掉。必殺技名與畫面上的中文必殺名一致（src/sim/tops.ts 的 special.nameZh）。倒數與發射照台灣（與日本原作）的習慣喊英文「Three! Two! One! Go Shoot!」。",
   "speakers": {
     "announcer": { "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe", "name": "承翰 Chenghan（台灣） / Fish Official" },
     "player": { "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe", "name": "承翰 Chenghan（台灣） / Fish Official" },
     "rival": { "voiceId": "297a6fd278df47c3b9da9bfdf55ac89a", "name": "さとる(ナレーション) / Fish Official（講中文）" }
   },
   "lines": {
-    "countdown_3": { "speaker": "announcer", "text": "[excited] 三！" },
-    "countdown_2": { "speaker": "announcer", "text": "[excited] 二！" },
-    "countdown_1": { "speaker": "announcer", "text": "[excited] 一！" },
-    "go_shoot": { "speaker": "player", "text": "[shouting][excited] 發射吧——！！" },
+    "countdown_3": { "speaker": "announcer", "text": "[excited] Three!" },
+    "countdown_2": { "speaker": "announcer", "text": "[excited] Two!" },
+    "countdown_1": { "speaker": "announcer", "text": "[excited] One!" },
+    "go_shoot": { "speaker": "player", "text": "[shouting][excited] Go Shoot!!" },
     "clash_1": { "speaker": "announcer", "text": "[shouting][excited] 撞上了——！！" },
     "clash_2": { "speaker": "announcer", "text": "[excited] 好驚人的力量！" },
     "clash_3": { "speaker": "announcer", "text": "[shouting] 這股衝擊太猛烈了！！" },
