@@ -23,6 +23,8 @@ import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
 import { css, Hud, type ArenaChoice, type CordView } from '../ui/hud';
 import { SwipeControls, type StickVector } from '../ui/touch';
+import { TutorialOverlay } from '../ui/tutorial';
+import { PULL_MIN, shouldOfferTutorial, STEPS, TUTORIAL_KEY, TutorialFlow, type TutorialCtx, type TutorialEvent, type TutorialInput } from '../tutorial/flow';
 import type { NetStatus } from '../net/client';
 import { perspectiveMatch } from '../net/perspective';
 import type { ServerMessage } from '../net/protocol';
@@ -98,6 +100,24 @@ function loadDifficulty(): Difficulty {
     // 儲存空間被封鎖：用預設值
   }
   return DIFFICULTIES.normal;
+}
+
+/** 讀瀏覽器記住的教學狀態（done 已完成、dismissed 不想看；封鎖儲存空間時當作沒有） */
+function readTutorialFlag(): string | null {
+  try {
+    return localStorage.getItem(TUTORIAL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** 記住教學狀態 */
+function writeTutorialFlag(v: 'done' | 'dismissed'): void {
+  try {
+    localStorage.setItem(TUTORIAL_KEY, v);
+  } catch {
+    // 儲存空間被封鎖：這次仍然生效，只是不會記住
+  }
 }
 
 /**
@@ -187,6 +207,25 @@ export class Game {
   private oppLabel = tr('cpu');
   /** 線上對戰（CPU 模式為 null） */
   private online: OnlineSession | null = null;
+  /**
+   * 操作教學進行中的狀態（沒在教學時為 null）：
+   * flow 步驟流程、ui 教學畫面、pushTime 對戰中推移的累計秒數、next「下一步」按鈕的訊號（用一次就清掉）、
+   * holdUntil 發射倒數暫停到這個時間（解說講完才開始倒數）、firstOrder 第 2 步一開始的出場順序、
+   * narrated 這一步的解說播過了沒、narrateAt 最早何時播（等主播講完）、guideReady 解說音檔載好了沒、
+   * restoreDifficulty 教學結束後還原的難度（教學固定用簡單）。
+   */
+  private tut: {
+    flow: TutorialFlow;
+    ui: TutorialOverlay;
+    pushTime: number;
+    next: boolean;
+    holdUntil: number;
+    firstOrder: string | null;
+    narrated: boolean;
+    narrateAt: number;
+    guideReady: boolean;
+    restoreDifficulty: Difficulty;
+  } | null = null;
   /** 這則快照裡伺服器判定為重擊（觸發特寫）的撞擊位置 */
   private bigClashPos: V2[] = [];
 
@@ -426,7 +465,8 @@ export class Game {
 
   /** 開始一場 3 對 3：隨機場地在這時抽出，整場（含延長賽）都用同一個場地 */
   private startMatch(): void {
-    const choice = this.arenaChoice;
+    // 教學固定在練習場（沒有機關），不改玩家記住的場地
+    const choice = this.tut ? 'practice' : this.arenaChoice;
     this.setArena(ARENAS[choice === 'random' ? ARENA_IDS[Math.floor(this.rng() * ARENA_IDS.length)] : choice]);
     this.match = createMatch(this.playerTeam, this.cpuTeam);
     this.round = 0;
@@ -662,6 +702,12 @@ export class Game {
 
   /** 標題畫面：點任意處開始 CPU 對戰，或按「線上對戰」；從分享連結（?room=）進來時直接進線上房間 */
   private toTitle(): void {
+    // 從教學中途回到標題（結束教學、或其他流程）：收起教學畫面並還原難度
+    if (this.tut) {
+      this.tut.ui.dispose();
+      this.difficulty = this.tut.restoreDifficulty;
+      this.tut = null;
+    }
     this.setState('title');
     this.clearArena();
     this.hud.hideTeamSelect();
@@ -685,7 +731,165 @@ export class Game {
         void this.boot();
         this.enterOnline(room);
       },
+      {
+        offer: shouldOfferTutorial(readTutorialFlag()),
+        onStart: () => this.startTutorial(),
+        onDismiss: () => writeTutorialFlag('dismissed'),
+      },
     );
+  }
+
+  // ---------------- 操作教學 ----------------
+
+  /**
+   * 開始操作教學：一般的 CPU 對戰流程（組隊兩步 → 發射 → 對戰），教學畫面一步一步提示，
+   * 玩家做到了才進下一步（流程在 tutorial/flow.ts）。固定練習場、簡單的發射判定；
+   * 從發射開始對手不攻擊，發射到必殺的步驟雙方不會被終結。打完第一戰說明計分後回到標題。
+   */
+  private startTutorial(): void {
+    void this.boot();
+    this.tut?.ui.dispose();
+    const tut = {
+      flow: new TutorialFlow(),
+      ui: new TutorialOverlay({
+        onReplay: () => this.narrate(),
+        onSkip: () => this.onTutorialEvent(this.tut?.flow.skip() ?? null),
+        onNext: () => {
+          if (this.tut) this.tut.next = true;
+        },
+        onExit: () => this.endTutorial(false),
+      }),
+      pushTime: 0,
+      next: false,
+      holdUntil: 0,
+      firstOrder: null,
+      narrated: false,
+      narrateAt: 0,
+      guideReady: false,
+      restoreDifficulty: this.difficulty,
+    };
+    this.tut = tut;
+    this.difficulty = DIFFICULTIES.easy;
+    this.enterSelect();
+    this.showTutorialStep();
+    // 解說音檔載好才開始講（載入很快；失敗時用語音合成）
+    void this.voice?.loadGuide().then(() => {
+      if (this.tut === tut) tut.guideReady = true;
+    });
+  }
+
+  /** 結束教學：完成（或中途離開）記在瀏覽器，之後標題不再提示，回到標題 */
+  private endTutorial(completed: boolean): void {
+    if (completed) writeTutorialFlag('done');
+    else if (readTutorialFlag() !== 'done') writeTutorialFlag('dismissed');
+    this.toTitle();
+  }
+
+  /** 目前是電腦（鍵盤、滑鼠）還是手機（觸控）：決定解說、字幕與示範動畫 */
+  private tutorialInput(): TutorialInput {
+    return this.touchMode ? 'tc' : 'kb';
+  }
+
+  /** 顯示目前這一步，並做進入這一步要做的事（集滿必殺、削弱對手、暫停倒數等） */
+  private showTutorialStep(): void {
+    const t = this.tut;
+    if (!t) return;
+    const step = t.flow.step;
+    t.ui.show(step, this.tutorialInput(), t.flow.index, STEPS.length);
+    t.narrated = false;
+    t.narrateAt = this.clock;
+    const me = this.sim?.tops[this.me];
+    const cpu = this.sim?.tops[this.me === 0 ? 1 : 0];
+    if (step.id === 'launch') {
+      // 解說講完才開始倒數（narrate 依解說長度改成實際的時間）
+      t.holdUntil = this.clock + 60;
+    } else if (step.id === 'special' && me) {
+      // 讓玩家馬上可以試：必殺量表直接集滿（這一戰已經放過也重新給一次）
+      me.special = 1;
+      me.specialUsed = false;
+    } else if (step.id === 'finish' && cpu) {
+      // 對手轉速降到兩成：很快就會停轉（或被撞出場、撞到爆裂），不用等很久
+      cpu.spin = Math.min(cpu.spin, cpu.spec.maxSpin * 0.2);
+    } else if (step.id === 'points') {
+      // 等主播喊完終結方式再講解（終結的大字也是 2.6 秒）
+      t.narrateAt = this.clock + 2.6;
+    }
+  }
+
+  /** 播這一步的解說（重聽也用這裡）；發射那一步講完才開始倒數 */
+  private narrate(): void {
+    const t = this.tut;
+    if (!t || !this.voice) return;
+    const id = t.flow.step.voice[this.tutorialInput()];
+    this.voice.guide(id);
+    t.narrated = true;
+    if (t.flow.step.id === 'launch' && this.state === 'launch') t.holdUntil = this.clock + this.voice.guideDuration(id) + 0.3;
+  }
+
+  /** 流程的結果：前進就顯示下一步；發射沒拉條就重來這一戰；全部完成就結束教學 */
+  private onTutorialEvent(ev: TutorialEvent | null): void {
+    const t = this.tut;
+    if (!t || !ev) return;
+    if (ev === 'done') this.endTutorial(true);
+    else if (ev === 'advanced') this.showTutorialStep();
+    else {
+      t.ui.toast('這次沒有拉條！再試一次');
+      this.voice?.guide('tut_retry');
+      this.restartTutorialRound(1.6);
+    }
+  }
+
+  /** 教學中重來這一戰（發射沒拉條、保護中被撞出場）：delay 秒後重新開場，倒數等解說講完 */
+  private restartTutorialRound(delay: number): void {
+    const t = this.tut;
+    if (!t) return;
+    t.holdUntil = this.clock + delay + 4;
+    window.setTimeout(() => {
+      if (this.tut !== t) return;
+      this.startRound();
+      t.holdUntil = this.clock + 1.2;
+    }, delay * 1000);
+  }
+
+  /** 保護中被終結（只會是被撞出場）：不計分、提示後重來這一戰，留在同一步 */
+  private tutorialKnockedOut(): void {
+    const t = this.tut!;
+    this.hud.clearBanner();
+    t.ui.toast('被終結了！重來一次');
+    this.voice?.guide('tut_restart');
+    this.restartTutorialRound(2);
+  }
+
+  /** 第 2 步目前的出場順序（判斷玩家有沒有調換過） */
+  private arrangeOrderKey(): string {
+    return [...document.querySelectorAll<HTMLElement>('#arrange .ar-slot')].map((e) => e.dataset.id).join(',');
+  }
+
+  /** 每幀：整理教學需要的狀態給流程判斷，播解說，更新聚光圈 */
+  private updateTutorial(wallDt: number): void {
+    const t = this.tut;
+    if (!t) return;
+    if (this.state === 'battle' && this.sim) {
+      const c = this.playerControl();
+      if (c.x !== 0 || c.z !== 0) t.pushTime += wallDt;
+    }
+    if (this.state === 'arrange' && t.firstOrder === null && document.querySelector('#arrange .ar-slot')) t.firstOrder = this.arrangeOrderKey();
+    const ctx: TutorialCtx = {
+      state: this.state,
+      picks: document.querySelectorAll('#select .card.picked').length,
+      orderChanged: this.state === 'arrange' && t.firstOrder !== null && this.arrangeOrderKey() !== t.firstOrder,
+      partChanged: [...document.querySelectorAll('#arrange .ar-slot small')].some((e) => e.textContent?.includes('換了零件')),
+      pulled: (this.lastLaunch.pull?.length ?? 0) >= PULL_MIN,
+      pushTime: t.pushTime,
+      dashes: this.counters.dashes,
+      specials: this.counters.specials,
+      finished: this.state === 'roundEnd',
+      next: t.next,
+    };
+    t.next = false;
+    this.onTutorialEvent(t.flow.update(ctx));
+    if (this.tut === t && !t.narrated && t.guideReady && this.clock >= t.narrateAt) this.narrate();
+    this.tut?.ui.update(wallDt);
   }
 
   /** 線上房間畫面（message 為要顯示的錯誤訊息）：還沒進房就瀏覽房間列表；房主等人中就顯示房號與分享連結 */
@@ -1131,6 +1335,7 @@ export class Game {
       const dir = this.playerControl();
       if (dir.x !== 0 || dir.z !== 0) this.dashWorld(dir);
     }
+    if (k === 'enter' && this.tut?.flow.step.info) this.tut.next = true;
     if (k === 'm') {
       this.musicOn = !this.musicOn;
       this.audio?.setMusic(this.musicOn, this.state === 'battle');
@@ -1196,6 +1401,8 @@ export class Game {
     this.frames++;
     this.clock += wallDt;
     this.stateTime += wallDt;
+    // 教學：發射的解說講完前停在開場介紹，不開始倒數（也不接受拉條與 Space）
+    if (this.tut && this.state === 'launch' && this.clock < this.tut.holdUntil) this.stateTime = Math.min(this.stateTime, this.launchLead - 0.05);
 
     this.director.update(wallDt);
     if (this.cutinLeft > 0) {
@@ -1221,7 +1428,8 @@ export class Game {
     if (this.lastDirectorMode === 'closeup' && this.director.mode !== 'closeup') this.audio?.slowmoOut();
     this.lastDirectorMode = this.director.mode;
 
-    if (this.state === 'roundEnd' && this.stateTime > 3.6 && !this.online) this.afterRound();
+    // 教學打完第一戰就停在這裡說明計分（不進下一戰）
+    if (this.state === 'roundEnd' && this.stateTime > 3.6 && !this.online && !this.tut) this.afterRound();
     if (this.state === 'result' && this.opts.demo && this.stateTime > 4) {
       this.hud.hideResult();
       this.startDemoMatch();
@@ -1261,6 +1469,7 @@ export class Game {
     }
     if (battleLike && this.sim) this.hud.updateHud(this.hudTops(this.sim.tops), this.score);
     this.updateTouch();
+    this.updateTutorial(wallDt);
 
     this.applyPost(ts);
     this.gfx.render();
@@ -1283,11 +1492,24 @@ export class Game {
         } else {
           sim.setControl(me, this.playerControl());
         }
-        const ai = cpuThink(sim, cpu, this.cpuRng, this.difficulty.cpuSpecialRate);
-        sim.setControl(cpu, ai.control);
-        if (ai.special) sim.useSpecial(cpu);
+        if (this.tut?.flow.cpuPassive) {
+          // 教學：對手不動也不放必殺，讓玩家專心練習
+          sim.setControl(cpu, { x: 0, z: 0 });
+        } else {
+          const ai = cpuThink(sim, cpu, this.cpuRng, this.difficulty.cpuSpecialRate);
+          sim.setControl(cpu, ai.control);
+          if (ai.special) sim.useSpecial(cpu);
+        }
       }
       sim.step(STEP);
+      if (this.tut?.flow.guard) {
+        // 教學保護：轉速與爆裂量維持在安全範圍，練習中不會停轉或爆裂
+        for (const t of sim.tops) {
+          if (!t.alive) continue;
+          t.spin = Math.max(t.spin, t.spec.maxSpin * 0.5);
+          t.burst = Math.min(t.burst, 0.5);
+        }
+      }
       for (const e of sim.drainEvents()) this.onEvent(e);
     }
   }
@@ -1369,6 +1591,10 @@ export class Game {
       }
       case 'finish': {
         if (this.state !== 'battle') break;
+        if (this.tut?.flow.guard) {
+          this.tutorialKnockedOut();
+          break;
+        }
         this.counters.finishes++;
         this.lastFinish = e.finish;
         const loser = sim.tops[e.loser];
@@ -1385,6 +1611,13 @@ export class Game {
           window.setTimeout(() => this.voice?.play(info.voice, 2), 250);
         }
         this.setState('roundEnd');
+        // 教學：不會進下一戰，這一戰的得分直接記上，比分與陣容小圖示馬上更新（說明計分時看得到）
+        if (this.tut && res && res.winner !== null) {
+          // 賽況仍標示剛打完的這一戰（記分後 currentPairing 會跳到下一戰）
+          const pair = currentPairing(this.match!);
+          recordResult(this.match!, res);
+          this.hud.setMatchInfo(this.match!, TOP_SPECS, this.arena.nameZh, pair);
+        }
         break;
       }
     }
@@ -1555,7 +1788,24 @@ export class Game {
       sfx: this.audio?.sfxCount ?? 0,
       audioLevel: this.audio?.peakLevel ?? 0,
       audioState: this.audio?.ctx.state ?? 'none',
-      voice: { mode: this.voice?.mode ?? 'none', lang: this.voice?.lang ?? lang(), loaded: this.voice?.loaded ?? 0, played: this.voice?.played ?? 0, last: this.voice?.last ?? null },
+      voice: {
+        mode: this.voice?.mode ?? 'none',
+        lang: this.voice?.lang ?? lang(),
+        loaded: this.voice?.loaded ?? 0,
+        played: this.voice?.played ?? 0,
+        last: this.voice?.last ?? null,
+        guidePlayed: this.voice?.guidePlayed ?? 0,
+        guideLast: this.voice?.guideLast ?? null,
+      },
+      tutorial: this.tut
+        ? {
+            step: this.tut.flow.step.id,
+            index: this.tut.flow.index,
+            guard: this.tut.flow.guard,
+            holding: this.state === 'launch' && this.clock < this.tut.holdUntil,
+            pushTime: this.tut.pushTime,
+          }
+        : null,
       lang: lang(),
       launch: this.lastLaunch,
       difficulty: this.difficulty.id,

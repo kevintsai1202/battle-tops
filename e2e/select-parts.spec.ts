@@ -144,7 +144,8 @@ test.describe('手機直向', () => {
   test.use(phone('Pixel 7'));
   test('兩步組隊版面不超出、絕招示範在動', async ({ page }) => {
     await page.goto('./?seed=33');
-    await page.tap('#title');
+    // 點「點擊開始」的字開始 CPU 對戰：直向畫面中央現在是線上對戰按鈕（標題加了操作教學的入口），點中央會進線上房間
+    await page.locator('#title .blink').tap();
     await expect(page.locator('#select')).toBeVisible();
     await expectInViewport(page, '#select .cards');
     await expectInViewport(page, '#select .detail');

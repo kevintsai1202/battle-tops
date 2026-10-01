@@ -9,7 +9,8 @@ test('直向手機：提示橫向遊玩、組隊與 HUD 不超出、場地視角
   await page.goto('./?seed=22');
   await expect(page.locator('.rotate-hint')).toBeVisible();
   await page.screenshot({ path: 'e2e/screenshots/32-portrait-title.png' });
-  await page.tap('#title');
+  // 點「點擊開始」的字開始 CPU 對戰：直向畫面中央現在是線上對戰按鈕（標題加了操作教學的入口），點中央會進線上房間
+  await page.locator('#title .blink').tap();
   await expect(page.locator('#select')).toBeVisible();
   await expectInViewport(page, '#select .cards');
   await expectInViewport(page, '#select .detail');

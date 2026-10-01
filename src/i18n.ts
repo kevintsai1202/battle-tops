@@ -27,6 +27,7 @@ export const TEXT = {
   'title.sub': { ja: '爆転バトル ・ 戰鬥陀螺', zh: '爆轉對戰' },
   'title.start': { ja: 'クリックしてスタート ／ 點擊開始（CPU 對戰）', zh: '點擊開始（電腦對戰）' },
   'title.online': { ja: 'オンライン対戦 ／ 線上對戰（找朋友）', zh: '線上對戰（找朋友）' },
+  'title.tutorial': { ja: 'チュートリアル ／ 操作教學', zh: '操作教學' },
   'select.title': { ja: 'チームを組め！', zh: '組成隊伍！' },
   'select.cpuTeam': { ja: 'CPU チーム', zh: '電腦隊伍' },
   'diff.easy': { ja: 'かんたん', zh: '簡單' },

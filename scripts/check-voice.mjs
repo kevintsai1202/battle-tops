@@ -17,6 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LANGS = {
   ja: { dir: 'public/voice', whisper: 'ja', prompt: null, out: 'logs/voice-check.json' },
   zh: { dir: 'public/voice/zh', whisper: 'zh', prompt: '以下是繁體中文的句子。', out: 'logs/voice-check-zh.json' },
+  tutorial: { dir: 'public/voice/tutorial', whisper: 'zh', prompt: '以下是繁體中文的句子。', out: 'logs/voice-check-tutorial.json' },
 };
 const API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const MAX_RETRY = 6;

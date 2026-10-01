@@ -115,6 +115,16 @@ export interface ArrangeOptions {
   thumb: (spec: TopSpec, cb: (url: string) => void) => void;
 }
 
+/** 標題畫面的操作教學入口 */
+export interface TitleTutorialOptions {
+  /** 顯示「第一次玩？建議先看操作教學」的提示 */
+  offer: boolean;
+  /** 開始教學（按鈕或提示的「開始教學」） */
+  onStart: () => void;
+  /** 提示選「不用了」 */
+  onDismiss: () => void;
+}
+
 /** 線上房間畫面的參數 */
 export interface OnlineLobbyOptions {
   /** 預設名稱與房號（從分享連結進來時帶入） */
@@ -186,12 +196,39 @@ export class Hud {
    * 用 click 而不是 pointerdown：觸控時瀏覽器在 pointerdown 之後才補送 click，
    * 若在 pointerdown 就切到組隊畫面，這個 click 會落在剛出現的陀螺小格上，誤選一顆。
    * 右上角的語言按鈕切換日文版／全中文版（記住選擇），不會開始遊戲。
+   * tutorial：「操作教學」按鈕；offer 為 true 時顯示「第一次玩？建議先看操作教學」的提示（開始教學／不用了），
+   * 提示不擋開始遊戲（點標題其他地方照常開打）。
    */
-  showTitle(onStart: () => void, onOnline?: () => void): void {
+  showTitle(onStart: () => void, onOnline?: () => void, tutorial?: TitleTutorialOptions): void {
     const title = $('#title');
     const online = $<HTMLButtonElement>('.to-online', title);
+    const tutBtn = $<HTMLButtonElement>('.to-tutorial', title);
+    const offer = $('.tut-offer', title);
     title.hidden = false;
     online.hidden = !onOnline;
+    tutBtn.hidden = !tutorial;
+    offer.hidden = !tutorial?.offer;
+    /** 標題上的按鈕：攔住事件，不要讓「點任意處開始」也觸發 */
+    const own = (b: HTMLButtonElement, fn: () => void) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        fn();
+      };
+    };
+    if (tutorial) {
+      own(tutBtn, () => {
+        stop();
+        tutorial.onStart();
+      });
+      own($<HTMLButtonElement>('.tut-offer-go', offer), () => {
+        stop();
+        tutorial.onStart();
+      });
+      own($<HTMLButtonElement>('.tut-offer-no', offer), () => {
+        offer.hidden = true;
+        tutorial.onDismiss();
+      });
+    }
     const langBtns = [...title.querySelectorAll<HTMLButtonElement>('.lang-switch button')];
     /** 標出目前的語言 */
     const markLang = () => langBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang())));
@@ -210,6 +247,7 @@ export class Hud {
       title.removeEventListener('click', go);
       window.removeEventListener('keydown', go);
       online.onclick = null;
+      tutBtn.onclick = null;
       langBtns.forEach((b) => (b.onclick = null));
       title.hidden = true;
     };

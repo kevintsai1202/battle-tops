@@ -69,7 +69,16 @@
         <h1 data-i18n="title.logo">BATTLE TOPS</h1>
         <p class="en" data-i18n="title.sub">爆転バトル ・ 戰鬥陀螺</p>
         <p class="blink" data-i18n="title.start">クリックしてスタート ／ 點擊開始（CPU 對戰）</p>
-        <button type="button" class="to-online" data-i18n="title.online">オンライン対戦 ／ 線上對戰（找朋友）</button>
+        <div class="title-actions">
+          <button type="button" class="to-online" data-i18n="title.online">オンライン対戦 ／ 線上對戰（找朋友）</button>
+          <button type="button" class="to-tutorial" data-i18n="title.tutorial">チュートリアル ／ 操作教學</button>
+        </div>
+        <!-- 第一次玩的提示（沒看過也沒拒絕過才顯示；教學是中文，兩種語言都顯示中文） -->
+        <div class="tut-offer" hidden>
+          <span>第一次玩？建議先看操作教學（約 3 分鐘）</span>
+          <button type="button" class="tut-offer-go">開始教學</button>
+          <button type="button" class="tut-offer-no">不用了</button>
+        </div>
         <p class="note">請開啟聲音（建議戴耳機，3D 立體音效）</p>
         <p class="rotate-hint">📱 橫向遊玩效果較好</p>
       </section>

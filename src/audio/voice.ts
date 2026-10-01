@@ -1,6 +1,7 @@
 import { lang as currentLang, type Lang } from '../i18n';
 import type { TopSpec } from '../sim/types';
 import type { AudioEngine } from './engine';
+import tutorialLines from './tutorial-lines.json';
 import { trimRange } from './trim';
 import jaLines from './voice-lines.json';
 import zhLines from './voice-lines.zh.json';
@@ -11,8 +12,14 @@ export type VoiceId = keyof typeof jaLines.lines;
 /** 語音來源：預先生成的音檔、瀏覽器語音合成（退路）、都沒有（含載入中） */
 export type VoiceMode = 'fish-files' | 'speechSynthesis' | 'none';
 
-/** 播放優先權：0 閒聊（有人講話就放棄）、1 一般、2 重要（倒數、終結、勝負） */
-export type Priority = 0 | 1 | 2;
+/** 操作教學的解說台詞 id（tutorial-lines.json，只有中文） */
+export type GuideId = keyof typeof tutorialLines.lines;
+
+/** 播放優先權：0 閒聊（有人講話就放棄）、1 一般、2 重要（倒數、終結、勝負）、3 教學解說（最優先） */
+export type Priority = 0 | 1 | 2 | 3;
+
+/** 一套音檔：日文、中文，或操作教學的解說 */
+type SetId = Lang | 'tutorial';
 
 /** 一句台詞：角色與文字（方括號是語氣標記） */
 interface Line {
@@ -22,8 +29,8 @@ interface Line {
 
 /** 各語言的台詞表；中文表少了任何一句時，這裡的型別檢查會報錯 */
 const LINES: Record<Lang, Record<VoiceId, Line>> = { ja: jaLines.lines, zh: zhLines.lines };
-/** 各語言音檔的資料夾（相對 BASE_URL）：日文沿用原本的 voice/，中文在 voice/zh/ */
-export const VOICE_DIR: Record<Lang, string> = { ja: 'voice/', zh: 'voice/zh/' };
+/** 各套音檔的資料夾（相對 BASE_URL）：日文沿用原本的 voice/，中文在 voice/zh/，教學解說在 voice/tutorial/ */
+export const VOICE_DIR: Record<SetId, string> = { ja: 'voice/', zh: 'voice/zh/', tutorial: 'voice/tutorial/' };
 /** 語音合成退路用的語言 */
 const SYNTH_LANG: Record<Lang, string> = { ja: 'ja-JP', zh: 'zh-TW' };
 
@@ -45,9 +52,14 @@ function plainText(l: Lang, id: VoiceId): string {
   return LINES[l][id].text.replace(/\[[^\]]*\]/g, '').trim();
 }
 
-/** 一種語言的音檔：解碼後的音訊、來源（載入完成前為 none） */
+/** 教學解說去掉語氣標記的文字 */
+function guideText(id: GuideId): string {
+  return tutorialLines.lines[id].text.replace(/\[[^\]]*\]/g, '').trim();
+}
+
+/** 一套音檔：解碼後的音訊（依台詞 id）、來源（載入完成前為 none） */
 interface VoiceSet {
-  buffers: Map<VoiceId, AudioBuffer>;
+  buffers: Map<string, AudioBuffer>;
   mode: VoiceMode;
   loading: Promise<void>;
 }
@@ -67,8 +79,11 @@ export class VoicePlayer {
   played = 0;
   /** 最近播放的台詞 id（e2e 觀察用） */
   last: VoiceId | null = null;
+  /** 教學解說：累計播放句數與最近一句（e2e 觀察用） */
+  guidePlayed = 0;
+  guideLast: GuideId | null = null;
   private readonly audio: AudioEngine;
-  private readonly sets = new Map<Lang, VoiceSet>();
+  private readonly sets = new Map<SetId, VoiceSet>();
   private current: { src: AudioBufferSourceNode | null; priority: Priority; until: number } | null = null;
 
   constructor(audio: AudioEngine, l: Lang = currentLang()) {
@@ -97,8 +112,13 @@ export class VoicePlayer {
     void this.load();
   }
 
-  /** 取得（必要時開始載入）某語言的音檔；失敗時那一套改用語音合成退路 */
-  private loadSet(l: Lang): VoiceSet {
+  /** 載入教學解說的音檔（開始教學時呼叫；已載過就沿用） */
+  loadGuide(): Promise<void> {
+    return this.loadSet('tutorial').loading;
+  }
+
+  /** 取得（必要時開始載入）某一套音檔；失敗時那一套改用語音合成退路 */
+  private loadSet(l: SetId): VoiceSet {
     const hit = this.sets.get(l);
     if (hit) return hit;
     const set: VoiceSet = { buffers: new Map(), mode: 'none', loading: Promise.resolve() };
@@ -114,7 +134,7 @@ export class VoicePlayer {
             const r = await fetch(`${base}${m.file}`);
             if (!r.ok) return;
             const buf = await this.audio.ctx.decodeAudioData(await r.arrayBuffer());
-            set.buffers.set(id as VoiceId, this.trim(buf));
+            set.buffers.set(id, this.trim(buf));
           }),
         );
         if (set.buffers.size === 0) throw new Error('沒有可用的音檔');
@@ -142,6 +162,27 @@ export class VoicePlayer {
     return b ? b.duration : 0.12 * plainText(this.lang, id).length + 0.3;
   }
 
+  /** 教學解說的長度（秒）；還沒載好時依字數粗估 */
+  guideDuration(id: GuideId): number {
+    const b = this.sets.get('tutorial')?.buffers.get(id);
+    return b ? b.duration : 0.2 * guideText(id).length + 0.3;
+  }
+
+  /**
+   * 播放教學解說（最優先，會打斷主播與角色台詞；中文，不跟介面語言切換）。
+   * 音檔還沒載好或缺檔時用瀏覽器的中文語音合成。回傳是否真的播出。
+   */
+  guide(id: GuideId): boolean {
+    const set = this.sets.get('tutorial');
+    const buf = set?.mode === 'fish-files' ? set.buffers.get(id) : undefined;
+    const ok = this.start(buf, guideText(id), 'guide', 'zh-TW', 3, buf ? buf.duration : this.guideDuration(id));
+    if (ok) {
+      this.guidePlayed++;
+      this.guideLast = id;
+    }
+    return ok;
+  }
+
   /** 目前是否有人在講話 */
   get busy(): boolean {
     return this.current !== null && this.audio.ctx.currentTime < this.current.until;
@@ -149,43 +190,52 @@ export class VoicePlayer {
 
   /** 播放台詞；回傳是否真的播出 */
   play(id: VoiceId, priority: Priority = 1): boolean {
-    const now = this.audio.ctx.currentTime;
+    // 這一句沒有音檔（例如新增的台詞還沒生成）：單句退回瀏覽器語音合成；整套還在載入時不講話
     const mode = this.mode;
+    if (mode === 'none') return false;
+    const buf = mode === 'fish-files' ? this.sets.get(this.lang)?.buffers.get(id) : undefined;
+    const ok = this.start(buf, plainText(this.lang, id), LINES[this.lang][id].speaker, SYNTH_LANG[this.lang], priority, this.duration(id));
+    if (ok) {
+      this.played++;
+      this.last = id;
+    }
+    return ok;
+  }
+
+  /**
+   * 實際播出一句：有音檔就播音檔（主播加場館殘響），沒有就用語音合成；
+   * 同一時間只講一句，高優先權打斷低優先權，閒聊（0）遇到有人講話就略過。播放時壓低音效與音樂。
+   */
+  private start(buf: AudioBuffer | undefined, text: string, speaker: string, synthLang: string, priority: Priority, dur: number): boolean {
+    const now = this.audio.ctx.currentTime;
     if (this.busy && this.current) {
       if (priority === 0 || priority < this.current.priority) return false;
       this.current.src?.stop();
       if (this.current.src === null && 'speechSynthesis' in window) speechSynthesis.cancel();
     }
-    const dur = this.duration(id);
-    // 這一句沒有音檔（例如新增的台詞還沒生成）：單句退回瀏覽器語音合成
-    const buf = mode === 'fish-files' ? this.sets.get(this.lang)?.buffers.get(id) : undefined;
-    const synth = !buf && mode !== 'none' && 'speechSynthesis' in window;
-    const line = LINES[this.lang][id];
     if (buf) {
       const src = this.audio.ctx.createBufferSource();
       src.buffer = buf;
       src.connect(this.audio.voice);
       // 實況主播加一點場館殘響，像從廣播喇叭出來
-      if (line.speaker === 'announcer') {
+      if (speaker === 'announcer') {
         const wet = this.audio.ctx.createGain();
         wet.gain.value = 0.25;
         src.connect(wet).connect(this.audio.reverbSend);
       }
       src.start();
       this.current = { src, priority, until: now + dur };
-    } else if (synth) {
-      const u = new SpeechSynthesisUtterance(plainText(this.lang, id));
-      u.lang = SYNTH_LANG[this.lang];
+    } else if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = synthLang;
       u.rate = 1.15;
-      u.pitch = line.speaker === 'player' ? 1.4 : 1.0;
+      u.pitch = speaker === 'player' ? 1.4 : 1.0;
       speechSynthesis.speak(u);
       this.current = { src: null, priority, until: now + dur };
     } else {
       return false;
     }
     this.audio.duck(dur + 0.1);
-    this.played++;
-    this.last = id;
     return true;
   }
 }

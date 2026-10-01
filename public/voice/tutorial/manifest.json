@@ -1,0 +1,146 @@
+{
+  "tut_pick": {
+    "file": "tut_pick.mp3",
+    "text": "[happy] 歡迎來到戰鬥陀螺！我們先來組隊：從名鑑裡點選三顆陀螺，點的順序就是出場順序。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "178b21022ee62cbb",
+    "seconds": 7.868
+  },
+  "tut_next": {
+    "file": "tut_next.mp3",
+    "text": "[happy] 選好三顆了！按「下一步」。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "310d5e796b229b7b",
+    "seconds": 2.433
+  },
+  "tut_order": {
+    "file": "tut_order.mp3",
+    "text": "[happy] 這裡可以調整出場順序。按陀螺旁邊的上下箭頭，把它往前或往後調一戰。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "0c4b36f7b3b289e4",
+    "seconds": 6.704
+  },
+  "tut_parts": {
+    "file": "tut_parts.mp3",
+    "text": "[happy] 點一顆陀螺，在右邊換上不同的盤或軸，雷達圖會立刻跟著變化。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "051251615fbbd15f",
+    "seconds": 5.623
+  },
+  "tut_ready": {
+    "file": "tut_ready.mp3",
+    "text": "[excited] 都準備好了！按「出陣」進入對戰。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "79d5d3dbab17565b",
+    "seconds": 3.016
+  },
+  "tut_launch_kb": {
+    "file": "tut_launch_kb.mp3",
+    "text": "[excited] 發射的時候，用滑鼠在畫面上按住往下拉，等外圈縮到和內圈一樣大的瞬間放手！往左或往右拉，可以瞄準方向。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "42ba1cfb4f66149c",
+    "seconds": 10.328
+  },
+  "tut_launch_tc": {
+    "file": "tut_launch_tc.mp3",
+    "text": "[excited] 發射的時候，手指在畫面上按住往下滑，等外圈縮到和內圈一樣大的瞬間放手！往左或往右滑，可以瞄準方向。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "fa2552442124ab20",
+    "seconds": 9.789
+  },
+  "tut_retry": {
+    "file": "tut_retry.mp3",
+    "text": "[happy] 這次沒有拉條喔。再試一次，記得按住往下拉！",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "9342b7169ecc31ed",
+    "seconds": 4.202
+  },
+  "tut_push_kb": {
+    "file": "tut_push_kb.mp3",
+    "text": "[excited] 陀螺轉起來了！用方向鍵或 W、A、S、D，推動你的陀螺。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "9ed1379864784af1",
+    "seconds": 5.307
+  },
+  "tut_push_tc": {
+    "file": "tut_push_tc.mp3",
+    "text": "[excited] 陀螺轉起來了！手指在畫面上滑動，就能推動你的陀螺。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "34c4fca59eae05e0",
+    "seconds": 5.06
+  },
+  "tut_dash_kb": {
+    "file": "tut_dash_kb.mp3",
+    "text": "[excited] 按住方向鍵，再按一下 Shift，就能朝那個方向衝刺一小段！",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "443e5d75360b7d4e",
+    "seconds": 4.94
+  },
+  "tut_dash_tc": {
+    "file": "tut_dash_tc.mp3",
+    "text": "[excited] 手指往一個方向快速甩一下，就能衝刺一小段！",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "55792bcfc6338aa5",
+    "seconds": 3.687
+  },
+  "tut_special_kb": {
+    "file": "tut_special_kb.mp3",
+    "text": "[excited] 必殺量表集滿了！按空白鍵，發動必殺技！",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "20f1710ef57e10ce",
+    "seconds": 3.971
+  },
+  "tut_special_tc": {
+    "file": "tut_special_tc.mp3",
+    "text": "[excited] 必殺量表集滿了！三根手指同時點一下畫面，發動必殺技！",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "97859564ea20c7ff",
+    "seconds": 5.31
+  },
+  "tut_finish": {
+    "file": "tut_finish.mp3",
+    "text": "[excited] 最後是分出勝負！把對手撞出場外、撞到爆裂，或是讓它停止轉動，都能終結對手。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "0b91555dd01ec916",
+    "seconds": 7.499
+  },
+  "tut_points": {
+    "file": "tut_points.mp3",
+    "text": "[happy] 旋轉終結，也就是對手停轉，得一分；場外終結和爆裂終結，各得兩分。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "b8040e5a35e7612e",
+    "seconds": 6.973
+  },
+  "tut_match": {
+    "file": "tut_match.mp3",
+    "text": "[happy] 正式比賽是三對三，三戰總分高的一方獲勝，平手就打延長賽。教學完成，上場吧！",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "6824425626818fd5",
+    "seconds": 8.431
+  },
+  "tut_restart": {
+    "file": "tut_restart.mp3",
+    "text": "[happy] 被終結了！沒關係，我們重來一次。",
+    "speaker": "guide",
+    "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36",
+    "hash": "4e81b3de25d8bfa9",
+    "seconds": 3.519
+  }
+}

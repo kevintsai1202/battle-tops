@@ -1,0 +1,26 @@
+{
+  "_comment": "操作教學的中文解說台詞（只有中文，日文版也用這一套）。遊戲（src/audio/voice.ts 的 guide）與生成腳本（scripts/gen-voice.mjs --lang tutorial）共用。_kb 是電腦（鍵盤、滑鼠）版、_tc 是手機（觸控）版。方括號是 Fish Audio s2 系列的語氣標記。",
+  "speakers": {
+    "guide": { "voiceId": "91ec588cf8ef443a9c0d5b21d0c1fa36", "name": "詩涵 Shihan（台灣） / Fish Official" }
+  },
+  "lines": {
+    "tut_pick": { "speaker": "guide", "text": "[happy] 歡迎來到戰鬥陀螺！我們先來組隊：從名鑑裡點選三顆陀螺，點的順序就是出場順序。" },
+    "tut_next": { "speaker": "guide", "text": "[happy] 選好三顆了！按「下一步」。" },
+    "tut_order": { "speaker": "guide", "text": "[happy] 這裡可以調整出場順序。按陀螺旁邊的上下箭頭，把它往前或往後調一戰。" },
+    "tut_parts": { "speaker": "guide", "text": "[happy] 點一顆陀螺，在右邊換上不同的盤或軸，雷達圖會立刻跟著變化。" },
+    "tut_ready": { "speaker": "guide", "text": "[excited] 都準備好了！按「出陣」進入對戰。" },
+    "tut_launch_kb": { "speaker": "guide", "text": "[excited] 發射的時候，用滑鼠在畫面上按住往下拉，等外圈縮到和內圈一樣大的瞬間放手！往左或往右拉，可以瞄準方向。" },
+    "tut_launch_tc": { "speaker": "guide", "text": "[excited] 發射的時候，手指在畫面上按住往下滑，等外圈縮到和內圈一樣大的瞬間放手！往左或往右滑，可以瞄準方向。" },
+    "tut_retry": { "speaker": "guide", "text": "[happy] 這次沒有拉條喔。再試一次，記得按住往下拉！" },
+    "tut_push_kb": { "speaker": "guide", "text": "[excited] 陀螺轉起來了！用方向鍵或 W、A、S、D，推動你的陀螺。" },
+    "tut_push_tc": { "speaker": "guide", "text": "[excited] 陀螺轉起來了！手指在畫面上滑動，就能推動你的陀螺。" },
+    "tut_dash_kb": { "speaker": "guide", "text": "[excited] 按住方向鍵，再按一下 Shift，就能朝那個方向衝刺一小段！" },
+    "tut_dash_tc": { "speaker": "guide", "text": "[excited] 手指往一個方向快速甩一下，就能衝刺一小段！" },
+    "tut_special_kb": { "speaker": "guide", "text": "[excited] 必殺量表集滿了！按空白鍵，發動必殺技！" },
+    "tut_special_tc": { "speaker": "guide", "text": "[excited] 必殺量表集滿了！三根手指同時點一下畫面，發動必殺技！" },
+    "tut_finish": { "speaker": "guide", "text": "[excited] 最後是分出勝負！把對手撞出場外、撞到爆裂，或是讓它停止轉動，都能終結對手。" },
+    "tut_points": { "speaker": "guide", "text": "[happy] 旋轉終結，也就是對手停轉，得一分；場外終結和爆裂終結，各得兩分。" },
+    "tut_match": { "speaker": "guide", "text": "[happy] 正式比賽是三對三，三戰總分高的一方獲勝，平手就打延長賽。教學完成，上場吧！" },
+    "tut_restart": { "speaker": "guide", "text": "[happy] 被終結了！沒關係，我們重來一次。" }
+  }
+}

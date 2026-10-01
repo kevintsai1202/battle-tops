@@ -1,5 +1,5 @@
 // 用 Fish Audio TTS 把台詞表生成成語音檔：日文 src/audio/voice-lines.json → public/voice/，
-// 中文 src/audio/voice-lines.zh.json → public/voice/zh/。
+// 中文 src/audio/voice-lines.zh.json → public/voice/zh/；操作教學（--lang tutorial）src/audio/tutorial-lines.json → public/voice/tutorial/。
 // 用法（PowerShell 7）：
 //   npm run voice
 //   npm run voice -- --lang zh
@@ -22,6 +22,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LANGS = {
   ja: { lines: 'src/audio/voice-lines.json', out: 'public/voice' },
   zh: { lines: 'src/audio/voice-lines.zh.json', out: 'public/voice/zh' },
+  // 操作教學的中文解說（只有中文）
+  tutorial: { lines: 'src/audio/tutorial-lines.json', out: 'public/voice/tutorial' },
 };
 const execFileP = promisify(execFile);
 

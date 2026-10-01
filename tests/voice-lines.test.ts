@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import jaManifest from '../public/voice/manifest.json';
 import zhManifest from '../public/voice/zh/manifest.json';
+import tutorialManifest from '../public/voice/tutorial/manifest.json';
+import tutorial from '../src/audio/tutorial-lines.json';
 import ja from '../src/audio/voice-lines.json';
 import zh from '../src/audio/voice-lines.zh.json';
 import { specialVoice, type VoiceId } from '../src/audio/voice';
@@ -20,6 +22,8 @@ const SETS: { lang: string; lines: Lines; manifest: Manifest }[] = [
 ];
 /** 中文音檔（只列檔名，不載入） */
 const ZH_FILES = Object.keys(import.meta.glob('../public/voice/zh/*.mp3')).map((p) => p.split('/').pop());
+/** 教學解說音檔（只列檔名，不載入） */
+const TUTORIAL_FILES = Object.keys(import.meta.glob('../public/voice/tutorial/*.mp3')).map((p) => p.split('/').pop());
 
 /** 日文假名（平假名、片假名、長音符；中黑點「・」是中文介面也用的標點，不算） */
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
@@ -93,5 +97,19 @@ describe('播放長度不超過節拍', () => {
     const m = zhManifest as Manifest;
     for (const id of ['winner_player', 'winner_rival']) expect(m[id].seconds, id).toBeLessThanOrEqual(WINNER_MAX);
     for (const id of ['p_win', 'r_win']) expect(m[id].seconds, id).toBeLessThanOrEqual(WIN_LINE_MAX);
+  });
+});
+
+describe('操作教學的解說語音', () => {
+  test('全中文、語氣標記用方括號，每句都已生成而且沒有過期（改了台詞要重跑 npm run voice -- --lang tutorial）', () => {
+    const m = tutorialManifest as Manifest;
+    for (const [id, line] of Object.entries(tutorial.lines)) {
+      expect(line.text, id).not.toMatch(KANA);
+      expect(line.text, id).not.toMatch(/\([a-z ]+\)/i);
+      expect(m[id], id).toBeDefined();
+      expect(m[id].text, id).toBe(line.text);
+      expect(m[id].voiceId, id).toBe(tutorial.speakers[line.speaker as keyof typeof tutorial.speakers].voiceId);
+      expect(TUTORIAL_FILES, id).toContain(m[id].file);
+    }
   });
 });
