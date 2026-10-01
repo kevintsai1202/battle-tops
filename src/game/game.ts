@@ -19,7 +19,20 @@ import { keyLaunchRatio, measurePull, pullLaunchRatio, pullQuality, trimPullSamp
 import { FINISH_POINTS, launchSpinRatio } from '../sim/rules';
 import { STOCK, type TeamLoadouts } from '../sim/parts';
 import { cpuPickTeam, createMatch, currentPairing, recordResult, setOvertime, type Pairing, type TeamMatch } from '../sim/team';
-import { addTrialResult, AutoDuel, emptyTrialRecord, trialKey, type DuelSummary, type TrialConfig, type TrialRecord } from '../sim/trial';
+import {
+  addTrialResult,
+  AutoDuel,
+  emptyTrialRecord,
+  parseTrialStore,
+  pruneTrialStore,
+  TRIAL_STORE_KEY,
+  trialKey,
+  type DuelSummary,
+  type TrialConfig,
+  type TrialEntry,
+  type TrialStore,
+} from '../sim/trial';
+import type { AutoDuelMessage, AutoDuelRequest } from '../sim/autoDuelJob';
 import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
 import { css, Hud, type ArenaChoice, type CordView, type TrialBattleStats } from '../ui/hud';
@@ -104,6 +117,18 @@ function loadDifficulty(): Difficulty {
     // 儲存空間被封鎖：用預設值
   }
   return DIFFICULTIES.normal;
+}
+
+/** 試驗模式「電腦自動對打」的場數（1000 場時勝率的誤差約 ±3 個百分點，比得出零件的差異） */
+const AUTO_DUEL_GAMES = 1000;
+
+/** 讀出存在瀏覽器裡的試驗紀錄（壞掉、過期或被封鎖時當成沒有） */
+function loadTrialStore(): TrialStore {
+  try {
+    return parseTrialStore(localStorage.getItem(TRIAL_STORE_KEY));
+  } catch {
+    return parseTrialStore(null);
+  }
 }
 
 /** 讀瀏覽器記住的教學狀態（done 已完成、dismissed 不想看；封鎖儲存空間時當作沒有） */
@@ -245,12 +270,17 @@ export class Game {
     bigClashes: number;
     end: { rpm: [number, number]; burst: [number, number] } | null;
   } | null = null;
-  /** 上一次試驗的設定（回到試驗畫面時沿用） */
+  /** 上一次試驗的設定（回到試驗畫面時沿用；存在瀏覽器裡） */
   private trialCfg: TrialConfig | null = null;
-  /** 各組設定的累計戰績（key → 戰績；重新整理頁面才清掉） */
-  private readonly trialRecords = new Map<string, TrialRecord>();
-  /** 進行中的電腦自動對打（每幀分批推進）與最近一次的結果（e2e 觀察用） */
+  /** 各組設定的紀錄（累計戰績、最近一次自動對打的結果；存在瀏覽器裡，見 saveTrial） */
+  private trialStore: TrialStore;
+  /** 電腦自動對打：背景執行的 Worker 與這次工作的編號（舊工作的回報一律忽略）、目前進度 */
+  private autoWorker: Worker | null = null;
+  private autoJobId = 0;
+  private autoProgress: number | null = null;
+  /** 沒有 Worker 可用時的退路：在畫面的每幀分批推進 */
   private trialAuto: AutoDuel | null = null;
+  /** 最近一次自動對打的結果（e2e 觀察用） */
   lastAutoDuel: DuelSummary | null = null;
   /** 這則快照裡伺服器判定為重擊（觸發特寫）的撞擊位置 */
   private bigClashPos: V2[] = [];
@@ -258,6 +288,8 @@ export class Game {
   constructor(container: HTMLElement, opts: GameOptions) {
     this.opts = opts;
     this.difficulty = opts.demo ? DIFFICULTIES.normal : loadDifficulty();
+    this.trialStore = loadTrialStore();
+    this.trialCfg = this.trialStore.cfg;
     this.arenaChoice = opts.demo ? (opts.arena ?? 'practice') : loadArena();
     this.rng = createRng(opts.seed);
     this.cpuRng = createRng(opts.seed * 31 + 7);
@@ -343,7 +375,7 @@ export class Game {
   /** 目前總分 [玩家, CPU]；試驗模式為這組設定的累計 [勝, 敗] */
   get score(): [number, number] {
     if (this.trial) {
-      const r = this.trialRecords.get(this.trial.key);
+      const r = this.trialStore.entries[this.trial.key]?.record;
       return r ? [r.wins, r.losses] : [0, 0];
     }
     return this.match?.score ?? [0, 0];
@@ -507,7 +539,7 @@ export class Game {
     this.rig.seat = 0;
     this.oppLabel = tr('cpu');
     this.trial = null;
-    this.trialAuto = null;
+    this.stopAutoDuel();
     this.setState('trial');
     this.hud.hideHud();
     this.hud.clearBanner();
@@ -535,6 +567,7 @@ export class Game {
       onAuto: (c) => {
         this.closeShowcase();
         this.trialCfg = c;
+        this.saveTrial();
         this.setDifficulty(c.difficulty);
         this.showTrialScreen(null);
         this.startAutoDuel(c);
@@ -549,8 +582,9 @@ export class Game {
   /** 開始試驗的一戰（單戰，不計 3 對 3 的比分）：同一組設定沿用累計戰績 */
   private startTrial(cfg: TrialConfig): void {
     this.trialCfg = cfg;
+    this.saveTrial();
     this.trial = { cfg, key: trialKey(cfg), clashes: 0, bigClashes: 0, end: null };
-    this.trialAuto = null;
+    this.stopAutoDuel();
     this.hud.hideTrialResult();
     this.setDifficulty(cfg.difficulty);
     this.setArena(ARENAS[cfg.arena]);
@@ -559,7 +593,7 @@ export class Game {
     this.lastBattle = 0;
     this.playerSpec = buildSpec(cfg.player.top, cfg.player.loadout);
     this.cpuSpec = buildSpec(cfg.cpu.top, cfg.cpu.loadout);
-    const record = this.trialRecords.get(this.trial.key);
+    const record = this.trialStore.entries[this.trial.key]?.record;
     this.openRound({
       title: tr('banner.trial'),
       replay: false,
@@ -577,7 +611,12 @@ export class Game {
     const sim = this.sim;
     const res = sim?.result ?? null;
     this.counters.rounds++;
-    if (res) this.trialRecords.set(t.key, addTrialResult(this.trialRecords.get(t.key) ?? emptyTrialRecord(), res));
+    if (res) {
+      const e = this.trialEntry(t.cfg);
+      e.record = addTrialResult(e.record, res);
+      e.at = Date.now();
+      this.saveTrial();
+    }
     this.hud.clearBanner();
     this.hud.hideHud();
     this.audio?.setMusic(this.musicOn, false);
@@ -610,22 +649,95 @@ export class Game {
       arenaName: ARENAS[cfg.arena].nameZh,
       difficulty: cfg.difficulty,
       battle,
-      record: this.trialRecords.get(trialKey(cfg)) ?? emptyTrialRecord(),
+      record: this.trialStore.entries[trialKey(cfg)]?.record ?? emptyTrialRecord(),
+      auto: this.trialStore.entries[trialKey(cfg)]?.auto ?? null,
       onRetry: () => this.startTrial(cfg),
       onChange: () => this.enterTrial(),
       onAuto: () => this.startAutoDuel(cfg),
       onCancelAuto: () => {
-        this.trialAuto = null;
+        this.stopAutoDuel();
+        this.hud.setTrialAuto(null);
+      },
+      onClear: () => {
+        // 清除全部組合的紀錄（累計戰績與自動對打的結果），上次的設定保留
+        this.trialStore.entries = {};
+        this.saveTrial();
+        this.hud.setTrialRecord(emptyTrialRecord());
         this.hud.setTrialAuto(null);
       },
       onTitle: () => this.toTitle(),
     });
   }
 
-  /** 電腦自動對打 100 場（每幀分批推進，見 frame） */
+  /** 某組設定的紀錄（沒有就建一筆空的） */
+  private trialEntry(cfg: TrialConfig): TrialEntry {
+    const key = trialKey(cfg);
+    return (this.trialStore.entries[key] ??= { cfg, record: emptyTrialRecord(), at: Date.now() });
+  }
+
+  /** 把試驗紀錄（上次的設定、各組設定的紀錄，最多 50 組）存進瀏覽器；儲存空間被封鎖時這次照常運作，只是不會記住 */
+  private saveTrial(): void {
+    this.trialStore = pruneTrialStore({ ...this.trialStore, cfg: this.trialCfg });
+    try {
+      localStorage.setItem(TRIAL_STORE_KEY, JSON.stringify(this.trialStore));
+    } catch {
+      // 儲存空間被封鎖或已滿：不影響遊戲
+    }
+  }
+
+  /**
+   * 電腦自動對打 AUTO_DUEL_GAMES 場：在 Web Worker 背景執行（畫面不卡、不受影格速度影響），
+   * 每 10 場回報一次進度；不能用 Worker 時退回在畫面的每幀分批推進（見 frame）。
+   */
   private startAutoDuel(cfg: TrialConfig): void {
-    this.trialAuto = new AutoDuel(cfg, 100, Math.floor(this.rng() * 1e9));
+    this.stopAutoDuel();
+    const req: AutoDuelRequest = { id: ++this.autoJobId, cfg, total: AUTO_DUEL_GAMES, seed: Math.floor(this.rng() * 1e9) };
+    this.autoProgress = 0;
     this.hud.setTrialAuto({ progress: 0 });
+    try {
+      if (typeof Worker === 'undefined') throw new Error('沒有 Worker');
+      const w = new Worker(new URL('../sim/autoDuel.worker.ts', import.meta.url), { type: 'module' });
+      w.onmessage = (e: MessageEvent<AutoDuelMessage>) => {
+        const m = e.data;
+        if (m.id !== this.autoJobId || this.autoWorker !== w) return;
+        if (m.type === 'progress') {
+          this.autoProgress = m.progress;
+          this.hud.setTrialAuto({ progress: m.progress });
+        } else {
+          this.finishAutoDuel(cfg, m.summary);
+        }
+      };
+      // Worker 載入或執行失敗：改在畫面上分批算
+      w.onerror = () => {
+        if (this.autoWorker !== w) return;
+        this.stopAutoDuel();
+        this.trialAuto = new AutoDuel(cfg, req.total, req.seed);
+      };
+      this.autoWorker = w;
+      w.postMessage(req);
+    } catch {
+      this.trialAuto = new AutoDuel(cfg, req.total, req.seed);
+    }
+  }
+
+  /** 自動對打打完：記下結果（存進這組設定的紀錄）並顯示 */
+  private finishAutoDuel(cfg: TrialConfig, summary: DuelSummary): void {
+    this.stopAutoDuel();
+    this.lastAutoDuel = summary;
+    const e = this.trialEntry(cfg);
+    e.auto = summary;
+    e.at = Date.now();
+    this.saveTrial();
+    this.hud.setTrialAuto({ progress: 1, summary });
+  }
+
+  /** 停止進行中的自動對打（關掉 Worker；之後收到的回報都會被忽略） */
+  private stopAutoDuel(): void {
+    this.autoWorker?.terminate();
+    this.autoWorker = null;
+    this.trialAuto = null;
+    this.autoProgress = null;
+    this.autoJobId++;
   }
 
 
@@ -888,7 +1000,7 @@ export class Game {
     this.setState('title');
     this.clearArena();
     this.trial = null;
-    this.trialAuto = null;
+    this.stopAutoDuel();
     this.hud.hideTrial();
     this.hud.hideTrialResult();
     this.hud.hideTeamSelect();
@@ -1681,19 +1793,14 @@ export class Game {
       this.hud.showNetOverlay(`${this.oppLabel} 連線中斷`, `等待重新連線… ${left} 秒後判對手棄權`);
     }
 
-    // 試驗模式的電腦自動對打：每幀最多算約 12 毫秒（至少一場），畫面不會卡住；打完顯示結果
-    if (this.trialAuto) {
+    // 試驗模式的電腦自動對打（沒有 Worker 時的退路）：每幀最多算約 12 毫秒（至少一場）；打完顯示結果
+    if (this.trialAuto && this.trialCfg) {
       const duel = this.trialAuto;
       const t0 = performance.now();
       do duel.runNext();
       while (!duel.done && performance.now() - t0 < 12);
-      if (duel.done) {
-        this.lastAutoDuel = duel.summary;
-        this.trialAuto = null;
-        this.hud.setTrialAuto({ progress: 1, summary: this.lastAutoDuel });
-      } else {
-        this.hud.setTrialAuto({ progress: duel.progress });
-      }
+      if (duel.done) this.finishAutoDuel(this.trialCfg, duel.summary);
+      else this.hud.setTrialAuto({ progress: duel.progress });
     }
 
     // 特寫結束：時間恢復的音效
@@ -1871,22 +1978,25 @@ export class Game {
           break;
         }
         this.counters.finishes++;
-        this.lastFinish = e.finish;
+        // 終結方式與勝負依模擬的判定（同一步雙方都倒下時，先處理到的這則事件不一定是輸的那一顆）
+        const res = sim.result;
+        const finish = res?.finish ?? e.finish;
+        const loserId = res?.loser ?? e.loser;
+        this.lastFinish = finish;
         if (this.trial) {
           const [p, c] = sim.tops;
           this.trial.end = { rpm: [rpmOf(p), rpmOf(c)], burst: [Math.min(1, p.burst), Math.min(1, c.burst)] };
         }
-        const loser = sim.tops[e.loser];
+        const loser = sim.tops[loserId];
         if (!this.online) this.director.notifyFinish(e.pos);
         this.effects.finish(e.pos, loser.spec.glow);
         this.audio?.finish(this.world(e.pos, 0.3));
-        const res = sim.result;
-        const info = FINISH_TEXT[e.finish];
+        const info = FINISH_TEXT[finish];
         if (res && res.winner === null) {
           this.hud.banner(tr('banner.draw'), tr('banner.drawSub'), { seconds: 2.6 });
         } else {
-          const winnerIsPlayer = e.loser !== this.me;
-          this.hud.banner(tr(info.banner), `${winnerIsPlayer ? tr('you') : this.oppLabel} +${FINISH_POINTS[e.finish]}`, { blue: !winnerIsPlayer, seconds: 2.6 });
+          const winnerIsPlayer = loserId !== this.me;
+          this.hud.banner(tr(info.banner), `${winnerIsPlayer ? tr('you') : this.oppLabel} +${FINISH_POINTS[finish]}`, { blue: !winnerIsPlayer, seconds: 2.6 });
           window.setTimeout(() => this.voice?.play(info.voice, 2), 250);
         }
         this.setState('roundEnd');
@@ -2106,9 +2216,13 @@ export class Game {
       /** 雙層戰鬥盤中央的升降狀態 */
       lift: this.liftState(),
       /** 試驗模式：目前這組設定與累計戰績、自動對打的進度（沒在跑為 null）與最近一次的結果 */
-      trial: this.trial ? { key: this.trial.key, record: this.trialRecords.get(this.trial.key) ?? null } : null,
+      trial: this.trial ? { key: this.trial.key, record: this.trialStore.entries[this.trial.key]?.record ?? null } : null,
       trialCfg: this.trialCfg,
-      trialAuto: this.trialAuto ? this.trialAuto.progress : null,
+      /** 自動對打的進度（沒在跑為 null）與是不是在 Worker 背景執行 */
+      trialAuto: this.autoProgress ?? (this.trialAuto ? this.trialAuto.progress : null),
+      trialAutoWorker: this.autoWorker !== null,
+      /** 存在瀏覽器裡的試驗紀錄有幾組設定 */
+      trialStored: Object.keys(this.trialStore.entries).length,
       lastAutoDuel: this.lastAutoDuel,
       pulling: this.pull !== null,
       me: this.me,

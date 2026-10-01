@@ -204,10 +204,14 @@ export interface TrialResultOptions {
   /** 這一戰的數據；null 表示只看自動對打（從設定畫面直接按自動對打） */
   battle: TrialBattleStats | null;
   record: TrialRecord;
+  /** 這組設定最近一次自動對打的結果（存在瀏覽器裡的；沒有為 null） */
+  auto: DuelSummary | null;
   onRetry: () => void;
   onChange: () => void;
   onAuto: () => void;
   onCancelAuto: () => void;
+  /** 清除全部試驗紀錄 */
+  onClear: () => void;
   onTitle: () => void;
 }
 
@@ -1112,7 +1116,7 @@ export class Hud {
         row('撞擊', `${b.clashes} 次（重擊 ${b.bigClashes} 次）`),
       );
     }
-    this.renderTrialRecord(o.record);
+    this.setTrialRecord(o.record);
     $('.tr-auto-box', root).hidden = true;
     const btn = (sel: string, fn: () => void) => {
       $<HTMLButtonElement>(sel, root).onclick = (e) => {
@@ -1125,12 +1129,15 @@ export class Hud {
     btn('.tr-auto-run', o.onAuto);
     btn('.tr-title', o.onTitle);
     btn('.tr-auto-cancel', o.onCancelAuto);
+    btn('.tr-clear', o.onClear);
     root.hidden = false;
     document.body.classList.add('selecting');
+    // 這組設定之前自動對打過：直接顯示上次的結果
+    this.setTrialAuto(o.auto ? { progress: 1, summary: o.auto } : null);
   }
 
   /** 結果畫面的累計戰績（這一組設定） */
-  private renderTrialRecord(r: TrialRecord): void {
+  setTrialRecord(r: TrialRecord): void {
     const box = $('#trial-result .tr-record');
     if (!r.games) {
       box.replaceChildren(el('p', 'tr-none', '這組設定還沒有實際對戰紀錄。'));

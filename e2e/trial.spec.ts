@@ -4,7 +4,8 @@ import { expectInViewport, expectNoHorizontalScroll } from './mobile.helpers';
 /**
  * 試驗模式（一對一，自己指定雙方的陀螺與零件，比較搭配的效果）：
  * 1. 電腦：標題按「試驗模式」→ 換電腦的陀螺、換你的盤（零件清單）、選場地 → 開始試驗 → 打完一戰看到這一戰的數據與累計戰績 →
- *    同設定再戰累計到第 2 戰 → 電腦自動對打 100 場顯示勝率 → 換設定（換了零件累計戰績重新算）→ 回標題。
+ *    同設定再戰累計到第 2 戰 → 電腦自動對打 1000 場（Web Worker 背景執行）顯示勝率 → 換設定（換了零件累計戰績重新算）→ 回標題 →
+ *    重新整理後上次的設定與紀錄都還在（存在瀏覽器裡）→ 清除紀錄後重新整理也是空的。
  * 2. 手機橫向：設定畫面與結果畫面都在畫面內，點選操作。
  * 為了快點分出勝負，對戰中用除錯把一邊的爆裂值灌滿。
  */
@@ -16,6 +17,8 @@ type TrialDbg = {
   trial: { key: string; record: Record3 | null } | null;
   trialCfg: { player: { top: string; loadout: { disk: string | null; driver: string | null } }; cpu: { top: string }; arena: string } | null;
   trialAuto: number | null;
+  trialAutoWorker: boolean;
+  trialStored: number;
   lastAutoDuel: (Record3 & { seats: [number, number] }) | null;
 };
 const dbg = (page: Page) => page.evaluate(() => (window as unknown as { __game: { debug(): TrialDbg } }).__game.debug());
@@ -39,8 +42,8 @@ async function fightAndFinish(page: Page, loser: 0 | 1): Promise<void> {
   await expect(page.locator('#trial-result')).toBeVisible({ timeout: 150_000 });
 }
 
-test('試驗模式：指定雙方的陀螺與零件 → 一戰的數據與累計戰績 → 同設定再戰 → 電腦自動對打 100 場 → 換設定', async ({ page }) => {
-  test.setTimeout(480_000);
+test('試驗模式：指定雙方的陀螺與零件 → 一戰的數據與累計戰績 → 同設定再戰 → 電腦自動對打 1000 場 → 換設定 → 紀錄存在瀏覽器裡、可清除', async ({ page }) => {
+  test.setTimeout(900_000);
   const errors: string[] = [];
   // 頁面錯誤也印出來：中途失敗時看得到原因
   page.on('pageerror', (e) => {
@@ -107,15 +110,18 @@ test('試驗模式：指定雙方的陀螺與零件 → 一戰的數據與累計
   await expect(page.locator('#trial-result .tr-record')).toContainText('累計 2 戰：1 勝 1 敗 0 平');
   expect((await dbg(page)).trial?.record).toMatchObject({ games: 2, wins: 1, losses: 1 });
 
-  // 電腦自動對打 100 場：進行中顯示進度、其他按鈕停用；打完顯示勝率與終結方式（座位各半）
+  // 電腦自動對打 1000 場：在 Web Worker 背景執行，進行中顯示進度、其他按鈕停用；打完顯示勝率與終結方式（座位各半）
   await page.locator('#trial-result .tr-auto-run').click();
   await expect(page.locator('#trial-result .tr-auto-box')).toBeVisible();
   await expect(page.locator('#trial-result .tr-retry')).toBeDisabled();
-  await expect.poll(async () => (await dbg(page)).lastAutoDuel?.games ?? 0, { timeout: 180_000 }).toBe(100);
+  await expect(page.locator('#trial-result .tr-clear')).toBeDisabled();
+  expect((await dbg(page)).trialAutoWorker).toBe(true);
+  await expect.poll(async () => (await dbg(page)).trialAuto ?? 0, { timeout: 120_000 }).toBeGreaterThan(0);
+  await expect.poll(async () => (await dbg(page)).lastAutoDuel?.games ?? 0, { timeout: 480_000 }).toBe(1000);
   const auto = (await dbg(page)).lastAutoDuel!;
-  expect(auto.wins + auto.losses + auto.draws).toBe(100);
-  expect(auto.seats).toEqual([50, 50]);
-  await expect(page.locator('#trial-result .tr-auto-title')).toContainText('自動對打 100 場');
+  expect(auto.wins + auto.losses + auto.draws).toBe(1000);
+  expect(auto.seats).toEqual([500, 500]);
+  await expect(page.locator('#trial-result .tr-auto-title')).toContainText('自動對打 1000 場');
   await expect(page.locator('#trial-result .tr-rate')).toContainText('勝率');
   await expect(page.locator('#trial-result .tr-retry')).toBeEnabled();
   await page.screenshot({ path: 'e2e/screenshots/b2-trial-auto.png' });
@@ -136,13 +142,33 @@ test('試驗模式：指定雙方的陀螺與零件 → 一戰的數據與累計
   await page.locator('#trial-result .tr-title').click();
   await expect(page.locator('#title')).toBeVisible();
   expect((await dbg(page)).state).toBe('title');
+  // 兩組設定的紀錄存在瀏覽器裡
+  expect((await dbg(page)).trialStored).toBe(2);
+
+  // 重新整理：上次的設定（原廠烈焰龍對疾風鳳、標準戰鬥盤）還在；從設定畫面按自動對打，結果畫面列出這組設定之前的累計戰績
+  await page.reload();
+  expect((await dbg(page)).trialStored).toBe(2);
+  await page.locator('#title .to-trial').click();
+  await expect(page.locator('#trial .tr-side[data-side="cpu"] .tr-name')).toContainText('疾風鳳');
+  await expect(page.locator('#trial .tr-side[data-side="player"] .part-btn[data-slot="disk"]')).not.toHaveClass(/changed/);
+  await expect(page.locator('#trial .arena button.on')).toHaveAttribute('data-id', 'stadium');
+  await page.locator('#trial .tr-auto').click();
+  await expect(page.locator('#trial-result .tr-record')).toContainText('累計 1 戰：1 勝 0 敗 0 平');
+  // 停止自動對打後清除紀錄：累計戰績變成沒有，重新整理後也是空的
+  await page.locator('#trial-result .tr-auto-cancel').click();
+  await expect(page.locator('#trial-result .tr-clear')).toBeEnabled();
+  await page.locator('#trial-result .tr-clear').click();
+  await expect(page.locator('#trial-result .tr-record')).toContainText('還沒有實際對戰紀錄');
+  expect((await dbg(page)).trialStored).toBe(0);
+  await page.reload();
+  expect((await dbg(page)).trialStored).toBe(0);
   expect(errors).toEqual([]);
 });
 
 test.describe('手機橫向', () => {
   test.use(phone('Pixel 7 landscape'));
   test('試驗模式的設定畫面與結果畫面都在畫面內，點選操作', async ({ page }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(600_000);
     await page.goto('./?seed=42');
     await page.locator('#title .to-trial').tap();
     await expect(page.locator('#trial')).toBeVisible();
@@ -161,7 +187,7 @@ test.describe('手機橫向', () => {
     await expect(page.locator('#trial-result')).toBeVisible();
     await expect(page.locator('#trial-result .tr-headline')).toHaveText('電腦自動對打');
     await expect(page.locator('#trial-result .tr-stats')).toBeHidden();
-    await expect.poll(async () => (await dbg(page)).lastAutoDuel?.games ?? 0, { timeout: 180_000 }).toBe(100);
+    await expect.poll(async () => (await dbg(page)).lastAutoDuel?.games ?? 0, { timeout: 480_000 }).toBe(1000);
     for (const sel of ['#trial-result .tr-auto-box', '#trial-result .tr-retry', '#trial-result .tr-title']) await expectInViewport(page, sel);
     await expectNoHorizontalScroll(page);
     await page.screenshot({ path: 'e2e/screenshots/b4-trial-mobile-auto.png' });

@@ -59,6 +59,54 @@ describe('BattleSim', () => {
     expect(Math.hypot(t.pos.x, t.pos.z)).toBeGreaterThan(arena.radius + 0.5);
   });
 
+  describe('同一步雙方都倒下：只有一顆爆裂時，撞爆對方的那一顆獲勝（爆裂終結）；兩顆都爆裂或都沒爆裂才平手', () => {
+    /** 一場剛開打的模擬（兩顆都還轉得很快） */
+    const fresh = () => new BattleSim(TOP_SPECS.wolf, TOP_SPECS.wolf, { seed: 1, launch: [0.9, 0.9] });
+    /** 讓陀螺在下一步停轉 */
+    const stall = (sim: BattleSim, id: number) => (sim.tops[id].spin = sim.tops[id].spec.maxSpin * 0.05);
+
+    test('一顆停轉、一顆爆裂：停轉的那顆（撞爆了對方）獲勝', () => {
+      for (const [stopped, burst] of [
+        [0, 1],
+        [1, 0],
+      ] as const) {
+        const sim = fresh();
+        stall(sim, stopped);
+        sim.tops[burst].burst = 1;
+        sim.step(STEP);
+        expect(sim.result, `停轉 ${stopped}／爆裂 ${burst}`).toMatchObject({ finish: 'burst', loser: burst, winner: stopped });
+      }
+    });
+
+    test('一顆爆裂、一顆同時被撞出場：出場的那顆（撞爆了對方）獲勝', () => {
+      const sim = fresh();
+      const a = sim.arena;
+      const p = a.pockets[0];
+      const t = sim.tops[0];
+      const d = { x: Math.cos(p.at), z: Math.sin(p.at) };
+      const edge = a.radius - t.spec.radius + 0.01;
+      t.pos = { x: d.x * edge, z: d.z * edge };
+      t.vel = { x: d.x * 6, z: d.z * 6 };
+      sim.tops[1].burst = 1;
+      sim.step(STEP);
+      expect(sim.tops[0].finish).toBe('over');
+      expect(sim.result).toMatchObject({ finish: 'burst', loser: 1, winner: 0 });
+    });
+
+    test('兩顆都爆裂、或兩顆都停轉：平手', () => {
+      const both = fresh();
+      both.tops[0].burst = 1;
+      both.tops[1].burst = 1;
+      both.step(STEP);
+      expect(both.result?.winner).toBeNull();
+      const stop = fresh();
+      stall(stop, 0);
+      stall(stop, 1);
+      stop.step(STEP);
+      expect(stop.result?.winner).toBeNull();
+    });
+  });
+
   test('爆裂量表滿了判定爆裂（Burst Finish）', () => {
     const sim = new BattleSim(TOP_SPECS.wolf, TOP_SPECS.wolf, { seed: 1, launch: [0.9, 0.9] });
     sim.tops[0].burst = 1;

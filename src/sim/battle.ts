@@ -228,12 +228,16 @@ export class BattleSim {
     }
 
     if (!this.result && finished.length > 0) {
-      const loser = finished[0];
+      // 同一步雙方都倒下：只有一顆爆裂時，是另一顆撞爆了它 → 撞爆對方的那一顆獲勝（爆裂終結）；
+      // 兩顆都爆裂、或都沒爆裂（例如同時停轉）才是平手
+      const bursted = finished.length > 1 ? finished.filter((t) => t.finish === 'burst') : [];
+      const loser = bursted.length === 1 ? bursted[0] : finished[0];
       const other = this.tops[loser.id === 0 ? 1 : 0];
+      const draw = finished.length > 1 && bursted.length !== 1;
       this.result = {
         finish: loser.finish!,
         loser: loser.id,
-        winner: finished.length > 1 || !other.alive ? null : other.id,
+        winner: draw || (!other.alive && bursted.length !== 1) ? null : other.id,
       };
     }
   }

@@ -6,12 +6,13 @@ import { chargeLabel, css, el, radar, radarPoints, spinLabel, STAT_AXES } from '
 import { SLOT_LABEL } from './partMenu';
 
 /**
- * 組隊畫面右側的詳細資料：
- * - 上方是透明的「舞台」窗，主場景的鏡頭會對準這裡播放外觀與絕招示範（見 game.ts 的 showcase）。
- * - 名稱（日文版是日文名＋中文名，中文版只有中文名）、類型、原型；雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
- * - 目前的盤與軸（opts.parts 為 false 時不顯示，例如組隊第 1 步）；換零件用各畫面的「盤」「軸」按鈕（ui/partMenu.ts）。
- * - 必殺技名稱、說明與集氣速度。
- * 每一段的高度固定（名稱一行、原型說明兩行、必殺說明固定行數且內部捲動），切換陀螺時面板與裡面的版面都不會跳動。
+ * 組隊畫面右側的詳細資料，分上下兩段：
+ * - 上方固定（不捲動）：名稱一行（日文版是日文名＋中文名，中文版只有中文名）、雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
+ *   最重要的比較資料一定看得到，切換陀螺時位置也不變。
+ * - 下方捲動區：外觀・絕招示範的舞台窗（render/showcase.ts 畫在這個畫布上）、類型與原型、
+ *   目前的盤與軸（opts.parts 為 false 時不顯示，例如組隊第 1 步；換零件用各畫面的「盤」「軸」按鈕，見 ui/partMenu.ts）、
+ *   必殺技名稱、集氣速度與說明。
+ * 面板高度由 CSS 固定，切換陀螺不會跳動；捲動位置保留（正在比較兩顆的必殺說明時不會跳回頂端）。
  * 元素只建立一次，之後就地更新。
  */
 export class DetailView {
@@ -48,7 +49,13 @@ export class DetailView {
     this.sp = el('div', 'd-sp');
     this.charge = el('div', 'd-charge');
     this.desc = el('div', 'd-desc');
-    root.replaceChildren(this.stage, this.ja, this.zh, this.meta, this.radar, this.stats, this.parts, this.sp, this.charge, this.desc);
+    const name = el('div', 'd-name');
+    name.append(this.ja, this.zh);
+    const fixed = el('div', 'd-fixed');
+    fixed.append(name, this.radar, this.stats);
+    const scroll = el('div', 'd-scroll');
+    scroll.append(this.stage, this.meta, this.parts, this.sp, this.charge, this.desc);
+    root.replaceChildren(fixed, scroll);
   }
 
   /** 顯示一顆陀螺（spec 為套用目前零件後的規格） */
@@ -96,7 +103,6 @@ export class DetailView {
     this.sp.textContent = lang() === 'zh' ? `必殺：${spec.special.nameZh}` : `必殺：${specialName(spec)}（${spec.special.nameZh}）`;
     this.charge.textContent = chargeLabel(spec);
     this.desc.textContent = spec.special.descZh;
-    this.desc.scrollTop = 0;
   }
 
   /** 舞台上閃出招式名（絕招示範放招時） */

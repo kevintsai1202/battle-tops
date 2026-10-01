@@ -1,10 +1,10 @@
-import { ARENAS, type ArenaId, type ArenaSpec } from './arena';
+import { ARENA_IDS, ARENAS, type ArenaId, type ArenaSpec } from './arena';
 import { BattleSim } from './battle';
 import { cpuThink } from './cpu';
-import { DIFFICULTIES, type DifficultyId } from './difficulty';
-import type { Loadout } from './parts';
+import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from './difficulty';
+import { PARTS, type Loadout, type PartSlot } from './parts';
 import { createRng } from './rng';
-import { buildSpec } from './tops';
+import { buildSpec, TOP_SPECS } from './tops';
 import type { FinishType, RoundResult, TopId, TopSpec } from './types';
 
 /**
@@ -180,3 +180,119 @@ export class AutoDuel {
     return { ...structuredClone(this.result), games: this.played, avgTime: this.played ? this.time / this.played : 0 };
   }
 }
+
+// ---------------- 存在瀏覽器裡的紀錄（localStorage） ----------------
+
+/** localStorage 的鍵 */
+export const TRIAL_STORE_KEY = 'battle-tops.trial';
+/**
+ * 紀錄的資料版本：調整平衡數值（陀螺屬性、零件、場地、物理）時加一，舊版的紀錄就不再拿來混算
+ * （2026-10-02 起為 1：標準戰鬥盤改版、新增雙層戰鬥盤與極限終結之後）。
+ */
+export const TRIAL_DATA_VERSION = 1;
+/** 最多保留幾組設定的紀錄（依最後更新時間） */
+export const TRIAL_STORE_MAX = 50;
+
+/** 一組設定的紀錄：設定本身、累計戰績、最近一次自動對打的結果、最後更新時間（毫秒） */
+export interface TrialEntry {
+  cfg: TrialConfig;
+  record: TrialRecord;
+  auto?: DuelSummary;
+  at: number;
+}
+
+/** 存在瀏覽器裡的全部試驗紀錄：資料版本、上次的設定、各組設定的紀錄（key 為 trialKey） */
+export interface TrialStore {
+  v: number;
+  cfg: TrialConfig | null;
+  entries: Record<string, TrialEntry>;
+}
+
+/** 空的紀錄 */
+export function emptyTrialStore(): TrialStore {
+  return { v: TRIAL_DATA_VERSION, cfg: null, entries: {} };
+}
+
+const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
+/** 非負整數 */
+const isCount = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x) && x >= 0;
+
+/** 一邊的設定合不合法：陀螺存在；零件不是 null 就要存在而且裝在對的欄位 */
+function validSide(x: unknown): x is TrialSide {
+  if (!isObj(x) || typeof x.top !== 'string' || !TOP_SPECS[x.top] || !isObj(x.loadout)) return false;
+  return (['disk', 'driver'] as PartSlot[]).every((slot) => {
+    const id = (x.loadout as Record<string, unknown>)[slot];
+    return id === null || (typeof id === 'string' && PARTS[id]?.slot === slot);
+  });
+}
+
+/** 試驗設定合不合法（存在瀏覽器裡的資料可能過期或被改壞，不合法的不能拿去 buildSpec） */
+function validConfig(x: unknown): x is TrialConfig {
+  return (
+    isObj(x) &&
+    validSide(x.player) &&
+    validSide(x.cpu) &&
+    ARENA_IDS.includes(x.arena as ArenaId) &&
+    DIFFICULTY_IDS.includes(x.difficulty as DifficultyId)
+  );
+}
+
+/** 終結方式的統計合不合法：四種都要有 [非負整數, 非負整數] */
+function validTally(x: unknown): x is FinishTally {
+  return isObj(x) && FINISHES.every((f) => Array.isArray(x[f]) && (x[f] as unknown[]).length === 2 && (x[f] as unknown[]).every(isCount));
+}
+
+/** 累計戰績合不合法 */
+function validRecord(x: unknown): x is TrialRecord {
+  return isObj(x) && isCount(x.games) && isCount(x.wins) && isCount(x.losses) && isCount(x.draws) && validTally(x.finishes);
+}
+
+/** 自動對打的結果合不合法 */
+function validSummary(x: unknown): x is DuelSummary {
+  return (
+    isObj(x) &&
+    isCount(x.games) &&
+    isCount(x.wins) &&
+    isCount(x.losses) &&
+    isCount(x.draws) &&
+    validTally(x.finishes) &&
+    typeof x.avgTime === 'number' &&
+    Array.isArray(x.seats) &&
+    x.seats.length === 2 &&
+    x.seats.every(isCount)
+  );
+}
+
+/**
+ * 解析存在瀏覽器裡的紀錄（純函式）：沒有資料、不是 JSON、資料版本不同都當成沒有紀錄；
+ * 每一組設定個別檢查，不合法的（陀螺或零件不存在、數字不對、key 和設定對不上）丟掉，其他保留。
+ */
+export function parseTrialStore(json: string | null): TrialStore {
+  let raw: unknown;
+  try {
+    raw = json ? JSON.parse(json) : null;
+  } catch {
+    return emptyTrialStore();
+  }
+  if (!isObj(raw) || raw.v !== TRIAL_DATA_VERSION) return emptyTrialStore();
+  const out = emptyTrialStore();
+  if (validConfig(raw.cfg)) out.cfg = raw.cfg;
+  if (isObj(raw.entries)) {
+    for (const [key, e] of Object.entries(raw.entries)) {
+      if (!isObj(e) || !validConfig(e.cfg) || trialKey(e.cfg) !== key || !validRecord(e.record) || typeof e.at !== 'number') continue;
+      const entry: TrialEntry = { cfg: e.cfg, record: e.record, at: e.at };
+      if (validSummary(e.auto)) entry.auto = e.auto;
+      out.entries[key] = entry;
+    }
+  }
+  return out;
+}
+
+/** 只留最近更新的 max 組設定（純函式，回傳新的紀錄） */
+export function pruneTrialStore(s: TrialStore, max = TRIAL_STORE_MAX): TrialStore {
+  const keep = Object.entries(s.entries)
+    .sort((a, b) => b[1].at - a[1].at)
+    .slice(0, max);
+  return { ...s, entries: Object.fromEntries(keep) };
+}
+

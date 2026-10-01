@@ -1436,33 +1436,53 @@ body.touch .tc {
 }
 
 /* 詳細資料：上方是絕招示範的舞台窗，其餘可捲動 */
+/*
+ * 詳細資料：上方固定（名稱一行＋雷達圖與六項數值，切換陀螺時位置不變、一定看得到），
+ * 下方捲動區（外觀・絕招示範、類型與原型、目前零件、必殺）。面板高度固定（不跟著內容變），切換陀螺不會跳動。
+ */
 .detail {
   --c: #fff;
   pointer-events: auto;
   border: 2px solid var(--c);
   border-radius: 10px;
-  padding: 0 12px 10px;
+  padding: 8px 12px 10px;
   background: rgba(8, 12, 30, 0.9);
   box-shadow: 0 0 18px color-mix(in srgb, var(--c) 45%, transparent);
   text-align: left;
   font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  height: min(calc(100dvh - 330px), 470px);
+  overflow: hidden;
+}
+
+.detail .d-fixed {
+  flex: none;
   display: grid;
   grid-template-columns: 116px 1fr;
   grid-template-areas:
-    'stage stage'
-    'ja ja'
-    'zh zh'
-    'meta meta'
-    'radar stats'
-    'parts parts'
-    'sp sp'
-    'charge charge'
-    'desc desc';
+    'name name'
+    'radar stats';
   column-gap: 8px;
-  align-content: start;
-  max-height: calc(100dvh - 330px);
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* 名稱一行：日文版是日文名＋中文名，中文版只有中文名 */
+.detail .d-name {
+  grid-area: name;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail .d-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding-top: 6px;
 }
 
 /* 組隊畫面的標題縮小一點，名鑑與詳細資料才放得下（矮螢幕另有規則） */
@@ -1479,11 +1499,10 @@ body.selecting #help {
 }
 
 .detail .d-stage {
-  grid-area: stage;
   position: relative;
   height: 136px;
-  margin: 0 -12px 6px;
-  border-radius: 8px 8px 0 0;
+  margin: 0 0 6px;
+  border-radius: 8px;
   overflow: hidden;
   background: radial-gradient(ellipse at 50% 60%, color-mix(in srgb, var(--c) 22%, #0a1024), #05070f 75%);
 }
@@ -1542,52 +1561,31 @@ body.selecting #help {
   }
 }
 
-/*
- * 詳細資料的每一段都固定高度（切換陀螺時面板與裡面的版面不跳動）：
- * 名稱各一行（太長用省略號）、原型說明兩行、必殺名稱兩行、必殺說明固定四行（超過時在框內捲動）。
- * 高度用 em 計算，各尺寸的字級縮放時一起縮放。
- */
-.detail .d-ja,
-.detail .d-zh,
-.detail .d-charge {
+/* 名稱：日文名太長用省略號，中文名不縮 */
+.detail .d-ja {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  line-height: 1.3;
-  height: 1.3em;
-}
-
-.detail .d-ja {
-  grid-area: ja;
   font-family: var(--display);
   font-size: 18px;
+  line-height: 1.3;
   color: var(--c);
   text-shadow: 0 0 8px var(--c);
 }
 
 .detail .d-zh {
-  grid-area: zh;
+  flex: none;
   font-size: 14px;
-}
-
-/* 中文版沒有中文副名：仍保留那一行的高度 */
-.detail .d-zh[hidden] {
-  display: block;
-  visibility: hidden;
+  white-space: nowrap;
 }
 
 .detail .d-meta {
-  grid-area: meta;
   font-size: 11px;
   opacity: 0.75;
   margin-bottom: 4px;
   line-height: 1.35;
-  height: 2.7em;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .detail .radar {
@@ -1659,24 +1657,21 @@ body.selecting #help {
   color: #ff7a6a;
 }
 
-/* 目前的盤與軸（換零件用各畫面的「盤」「軸」按鈕）：一行，換過的用發光色 */
+/* 目前的盤與軸（換零件用各畫面的「盤」「軸」按鈕），換過的用發光色 */
 .detail .d-parts {
-  grid-area: parts;
   display: flex;
-  gap: 4px 10px;
-  margin-top: 6px;
-  padding-top: 5px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 4px;
   font-size: 11px;
   line-height: 1.35;
-  height: calc(1.35em + 6px);
-  overflow: hidden;
-  white-space: nowrap;
+}
+
+.detail .d-parts[hidden] {
+  display: none;
 }
 
 .detail .d-parts span {
-  overflow: hidden;
-  text-overflow: ellipsis;
   opacity: 0.8;
 }
 
@@ -1686,34 +1681,22 @@ body.selecting #help {
 }
 
 .detail .d-sp {
-  grid-area: sp;
   margin-top: 6px;
   font-family: var(--display);
   font-size: 13px;
   color: #ffe35a;
   line-height: 1.3;
-  height: 2.6em;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .detail .d-charge {
-  grid-area: charge;
   font-size: 11px;
   color: #ffb3f0;
 }
 
 .detail .d-desc {
-  grid-area: desc;
   font-size: 12px;
   opacity: 0.9;
   line-height: 1.4;
-  height: 5.6em;
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .arena {
@@ -1795,14 +1778,17 @@ body.selecting #help {
     display: none;
   }
   .detail {
-    grid-template-columns: 92px 1fr;
-    padding: 0 8px 6px;
+    padding: 5px 8px 6px;
     font-size: 11px;
-    max-height: calc(100dvh - 150px);
+    height: calc(100dvh - 150px);
+  }
+  .detail .d-fixed {
+    grid-template-columns: 92px 1fr;
+    padding-bottom: 4px;
   }
   .detail .d-stage {
     height: 96px;
-    margin: 0 -8px 4px;
+    margin: 0 0 4px;
   }
   .detail .d-ja {
     font-size: 13px;
@@ -1857,8 +1843,10 @@ body.selecting #help {
     height: 44px;
   }
   .detail {
+    height: 34vh;
+  }
+  .detail .d-fixed {
     grid-template-columns: 100px 1fr;
-    max-height: 34vh;
   }
   .detail .d-stage {
     height: 110px;
@@ -2030,7 +2018,7 @@ body.selecting #help {
 }
 
 #arrange .detail {
-  max-height: calc(100dvh - 260px);
+  height: min(calc(100dvh - 260px), 470px);
 }
 
 /* 欄位裡的「盤」「軸」按鈕：上下排，顯示目前的零件；換過的發光 */
@@ -2323,7 +2311,7 @@ body.selecting #help {
     height: 28px;
   }
   #arrange .detail {
-    max-height: calc(100dvh - 90px);
+    height: calc(100dvh - 90px);
   }
   .ar-actions button {
     padding: 6px 20px;
@@ -2367,7 +2355,7 @@ body.selecting #help {
     width: auto;
   }
   #arrange .detail {
-    max-height: 40vh;
+    height: 40vh;
   }
 }
 

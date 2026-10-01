@@ -8,7 +8,7 @@ import { arrangeOrder, choosePart, pickTops } from './team.helpers';
  * - 第 2 步（出場順序與零件）：▲▼ 調換順序；每個欄位的「盤」「軸」按鈕展開零件清單（附數值增減），
  *   換上後雷達圖與數值立刻更新、按鈕發光；備用零件每種一件；鍵盤 Q／E 也能開清單；
  *   回上一步換掉陀螺時零件歸還；出陣後順序與零件帶進對戰。
- * - 說明區塊固定大小：切換陀螺時面板高度與裡面各段的位置都不變；切換場地時名鑑不會上下跳。
+ * - 說明區塊：上方固定名稱＋雷達圖（一定看得到），其餘在下方捲動；切換陀螺時面板高度與雷達圖位置都不變；切換場地時名鑑不會上下跳。
  * 桌機跑完整流程；手機橫向與直向檢查兩步的版面、示範有在動與觸控操作，並截圖。
  */
 
@@ -47,18 +47,42 @@ test('組隊兩步：第 1 步縮圖與絕招示範；第 2 步調順序、換�
   await expect.poll(async () => (await dbg(page)).showcase?.fires ?? 0, { timeout: 20_000 }).toBeGreaterThan(0);
   await page.screenshot({ path: 'e2e/screenshots/70-select-showcase.png' });
 
-  // 說明區塊固定大小：名稱、原型說明、必殺說明長短不同的陀螺，面板高度與雷達圖、必殺說明的位置都不變
+  // 說明區塊：名稱、原型說明、必殺說明長短不同的陀螺，面板高度、雷達圖的位置與捲動區的大小都不變；
+  // 雷達圖在上方固定區（在畫面內），1280×720 時內容比面板高，捲動的是下方的捲動區（不是整個面板）
   const layouts: string[] = [];
   for (const id of ['blaze', 'pegasus', 'nemesis', 'ldrago', 'requiem', 'kerbeus']) {
     await page.locator(`#select .card[data-id="${id}"]`).hover();
     await expect(page.locator('#select .detail')).toHaveAttribute('data-id', id);
     const box = async (sel: string) => (await page.locator(`#select .detail ${sel}`.trim()).boundingBox())!;
     const panel = await box('');
-    const radar = await box('.radar');
-    const desc = await box('.d-desc');
-    layouts.push([panel.height, radar.y - panel.y, desc.y - panel.y, desc.height].map(Math.round).join(','));
+    const radar = await box('.d-fixed .radar');
+    const scroll = await box('.d-scroll');
+    layouts.push([panel.height, radar.y - panel.y, scroll.y - panel.y, scroll.height].map(Math.round).join(','));
   }
   expect(new Set(layouts).size, layouts.join(' / ')).toBe(1);
+  await expectInViewport(page, '#select .detail .d-fixed .radar');
+  const scrolls = await page.locator('#select .detail').evaluate((d) => {
+    const sc = d.querySelector('.d-scroll') as HTMLElement;
+    return { panel: d.scrollHeight - d.clientHeight, inner: sc.scrollHeight - sc.clientHeight };
+  });
+  expect(scrolls.panel, '整個面板不捲動').toBeLessThanOrEqual(1);
+  expect(scrolls.inner, '下方的捲動區要能捲').toBeGreaterThan(0);
+  // 捲到最下面看必殺說明，雷達圖仍在原位；換一顆陀螺時捲動位置保留
+  const radarY = async () => Math.round((await page.locator('#select .detail .radar').boundingBox())!.y);
+  const y1 = await radarY();
+  await page.locator('#select .detail .d-scroll').evaluate((sc) => (sc.scrollTop = sc.scrollHeight));
+  await expect(page.locator('#select .detail .d-desc')).toBeInViewport();
+  expect(await radarY()).toBe(y1);
+  await page.screenshot({ path: 'e2e/screenshots/70b-select-detail-scrolled.png' });
+  // 換一顆時不重設捲動位置：只會因為新的內容比較短而被夾到最多能捲的位置（內容放得下時才是 0）
+  const scrolledTop = await page.locator('#select .detail .d-scroll').evaluate((sc) => sc.scrollTop);
+  expect(scrolledTop).toBeGreaterThan(0);
+  for (const id of ['pegasus', 'blaze']) {
+    await page.locator(`#select .card[data-id="${id}"]`).hover();
+    await expect(page.locator('#select .detail')).toHaveAttribute('data-id', id);
+    const st = await page.locator('#select .detail .d-scroll').evaluate((sc) => ({ top: sc.scrollTop, max: sc.scrollHeight - sc.clientHeight }));
+    expect(Math.abs(st.top - Math.min(scrolledTop, st.max)), `${id} 的捲動位置`).toBeLessThanOrEqual(1);
+  }
   // 切換場地（說明長短不同）時名鑑不會上下跳
   const cardsY = async () => Math.round((await page.locator('#select .cards').boundingBox())!.y);
   const y0 = await cardsY();
