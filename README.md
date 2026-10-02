@@ -6,6 +6,8 @@
 
 **線上遊玩：<https://kevintsai1202.github.io/battle-tops/>**（電腦與手機都能玩；建議戴耳機）
 
+> **非官方同人作品，免費提供、禁止商業使用。** 與 TAKARA TOMY、Hasbro 無關。授權範圍與聲明見 [LICENSE-ASSETS.md](LICENSE-ASSETS.md)。
+
 | 撞擊特寫 | 必殺技 cut-in |
 | --- | --- |
 | ![撞擊特寫](docs/screenshots/closeup.png) | ![必殺技](docs/screenshots/special-cutin.png) |
@@ -373,7 +375,7 @@ npm run voice:check -- --lang tutorial
 
 Whisper 聽寫中文時常把同音字寫錯（戰→站、揭曉→皆小），相似度低不一定是唸錯，要聽過再決定要不要重生。
 
-模型是免費的 `s2.1-pro-free`。如果要商用，請先確認 Fish Audio 的授權條款。方括號是 s2 系列的語氣標記（例如 `[shouting]`、`[excited]`），要用方括號，圓括號會被直接唸出來。
+語音是用 Fish Audio 的免費模型 `s2.1-pro-free` 生成，依 Fish Audio 服務條款只能非商業使用（本專案的授權見 [LICENSE-ASSETS.md](LICENSE-ASSETS.md)）。方括號是 s2 系列的語氣標記（例如 `[shouting]`、`[excited]`），要用方括號，圓括號會被直接唸出來。
 
 ## 專案結構
 
@@ -391,6 +393,16 @@ Whisper 聽寫中文時常把同音字寫錯（戰→站、揭曉→皆小），
 | `server/` | 線上對戰伺服器（Node.js＋ws）：房間狀態機、權威模擬、HTTP `/health`；打包設定與整合測試。 |
 | `scripts/` | 語音生成與抽查腳本、平衡報表、伺服器部署腳本；`scripts/net-eval/` 是連線方案評估（跨瀏覽器確定性、線上延遲、雙瀏覽器效能診斷）；`scripts/perf/part-change-block.mjs` 量組隊第 2 步換零件後頁面卡住多久（比較兩個建置用）。 |
 | `tests/`、`e2e/` | 單元測試、Playwright 端對端測試。 |
+
+## 授權
+
+免費提供，原始碼公開，禁止商業使用：
+
+- 程式碼：[PolyForm Noncommercial License 1.0.0](LICENSE)。
+- 作者自己製作的素材（語音、台詞、文件與截圖）：[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)。
+- 第三方套件與字型（three.js、ws 是 MIT，Dela Gothic One 是 SIL OFL 1.1）：見 [public/THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt)，建置時會一起發佈到網站根目錄。
+
+本作品是非官方的同人作品，BEYBLADE、戰鬥陀螺及遊戲中提到的原型商品名、角色名與招式名屬於各自的權利人，不在授權範圍內。完整的範圍與聲明見 [LICENSE-ASSETS.md](LICENSE-ASSETS.md)。`v1.0.0` 起本版本內容凍結，只修正錯誤。
 
 ## 已知限制
 
