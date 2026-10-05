@@ -1,15 +1,26 @@
 // 用 Groq Whisper 對語音檔做聽寫抽查，與台詞原文（去語氣標記）比對字元相似度。
-// 日文抽查 public/voice/*.mp3，中文（--lang zh）抽查 public/voice/zh/*.mp3。
+// 日文抽查 public/voice/*.mp3，中文（--lang zh）抽查 public/voice/zh/*.mp3，英文（--lang en）抽查 public/voice/en/*.mp3。
 // 用法（PowerShell 7）：
 //   node --env-file=../transcript-review/.env scripts/check-voice.mjs
 //   node --env-file=../transcript-review/.env scripts/check-voice.mjs --lang zh
 //   node --env-file=../transcript-review/.env scripts/check-voice.mjs --lang zh --only go_shoot,countdown_3
+//   node --env-file=../transcript-review/.env scripts/check-voice.mjs --lang en
+//   node --env-file=../transcript-review/.env scripts/check-voice.mjs --lang tutorial-en
 // 結果表存到 logs/voice-check.json（中文是 logs/voice-check-zh.json）。金鑰讀環境變數 GROQ_API_KEY，不會印出。
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/**
+ * 英文的提示：陀螺與必殺技的專有名詞（Whisper 不認得時會拼成別的字，相似度無故變低）。
+ * 與 src/sim/tops.ts 的英文名一致。
+ */
+const EN_PROMPT =
+  'Battle Tops. Go Shoot! Spin Finish, Over Finish, Burst Finish, Xtreme Finish. Special moves: Dragon Impact, Iron Fortress, Eternal Cyclone, ' +
+  'Galaxy Nova, Storm Assault, Tempest Bringer, Dragon Emperor Bite, Rush Strike, Metal Ball Guard, Lion Gale Wall, Triple Howl, Shield Impact, ' +
+  'Nova Blizzard, Barnard Loop, Drain Spin, Mirage Parry, Fire Arrow, Cataclysm, Counter Break, Crescent Judge. Xtreme Stadium, Disk, Driver.';
+
 /**
  * 各語言的音檔位置、Whisper 語言與結果檔。
  * 中文加上繁體提示：沒有提示時 Whisper 常輸出簡體字，相似度會無故變低。
@@ -18,6 +29,8 @@ const LANGS = {
   ja: { dir: 'public/voice', whisper: 'ja', prompt: null, out: 'logs/voice-check.json' },
   zh: { dir: 'public/voice/zh', whisper: 'zh', prompt: '以下是繁體中文的句子。', out: 'logs/voice-check-zh.json' },
   tutorial: { dir: 'public/voice/tutorial', whisper: 'zh', prompt: '以下是繁體中文的句子。', out: 'logs/voice-check-tutorial.json' },
+  en: { dir: 'public/voice/en', whisper: 'en', prompt: EN_PROMPT, out: 'logs/voice-check-en.json' },
+  'tutorial-en': { dir: 'public/voice/tutorial/en', whisper: 'en', prompt: EN_PROMPT, out: 'logs/voice-check-tutorial-en.json' },
 };
 const API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const MAX_RETRY = 6;
@@ -29,10 +42,11 @@ const stripTags = (s) => s.replace(/\[[^\]]*\]/g, '').trim();
 /**
  * 正規化：去標記、長音符、破折號、標點、空白、中黑點，片假名轉平假名，
  * 阿拉伯數字轉成中文數字（Whisper 常把「三！」聽寫成「3.」），供相似度比較。
+ * 英文另外去掉引號與撇號（Whisper 有時省略「don't」的撇號）。
  */
 function normalize(s) {
   return stripTags(s)
-    .replace(/[ー－―—\-・･\s、。，,.！!？?…「」『』（）()〜~：:；;]/g, '')
+    .replace(/[ー－―—\-・･\s、。，,.！!？?…「」『』（）()〜~：:；;"'’]/g, '')
     .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
     .replace(/[0-9]/g, (d) => '〇一二三四五六七八九'[Number(d)])
     .toLowerCase()

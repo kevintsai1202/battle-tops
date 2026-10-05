@@ -128,8 +128,11 @@ export interface SpecialDef {
   nameJa: string;
   /** 招式名（中文） */
   nameZh: string;
-  /** 效果說明（選單顯示） */
+  /** 招式名（英文，英文版的 cut-in 與語音） */
+  nameEn: string;
+  /** 效果說明（選單顯示；中文、英文） */
   descZh: string;
+  descEn: string;
   cue: SpecialCue;
   steps: SpecialStep[];
   /**
@@ -147,8 +150,11 @@ export interface TopSpec {
   nameJa: string;
   /** 顯示名稱（中文） */
   nameZh: string;
-  /** 致敬的原型陀螺（說明用；原創陀螺為 null） */
+  /** 顯示名稱（英文） */
+  nameEn: string;
+  /** 致敬的原型陀螺（說明用；原創陀螺為 null）；originEn 是英文版顯示的寫法（不含中文暱稱） */
   origin: string | null;
+  originEn: string | null;
   /** 旋轉方向：1 = 右旋，-1 = 左旋（渲染時右旋從上方看為順時針） */
   spinDir: 1 | -1;
   /** 紋章字（頂部晶片與小圖示） */

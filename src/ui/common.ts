@@ -1,15 +1,28 @@
-import { emblemOf } from '../i18n';
-import type { BaseStats, TopSpec } from '../sim/types';
+import { emblemOf, plainName, tr, type TextKey } from '../i18n';
+import type { BaseStats, TopSpec, TopType } from '../sim/types';
 
 /** 雷達圖與數值列的六項屬性（重量換算成 1～10 分顯示：30 g = 1、66 g = 10） */
-export const STAT_AXES: { key: keyof BaseStats; label: string }[] = [
-  { key: 'attack', label: '攻擊' },
-  { key: 'defense', label: '防禦' },
-  { key: 'stamina', label: '持久' },
-  { key: 'weight', label: '重量' },
-  { key: 'burst', label: '爆裂抵抗' },
-  { key: 'dash', label: '機動' },
+export const STAT_AXES: { key: keyof BaseStats }[] = [
+  { key: 'attack' },
+  { key: 'defense' },
+  { key: 'stamina' },
+  { key: 'weight' },
+  { key: 'burst' },
+  { key: 'dash' },
 ];
+
+/** 屬性名稱：full 完整（數值列）、short 短名（雷達圖與卡片，中文兩個字）、tiny 最短（零件清單的小膠囊，中文一個字） */
+export function statLabel(key: keyof BaseStats, form: 'full' | 'short' | 'tiny' = 'full'): string {
+  return tr((form === 'full' ? `stat.${key}` : `stat.${key}.${form === 'short' ? 's' : 't'}`) as TextKey);
+}
+
+/** 類型名稱（攻擊型…）；short 為名鑑小格角落的一個字 */
+export function typeLabel(type: TopType, short = false): string {
+  return tr((short ? `type.${type}.s` : `type.${type}`) as TextKey);
+}
+
+/** 兩段說明用中黑點連起來（英文版用 ·） */
+export const joinDot = (a: string, b: string) => tr('info.join', { a, b });
 
 /** 屬性換成 0..10 的顯示分數（屬性本身已由 sim/parts.ts 的 clampStats 限制在合法範圍） */
 export function statScore(s: BaseStats, key: keyof BaseStats): number {
@@ -40,18 +53,19 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, t
 export function chip(sp: TopSpec): HTMLElement {
   const c = el('i', 'chip', emblemOf(sp));
   c.style.setProperty('--c', css(sp.glow));
-  c.title = sp.nameZh;
+  c.title = plainName(sp);
   return c;
 }
 
 /** 旋轉方向的標示 */
-export const spinLabel = (sp: TopSpec) => (sp.spinDir === 1 ? '右旋' : '左旋') + (sp.special.steps.some((s) => s.op === 'reverse') ? '（可切換）' : '');
+export const spinLabel = (sp: TopSpec) =>
+  tr(sp.spinDir === 1 ? 'spin.right' : 'spin.left') + (sp.special.steps.some((s) => s.op === 'reverse') ? tr('spin.switch') : '');
 
 /** 集氣速度的文字（依集氣時間分三級） */
 export function chargeLabel(sp: TopSpec): string {
   const c = sp.special.charge;
-  const tier = c <= 6 ? '快' : c <= 7.5 ? '中' : '慢';
-  return `集氣 ${tier}（約 ${c} 秒）`;
+  const tier = tr(c <= 6 ? 'charge.fast' : c <= 7.5 ? 'charge.mid' : 'charge.slow');
+  return tr('charge.label', { tier, c });
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -94,7 +108,7 @@ export function radar(s: BaseStats): SVGSVGElement {
     t.setAttribute('x', String(x));
     t.setAttribute('y', String(y + 3));
     t.setAttribute('text-anchor', 'middle');
-    t.textContent = ax.label.slice(0, 2);
+    t.textContent = statLabel(ax.key, 'short');
     svg.append(t);
   });
   return svg;

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
+import enLines from '../src/audio/tutorial-lines.en.json';
 import lines from '../src/audio/tutorial-lines.json';
-import { emptyCtx, GUIDE_KINDS, RECOMMENDED, shouldOfferTutorial, STEPS, targetOf, TutorialFlow, type TutorialCtx } from '../src/tutorial/flow';
+import { TEXT } from '../src/i18n';
+import { caption, emptyCtx, GUIDE_KINDS, RECOMMENDED, shouldOfferTutorial, STEPS, targetOf, TutorialFlow, type TutorialCtx } from '../src/tutorial/flow';
 
 /**
  * 操作教學的步驟流程（純邏輯）：一步一步檢查玩家是否真的做到，做到才進下一步。
@@ -9,6 +11,8 @@ import { emptyCtx, GUIDE_KINDS, RECOMMENDED, shouldOfferTutorial, STEPS, targetO
 
 /** 日文假名 */
 const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
+/** 中日文字（漢字、假名、全形標點）：英文版的字幕與標題不能有 */
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}　-〿＀-￯]/u;
 
 /** 從空白狀態套上變化 */
 const ctx = (patch: Partial<TutorialCtx> = {}): TutorialCtx => ({ ...emptyCtx(), ...patch });
@@ -19,16 +23,22 @@ describe('教學步驟', () => {
     expect([...new Set(STEPS.map((s) => s.chapter))]).toEqual(['team', 'launch', 'control', 'score']);
   });
 
-  test('每一步的電腦版與手機版都有解說語音，字幕就是語音的台詞（去掉語氣標記），全中文', () => {
+  test('每一步的電腦版與手機版都有解說語音，字幕就是語音的台詞（去掉語氣標記）：日文版與中文版全中文，英文版全英文', () => {
     for (const s of STEPS) {
       for (const input of ['kb', 'tc'] as const) {
         const id = s.voice[input];
         expect(lines.lines, `${s.id} ${input}`).toHaveProperty(id);
+        expect(enLines.lines, `${s.id} ${input}`).toHaveProperty(id);
         const text = lines.lines[id as keyof typeof lines.lines].text.replace(/\[[^\]]*\]/g, '').trim();
-        expect(s.text[input]).toBe(text);
-        expect(s.text[input]).not.toMatch(KANA);
+        const en = enLines.lines[id as keyof typeof enLines.lines].text.replace(/\[[^\]]*\]/g, '').trim();
+        expect(caption(s, input, 'zh')).toBe(text);
+        expect(caption(s, input, 'ja')).toBe(text);
+        expect(caption(s, input, 'zh')).not.toMatch(KANA);
+        expect(caption(s, input, 'en')).toBe(en);
+        expect(caption(s, input, 'en')).not.toMatch(CJK);
       }
-      expect(s.title).not.toMatch(KANA);
+      expect(TEXT[s.title].zh).not.toMatch(KANA);
+      expect(TEXT[s.title].en).not.toMatch(CJK);
     }
   });
 

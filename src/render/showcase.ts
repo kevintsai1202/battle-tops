@@ -21,6 +21,7 @@ const DUMMY: TopSpec = {
   ...TOP_SPECS.wolf,
   id: 'dummy',
   nameZh: '練習用陀螺',
+  nameEn: 'Practice Top',
   emblem: '練',
   glow: 0x9aa4b4,
   color: 0x70767f,

@@ -1,0 +1,26 @@
+{
+  "_comment": "操作教學的英文解說台詞（英文版用；日文版與中文版仍用中文那一套 tutorial-lines.json）。台詞 id 與中文版相同。遊戲（src/audio/voice.ts 的 guide、src/tutorial/flow.ts 的字幕）與生成腳本（scripts/gen-voice.mjs --lang tutorial-en）共用。_kb 是電腦（鍵盤、滑鼠）版、_tc 是手機（觸控）版。按鈕名稱要和英文版畫面上的字一致（Next、Battle!、Disk、Driver）。方括號是 Fish Audio s2 系列的語氣標記。",
+  "speakers": {
+    "guide": { "voiceId": "9a9cf47702da476aa4629e2506d4a857", "name": "Hannah / Fish Official" }
+  },
+  "lines": {
+    "tut_pick": { "speaker": "guide", "text": "[happy] Welcome to Battle Tops! First, let's build your team: follow the finger and pick three tops. The order you pick them in is the order they battle. You can choose other tops, too!" },
+    "tut_next": { "speaker": "guide", "text": "[happy] Three tops picked! Now press \"Next\"." },
+    "tut_order": { "speaker": "guide", "text": "[happy] Here you can change the battle order. Press the up or down arrow next to a top to move it one battle earlier or later." },
+    "tut_parts": { "speaker": "guide", "text": "[happy] Under each top are two buttons, Disk and Driver. Press one to swap in a different part, and the radar chart changes right away." },
+    "tut_ready": { "speaker": "guide", "text": "[excited] All set! Press \"Battle!\" to start the match." },
+    "tut_launch_kb": { "speaker": "guide", "text": "[excited] Watch the demo first: hold the mouse button on the screen and drag down, then let go the moment the outer ring shrinks to the size of the inner ring! Drag left or right to aim. Now it's your turn!" },
+    "tut_launch_tc": { "speaker": "guide", "text": "[excited] Watch the demo first: hold your finger on the screen and slide down, then let go the moment the outer ring shrinks to the size of the inner ring! Slide left or right to aim. Now it's your turn!" },
+    "tut_retry": { "speaker": "guide", "text": "[happy] You didn't pull the cord that time. Try again, and remember to hold and pull down!" },
+    "tut_push_kb": { "speaker": "guide", "text": "[excited] Your top is spinning! Use the arrow keys or W, A, S, D to push it around." },
+    "tut_push_tc": { "speaker": "guide", "text": "[excited] Your top is spinning! Slide your finger on the screen to push it around." },
+    "tut_dash_kb": { "speaker": "guide", "text": "[excited] Hold an arrow key, then tap Shift to dash a short way in that direction!" },
+    "tut_dash_tc": { "speaker": "guide", "text": "[excited] Flick your finger quickly in one direction to dash a short way!" },
+    "tut_special_kb": { "speaker": "guide", "text": "[excited] Your special gauge is full! Press the space bar to unleash your special move!" },
+    "tut_special_tc": { "speaker": "guide", "text": "[excited] Your special gauge is full! Tap the glowing special button in the bottom right to unleash your special move! A three-finger tap on the screen works too." },
+    "tut_finish": { "speaker": "guide", "text": "[excited] Now finish the battle! Ram your opponent in the direction of the arrow. Knock it out of the stadium, make it burst, or make it stop spinning to finish it." },
+    "tut_points": { "speaker": "guide", "text": "[happy] A Spin Finish, when the opponent stops spinning, is worth one point. Over Finishes and Burst Finishes are worth two. In the Xtreme Stadium and the Double Xtreme Stadium, knocking the opponent into the wide center gap is an Xtreme Finish, worth three points!" },
+    "tut_match": { "speaker": "guide", "text": "[happy] A real match is three on three: the side with more points after three battles wins, and a tie goes to overtime. Tutorial complete. Let's battle!" },
+    "tut_restart": { "speaker": "guide", "text": "[happy] You got finished! No worries, let's try that again." }
+  }
+}

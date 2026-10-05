@@ -2,7 +2,7 @@
 
 瀏覽器上的 3D 戰鬥陀螺對戰遊戲，可以 1P 對 CPU，也可以用房號找朋友線上對戰。正宗 3 對 3 賽制：雙方各挑三顆依序對戰，三戰總分高者獲勝。
 20 顆陀螺（4 顆原創＋16 顆致敬歷代名作），外觀參考原型的配色與輪廓，能力由六項基本屬性推導；組隊時可以換重心盤與軸心調整屬性。6 個場地（練習場、標準戰鬥盤、雙層戰鬥盤、火山、冰川、積水；兩個戰鬥盤照實體比賽盤做，撞進中間寬口是 3 分的極限終結），場地機關會實際改變陀螺走向；用拉發射台（滑鼠拖曳／手指滑動）發射。
-標題畫面是模式選單：電腦對戰（3 對 3）、試驗模式（一對一比較陀螺與零件的搭配）、線上對戰、操作教學；右上角可以切換日文版（日式熱血風格、日語語音）與全中文版（畫面與語音全中文）。第一次玩可以先跟著「操作教學」一步一步學會組隊、發射、操控與計分。
+標題畫面是模式選單：電腦對戰（3 對 3）、試驗模式（一對一比較陀螺與零件的搭配）、線上對戰、操作教學；右上角可以切換日文版（日式熱血風格、日語語音）、全中文版（畫面與語音全中文）與英文版（English：畫面、語音與操作教學全英文；第一次打開依瀏覽器語言自動選）。第一次玩可以先跟著「操作教學」一步一步學會組隊、發射、操控與計分。
 
 **線上遊玩：<https://kevintsai1202.github.io/battle-tops/>**（電腦與手機都能玩；建議戴耳機）
 
@@ -22,7 +22,7 @@
   - 金屬撞擊：非諧波泛音 + 次低頻。
   - 慢動作：音高下沉。
   - 其他：場館殘響、觀眾歡呼、152 BPM 程序生成戰鬥 BGM。
-- 熱血語音：用 Fish Audio 預先生成的台詞（含 20 顆陀螺各自的必殺技名），日文、中文各 49 句，跟著介面語言切換，分三個角色：
+- 熱血語音：用 Fish Audio 預先生成的台詞（含 20 顆陀螺各自的必殺技名），日文、中文、英文各 49 句，跟著介面語言切換，分三個角色：
   - 實況主播：倒數、激突、終結。
   - 玩家：ゴー・シュート（中文版也喊英文「Go Shoot」）、必殺技名。
   - 對手：挑釁、必殺、敗北。
@@ -62,7 +62,7 @@ npm run server:start   # http://localhost:8787/health，WebSocket 在 ws://local
 | `&p=blaze,turtle&c=wolf` | 展示模式指定雙方隊伍的前幾顆（陀螺代號見下方名鑑，其餘隨機補滿 3 顆） |
 | `&arena=volcano` | 展示模式的場地：practice / stadium / volcano / glacier / flooded（預設 practice） |
 | `?room=ABCD` | 線上對戰的分享連結：點標題畫面直接進線上房間，房號已帶入 |
-| `&lang=zh` | 介面語言：`ja` 日文版、`zh` 全中文版（只在這次有效；不給時沿用上次在標題畫面選的，預設日文） |
+| `&lang=zh` | 介面語言：`ja` 日文版、`zh` 全中文版、`en` 英文版（只在這次有效；不給時沿用上次在標題畫面選的，沒選過依瀏覽器語言：英文 → 英文版、中文 → 中文版、其他 → 日文版） |
 | `?server=ws://localhost:8787/ws` | 線上對戰改連指定的伺服器（預設 `wss://battle-tops.zeabur.app/ws`；建置時也可以用環境變數 `VITE_GAME_SERVER` 指定） |
 
 建議戴耳機，才聽得出 3D 定位。
@@ -339,10 +339,11 @@ Remove-Item Env:GAME_SERVER
 
 ## 語音台詞
 
-台詞表有兩份，遊戲與生成腳本共用，兩份的台詞 id 與角色一一對應：
+台詞表有三份，遊戲與生成腳本共用，三份的台詞 id 與角色一一對應：
 
 - 日文：[src/audio/voice-lines.json](src/audio/voice-lines.json)，音檔在 `public/voice/`。
 - 中文：[src/audio/voice-lines.zh.json](src/audio/voice-lines.zh.json)，音檔在 `public/voice/zh/`。
+- 英文：[src/audio/voice-lines.en.json](src/audio/voice-lines.en.json)，音檔在 `public/voice/en/`。
 
 音檔都已經生成，要改台詞或換聲音才需要重新生成。
 
@@ -360,6 +361,8 @@ npm run voice:check -- --only go_shoot          # 用 Whisper 聽寫抽查發音
 npm run voice:check -- --lang zh                # 中文（結果在 logs/voice-check-zh.json）
 npm run voice -- --lang tutorial                # 操作教學的解說（src/audio/tutorial-lines.json → public/voice/tutorial/）
 npm run voice:check -- --lang tutorial
+npm run voice -- --lang en                      # 英文（結果檢查：npm run voice:check -- --lang en）
+npm run voice -- --lang tutorial-en             # 英文版的操作教學（src/audio/tutorial-lines.en.json → public/voice/tutorial/en/）
 ```
 
 生成時會用 ffmpeg 量出每句去掉頭尾靜音後的播放長度，記在 manifest 的 `seconds`（快取命中但還沒記長度的句子也會補上，不呼叫 API）。單元測試用它檢查倒數的數字在一拍（0.9 秒）內講完、開場介紹不超過 2.2 秒（線上對戰的介紹時間固定）、中文的勝負宣告在下一句之前講完；改台詞後超過就會失敗。沒有 ffmpeg 時不記長度，測試會提示補跑。

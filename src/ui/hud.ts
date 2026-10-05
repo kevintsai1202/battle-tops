@@ -1,13 +1,13 @@
-import { emblemOf, lang, LANGS, setLang, specialName, topName, tr, type Lang } from '../i18n';
+import { descOf, diffLabel, emblemOf, lang, LANGS, plainName, setLang, specialName, topName, tr, type Lang } from '../i18n';
 import { ARENA_IDS, ARENAS, type ArenaId } from '../sim/arena';
 import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from '../sim/difficulty';
 import { equip, PARTS, STOCK, type PartId, type PartSlot, type TeamLoadouts } from '../sim/parts';
 import { spinRatio } from '../sim/physics';
 import { currentPairing, type Pairing, type TeamMatch } from '../sim/team';
-import { buildSpec, TOP_IDS, TOP_SPECS, TYPE_LABEL } from '../sim/tops';
+import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { DuelSummary, TrialConfig, TrialRecord, TrialSide } from '../sim/trial';
 import type { FinishType, TopId, TopSpec, TopState } from '../sim/types';
-import { $, chip, css, el, rpmOf, spinLabel, STAT_AXES, statScore } from './common';
+import { $, chip, css, el, joinDot, rpmOf, spinLabel, STAT_AXES, statLabel, statScore, typeLabel } from './common';
 import { DetailView } from './detail';
 import { partButton, partMenu } from './partMenu';
 
@@ -29,34 +29,35 @@ function buildCard(sp: TopSpec): HTMLButtonElement {
     const row = el('div', 'stat');
     const b = document.createElement('b');
     b.style.width = `${v * 10}%`;
-    row.append(el('span', '', label.slice(0, 2)), b);
+    row.append(el('span', '', label), b);
     return row;
   };
   c.append(
     el('span', 'badge'),
     el('div', 'ja', topName(sp)),
-    el('div', 'zh ja-only', sp.nameZh),
-    el('span', 'type', `${TYPE_LABEL[sp.type]}・${spinLabel(sp)}`),
-    ...STAT_AXES.map((ax) => stat(ax.label, statScore(sp.stats, ax.key))),
-    el('div', 'sp', `必殺：${specialName(sp)}`),
+    // 日文版專用的中文名（其他語言由 CSS 隱藏，也不放字）
+    el('div', 'zh ja-only', lang() === 'ja' ? sp.nameZh : ''),
+    el('span', 'type', joinDot(typeLabel(sp.type), spinLabel(sp))),
+    ...STAT_AXES.map((ax) => stat(statLabel(ax.key, 'short'), statScore(sp.stats, ax.key))),
+    el('div', 'sp', tr('card.special', { name: specialName(sp) })),
   );
   return c;
 }
 
-/** 組隊畫面的陀螺小格：3D 縮圖（還沒產生時顯示紋章，見 setTileThumb）、中文名、類型色條，左旋另外標示 */
+/** 組隊畫面的陀螺小格：3D 縮圖（還沒產生時顯示紋章，見 setTileThumb）、中文名（英文版英文名）、類型色條，左旋另外標示 */
 function buildTile(sp: TopSpec): HTMLButtonElement {
   const c = el('button', 'card tile');
   c.type = 'button';
   c.dataset.id = sp.id;
   c.dataset.type = sp.type;
   c.style.setProperty('--c', css(sp.glow));
-  c.title = `${sp.nameZh}（${TYPE_LABEL[sp.type]}）`;
+  c.title = tr('tile.title', { name: plainName(sp), type: typeLabel(sp.type) });
   const img = el('img', 'thumb');
   img.alt = '';
   img.hidden = true;
   const emb = el('i', 'emb', emblemOf(sp));
-  c.append(el('span', 'badge'), img, emb, el('span', 'nm', sp.nameZh), el('span', 'ty', TYPE_LABEL[sp.type].slice(0, 1)));
-  if (sp.spinDir === -1) c.append(el('span', 'left', '左'));
+  c.append(el('span', 'badge'), img, emb, el('span', 'nm', plainName(sp)), el('span', 'ty', typeLabel(sp.type, true)));
+  if (sp.spinDir === -1) c.append(el('span', 'left', tr('tile.left')));
   return c;
 }
 
@@ -84,7 +85,7 @@ function bindModeRow(
   const choices: ArenaChoice[] = o.withRandom ? [...ARENA_IDS, 'random'] : [...ARENA_IDS];
   let arena = o.arena;
   const arenaBtns = choices.map((id) => {
-    const b = el('button', '', id === 'random' ? '隨機' : ARENAS[id].nameZh);
+    const b = el('button', '', id === 'random' ? tr('arena.random') : plainName(ARENAS[id]));
     b.type = 'button';
     b.dataset.id = id;
     b.disabled = !!o.lockArena;
@@ -98,7 +99,7 @@ function bindModeRow(
   const setArena = (id: ArenaChoice, notify = true) => {
     arena = id;
     arenaBtns.forEach((b) => b.classList.toggle('on', b.dataset.id === id));
-    $('.arena-desc', root).textContent = id === 'random' ? '開打時從六個場地隨機抽一個。' : ARENAS[id].descZh;
+    $('.arena-desc', root).textContent = id === 'random' ? tr('arena.randomDesc') : descOf(ARENAS[id]);
     if (notify) o.onArena(id);
   };
   setArena(arena);
@@ -392,10 +393,10 @@ export class Hud {
       if (row && !row.disabled && row.dataset.code) o.onJoin(row.dataset.code, name.value);
     };
     this.roomsKey = '';
-    this.setRoomList([], '連線中…');
+    this.setRoomList([], tr('net.connecting'));
     const join = () => {
       const c = code.value.trim().toUpperCase();
-      if (c.length !== 4) return this.setOnlineMessage('房號是 4 個字（英文與數字）', true);
+      if (c.length !== 4) return this.setOnlineMessage(tr('online.codeLen'), true);
       o.onJoin(c, name.value);
     };
     $<HTMLButtonElement>('.ol-join-btn', root).onclick = join;
@@ -406,8 +407,8 @@ export class Hud {
     $<HTMLButtonElement>('.ol-copy', root).onclick = () => {
       const link = $<HTMLInputElement>('.ol-link', root).value;
       void navigator.clipboard?.writeText(link).then(
-        () => this.setOnlineMessage('已複製連結，傳給朋友開啟就能加入'),
-        () => this.setOnlineMessage('無法自動複製，請手動複製連結'),
+        () => this.setOnlineMessage(tr('online.copied')),
+        () => this.setOnlineMessage(tr('online.copyFail')),
       );
     };
     root.hidden = false;
@@ -452,7 +453,7 @@ export class Hud {
     list.replaceChildren();
     if (!rooms.some((r) => r.status === 'waiting')) {
       const empty = el('p', 'ol-empty');
-      empty.textContent = '目前沒有等人的房間：按「快速加入」會幫你開一間公開房間等人';
+      empty.textContent = tr('online.noRooms');
       list.append(empty);
     }
     for (const r of rooms) {
@@ -467,10 +468,11 @@ export class Hud {
       who.textContent = waiting ? r.host : `${r.host} vs ${r.guest ?? ''}`;
       const meta = el('span', 'rr-meta');
       // 不認得的場地（伺服器比網頁新、加了新場地）照樣列出，不讓整個列表壞掉
-      const arena = r.arena === 'random' ? '隨機場地' : (ARENAS[r.arena]?.nameZh ?? '新場地');
-      meta.textContent = `${arena}・${waiting ? waitedLabel(r.waited) : '對戰中'}`;
+      const known = ARENAS[r.arena as ArenaId] as (typeof ARENAS)[ArenaId] | undefined;
+      const arena = r.arena === 'random' ? tr('online.randomArena') : known ? plainName(known) : tr('online.newArena');
+      meta.textContent = joinDot(arena, waiting ? waitedLabel(r.waited) : tr('online.playing'));
       const go = el('span', 'rr-go');
-      go.textContent = waiting ? '加入 ▶' : '—';
+      go.textContent = waiting ? tr('online.joinRow') : '—';
       row.append(who, meta, go);
       list.append(row);
     }
@@ -520,8 +522,8 @@ export class Hud {
     this.detail = detail;
     // CPU 陣容：依名鑑順序顯示，不洩漏出場順序；線上時改成對手狀態
     $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
-    $('.cpu-team .ct-label', root).textContent = online ? `對手：${online.opponent}` : tr('select.cpuTeam');
-    $('.cpu-team small', root).textContent = online ? '選擇中…' : '出場順序保密';
+    $('.cpu-team .ct-label', root).textContent = online ? tr('opp.label', { name: online.opponent }) : tr('select.cpuTeam');
+    $('.cpu-team small', root).textContent = tr(online ? 'opp.choosing' : 'select.cpuNote');
     const go = $<HTMLButtonElement>('.go', root);
     const slots = $('.slots', root);
     let idx = 0;
@@ -650,7 +652,7 @@ export class Hud {
     $('.ar-opp-label', root).textContent = o.opponent.label;
     $('.ar-opp .chips', root).replaceChildren(...o.opponent.team.map((t) => chip(o.specs[t])));
     $('.ar-opp-note', root).textContent = o.opponent.note;
-    $('.ar-arena', root).textContent = `場地：${o.arena}`;
+    $('.ar-arena', root).textContent = tr('arrange.arena', { name: o.arena });
     $('.ar-status', root).textContent = '';
     const back = $<HTMLButtonElement>('.ar-back', root);
     back.hidden = !o.onBack;
@@ -693,8 +695,8 @@ export class Hud {
           li.classList.toggle('on', i === sel);
           const thumb = el('span', 'ar-thumb');
           o.thumb(sp, (url) => (thumb.style.backgroundImage = `url(${url})`));
-          const name = el('span', 'ar-name', sp.nameZh);
-          name.append(el('small', '', TYPE_LABEL[sp.type]));
+          const name = el('span', 'ar-name', plainName(sp));
+          name.append(el('small', '', typeLabel(sp.type)));
           // 盤與軸的按鈕：直接顯示目前的零件，點下展開零件清單
           const parts = el('span', 'ar-parts');
           parts.append(
@@ -705,8 +707,8 @@ export class Hud {
           const down = el('button', 'ar-down', '▼');
           up.type = 'button';
           down.type = 'button';
-          up.setAttribute('aria-label', '往前一戰');
-          down.setAttribute('aria-label', '往後一戰');
+          up.setAttribute('aria-label', tr('arrange.up'));
+          down.setAttribute('aria-label', tr('arrange.down'));
           up.disabled = locked || i === 0;
           down.disabled = locked || i === order.length - 1;
           up.onclick = (e) => {
@@ -718,7 +720,7 @@ export class Hud {
             move(i, 1);
           };
           mv.append(up, down);
-          li.append(el('span', 'ar-n', `第 ${i + 1} 戰`), thumb, name, parts, mv);
+          li.append(el('span', 'ar-n', tr('arrange.n', { n: i + 1 })), thumb, name, parts, mv);
           li.onclick = () => select(i);
           return li;
         }),
@@ -774,9 +776,9 @@ export class Hud {
       const deadline = o.deadline;
       const tick = () => {
         const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-        timer.textContent = left > 0 ? `剩 ${left} 秒` : '時間到';
+        timer.textContent = left > 0 ? tr('arrange.left', { n: left }) : tr('arrange.timeUp');
         timer.classList.toggle('warn', left <= 10);
-        if (left <= 0 && !locked) lock('時間到，用目前的順序與零件開戰…');
+        if (left <= 0 && !locked) lock(tr('arrange.timeUpLock'));
       };
       tick();
       this.arrangeTimer = window.setInterval(tick, 250);
@@ -856,7 +858,7 @@ export class Hud {
   updateSelectOnline(arena: ArenaChoice, opponent: string, status: string): void {
     this.selectOnline?.setArena(arena);
     const root = $('#select');
-    $('.cpu-team .ct-label', root).textContent = `對手：${opponent}`;
+    $('.cpu-team .ct-label', root).textContent = tr('opp.label', { name: opponent });
     $('.cpu-team small', root).textContent = status;
   }
 
@@ -914,8 +916,8 @@ export class Hud {
           card.style.setProperty('--c', css(sp.glow));
           const thumb = el('span', 'ar-thumb');
           o.thumb(TOP_SPECS[s.top], (url) => (thumb.style.backgroundImage = `url(${url})`));
-          const name = el('span', 'tr-name', sp.nameZh);
-          name.append(el('small', '', TYPE_LABEL[sp.type]));
+          const name = el('span', 'tr-name', plainName(sp));
+          name.append(el('small', '', typeLabel(sp.type)));
           const parts = el('span', 'ar-parts');
           const lo: TeamLoadouts = { [s.top]: s.loadout };
           parts.append(
@@ -935,7 +937,7 @@ export class Hud {
               }),
             ),
           );
-          card.append(el('span', 'tr-who', who === 'player' ? tr('you') : '電腦'), thumb, name, parts);
+          card.append(el('span', 'tr-who', who === 'player' ? tr('you') : tr('trial.cpu')), thumb, name, parts);
           card.onclick = () => setActive(who);
           card.onkeydown = (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -951,7 +953,7 @@ export class Hud {
         const t = TOP_IDS[k];
         e.classList.toggle('on', k === idx);
         e.classList.toggle('picked', t === cfg.player.top || t === cfg.cpu.top);
-        $('.badge', e).textContent = [t === cfg.player.top ? '你' : '', t === cfg.cpu.top ? '電' : ''].filter(Boolean).join('');
+        $('.badge', e).textContent = [t === cfg.player.top ? tr('trial.badgeYou') : '', t === cfg.cpu.top ? tr('trial.badgeCpu') : ''].filter(Boolean).join('');
       });
       const sp = specOf(cfg[active]);
       detail.show(sp);
@@ -1067,7 +1069,7 @@ export class Hud {
 
   /** 對戰 HUD 的賽況列（試驗模式）：「試驗・場地」與雙方的陀螺；比分顯示這組設定的累計勝敗 */
   setTrialInfo(player: TopSpec, cpu: TopSpec, arenaName: string): void {
-    $('#hud .info').textContent = `試驗・${arenaName}`;
+    $('#hud .info').textContent = tr('trial.info', { arena: arenaName });
     const c0 = chip(player);
     const c1 = chip(cpu);
     c0.classList.add('cur');
@@ -1085,11 +1087,18 @@ export class Hud {
     const b = o.battle;
     const withParts = (sp: TopSpec) => {
       const stock = TOP_SPECS[sp.id];
-      const changed = (['disk', 'driver'] as PartSlot[]).filter((s) => sp.parts[s] !== stock.stock[s]).map((s) => PARTS[sp.parts[s]].nameZh);
-      return `${sp.nameZh}（${changed.length ? changed.join('＋') : '原廠'}）`;
+      const changed = (['disk', 'driver'] as PartSlot[]).filter((s) => sp.parts[s] !== stock.stock[s]).map((s) => plainName(PARTS[sp.parts[s]]));
+      return tr('trial.withParts', { name: plainName(sp), parts: changed.length ? changed.join(tr('trial.partsJoin')) : tr('part.stock') });
     };
-    $('.tr-headline', root).textContent = !b ? '電腦自動對打' : b.winner === null ? '平手' : b.winner === 0 ? tr('result.win') : tr('result.lose');
-    $('.tr-matchup', root).textContent = `${tr('you')}：${withParts(o.player)} ${tr('vs')} 電腦：${withParts(o.cpu)}＠${o.arenaName}・${DIFFICULTIES[o.difficulty].labelZh}`;
+    $('.tr-headline', root).textContent = !b ? tr('trial.autoHead') : b.winner === null ? tr('trial.draw') : b.winner === 0 ? tr('result.win') : tr('result.lose');
+    $('.tr-matchup', root).textContent = tr('trial.matchup', {
+      you: tr('you'),
+      p: withParts(o.player),
+      vs: tr('vs'),
+      c: withParts(o.cpu),
+      arena: o.arenaName,
+      diff: diffLabel(DIFFICULTIES[o.difficulty]),
+    });
     const table = $('.tr-stats', root);
     table.hidden = !b;
     if (b) {
@@ -1103,17 +1112,19 @@ export class Hud {
         return tr0;
       };
       const head = el('tr', '');
-      head.append(el('th', '', ''), el('th', '', tr('you')), el('th', '', '電腦'));
+      head.append(el('th', '', ''), el('th', '', tr('you')), el('th', '', tr('trial.cpu')));
       const pct = (v: number) => `${Math.round(v * 100)}%`;
+      const who = b.winner === null ? tr('trial.draw') : b.winner === 0 ? tr('trial.youWin', { you: tr('you') }) : tr('trial.cpuWin');
+      const used = (v: boolean) => tr(v ? 'trial.used' : 'trial.unused');
       table.replaceChildren(
         head,
-        row('終結方式', b.finish ? `${finishName(b.finish)}（${b.winner === null ? '平手' : b.winner === 0 ? `${tr('you')} 獲勝` : '電腦獲勝'}）` : '—'),
-        row('對戰時間', `${b.time.toFixed(1)} 秒`),
-        row('剩餘轉速', `${b.rpm[0]} RPM`, `${b.rpm[1]} RPM`),
-        row('爆裂值', pct(b.burst[0]), pct(b.burst[1])),
-        row('發射力道', pct(b.launch[0]), pct(b.launch[1])),
-        row('必殺', b.specials[0] ? '有放出' : '沒放', b.specials[1] ? '有放出' : '沒放'),
-        row('撞擊', `${b.clashes} 次（重擊 ${b.bigClashes} 次）`),
+        row(tr('trial.finish'), b.finish ? tr('trial.finishVal', { finish: finishName(b.finish), who }) : '—'),
+        row(tr('trial.time'), tr('unit.sec', { n: b.time.toFixed(1) })),
+        row(tr('trial.rpm'), `${b.rpm[0]} RPM`, `${b.rpm[1]} RPM`),
+        row(tr('trial.burst'), pct(b.burst[0]), pct(b.burst[1])),
+        row(tr('trial.launch'), pct(b.launch[0]), pct(b.launch[1])),
+        row(tr('trial.special'), used(b.specials[0]), used(b.specials[1])),
+        row(tr('trial.clash'), tr('trial.clashVal', { n: b.clashes, big: b.bigClashes })),
       );
     }
     this.setTrialRecord(o.record);
@@ -1140,12 +1151,12 @@ export class Hud {
   setTrialRecord(r: TrialRecord): void {
     const box = $('#trial-result .tr-record');
     if (!r.games) {
-      box.replaceChildren(el('p', 'tr-none', '這組設定還沒有實際對戰紀錄。'));
+      box.replaceChildren(el('p', 'tr-none', tr('trial.noRecord')));
       return;
     }
     const rate = r.wins + r.losses ? Math.round((r.wins / (r.wins + r.losses)) * 100) : 0;
     box.replaceChildren(
-      el('p', 'tr-sum', `這組設定累計 ${r.games} 戰：${r.wins} 勝 ${r.losses} 敗 ${r.draws} 平（勝率 ${rate}%）`),
+      el('p', 'tr-sum', tr('trial.recordSum', { games: r.games, w: r.wins, l: r.losses, d: r.draws, rate })),
       this.finishTable(r.finishes),
     );
   }
@@ -1156,7 +1167,7 @@ export class Hud {
     for (const [k, [w, l]] of Object.entries(f) as [FinishType, [number, number]][]) {
       if (!w && !l) continue;
       const li = el('li', '', finishName(k));
-      li.append(el('b', 'w', `你 ${w}`), el('b', 'l', `電腦 ${l}`));
+      li.append(el('b', 'w', tr('trial.youN', { n: w })), el('b', 'l', tr('trial.cpuN', { n: l })));
       ul.append(li);
     }
     return ul;
@@ -1179,9 +1190,7 @@ export class Hud {
     box.hidden = false;
     $<HTMLElement>('.tr-progress i', root).style.width = `${Math.round(state.progress * 100)}%`;
     const s = state.summary;
-    $('.tr-auto-title', root).textContent = s
-      ? `電腦自動對打 ${s.games} 場（雙方都由電腦操作，座位各半）`
-      : `電腦自動對打中… ${Math.round(state.progress * 100)}%`;
+    $('.tr-auto-title', root).textContent = s ? tr('trial.autoDone', { n: s.games }) : tr('trial.autoRun', { p: Math.round(state.progress * 100) });
     const res = $('.tr-auto-result', root);
     if (!s) {
       res.replaceChildren();
@@ -1189,8 +1198,8 @@ export class Hud {
     }
     const rate = s.wins + s.losses ? Math.round((s.wins / (s.wins + s.losses)) * 100) : 0;
     res.replaceChildren(
-      el('p', 'tr-rate', `你的陀螺勝率 ${rate}%`),
-      el('p', 'tr-sum', `${s.wins} 勝 ${s.losses} 敗 ${s.draws} 平・平均 ${s.avgTime.toFixed(1)} 秒`),
+      el('p', 'tr-rate', tr('trial.rate', { rate })),
+      el('p', 'tr-sum', tr('trial.autoSum', { w: s.wins, l: s.losses, d: s.draws, t: s.avgTime.toFixed(1) })),
       this.finishTable(s.finishes),
     );
   }
@@ -1258,7 +1267,7 @@ export class Hud {
   /** 對戰中的賽況：BATTLE n/3 或延長賽、場地名，以及雙方陣容小圖示（出戰中、已出戰與得分） */
   setMatchInfo(m: TeamMatch, specs: Record<TopId, TopSpec>, arenaName: string, current?: Pairing | null): void {
     const pair = current === undefined ? currentPairing(m) : current;
-    $('#hud .info').textContent = `${pair ? (pair.overtime ? '延長賽' : tr('info.battle', { n: pair.battle })) : tr('info.final')}・${arenaName}`;
+    $('#hud .info').textContent = joinDot(pair ? (pair.overtime ? tr('info.overtime') : tr('info.battle', { n: pair.battle })) : tr('info.final'), arenaName);
     const side = (team: TopId[], who: 0 | 1) =>
       team.map((t) => {
         const c = chip(specs[t]);
@@ -1284,7 +1293,7 @@ export class Hud {
     hud.style.setProperty('--p0', css(a.glow));
     hud.style.setProperty('--p1', css(b.glow));
     $('.panel[data-side="0"] .name', hud).textContent = tr('hud.you', { name: topName(a) });
-    $('.panel[data-side="1"] .name', hud).textContent = `${topName(b)} ｜ ${opponent}`;
+    $('.panel[data-side="1"] .name', hud).textContent = tr('hud.opp', { name: topName(b), who: opponent });
   }
 
   hideHud(): void {
@@ -1376,8 +1385,8 @@ export class Hud {
     const root = $('#cutin');
     const band = $('.band', root);
     band.style.setProperty('--c', css(spec.glow));
-    $('.who', root).textContent = isPlayer ? tr('hud.you', { name: topName(spec) }) : `${tr('cpu')} ｜ ${topName(spec)}`;
-    $('.move', root).textContent = `必殺！${specialName(spec)}`;
+    $('.who', root).textContent = isPlayer ? tr('hud.you', { name: topName(spec) }) : tr('hud.opp', { name: tr('cpu'), who: topName(spec) });
+    $('.move', root).textContent = tr('cutin.move', { name: specialName(spec) });
     root.hidden = false;
     // 重新觸發動畫
     band.style.animation = 'none';
@@ -1398,11 +1407,19 @@ export class Hud {
     $('.diff', root).textContent = footnote;
     $('.breakdown', root).replaceChildren(
       ...m.results.map((r) => {
-        const label = r.overtime ? '延長賽' : `第 ${r.battle} 戰`;
+        const label = r.overtime ? tr('result.overtime') : tr('result.battleN', { n: r.battle });
         return el(
           'li',
           r.winner === 0 ? 'w' : 'l',
-          `${label}　${specs[r.player].nameZh} ${tr('vs')} ${specs[r.cpu].nameZh}　${finishName(r.finish)}　${r.winner === 0 ? tr('you') : opp} +${r.points[r.winner]}`,
+          tr('result.row', {
+            label,
+            a: plainName(specs[r.player]),
+            vs: tr('vs'),
+            b: plainName(specs[r.cpu]),
+            finish: finishName(r.finish),
+            who: r.winner === 0 ? tr('you') : opp,
+            pts: r.points[r.winner],
+          }),
         );
       }),
     );
@@ -1437,11 +1454,11 @@ export class Hud {
 /** 瞄準角度的文字（例如「→ 12°」） */
 /** 房間列表的等待時間文字：一分鐘內用秒、之後用分鐘 */
 function waitedLabel(sec: number): string {
-  return sec < 60 ? `等了 ${sec} 秒` : `等了 ${Math.floor(sec / 60)} 分鐘`;
+  return sec < 60 ? tr('online.waitedS', { n: sec }) : tr('online.waitedM', { n: Math.floor(sec / 60) });
 }
 
 function aimText(aim: number): string {
   const deg = Math.round((aim * 180) / Math.PI);
-  if (Math.abs(deg) < 3) return '正面';
-  return `${deg > 0 ? '右' : '左'} ${Math.abs(deg)}°`;
+  if (Math.abs(deg) < 3) return tr('aim.center');
+  return tr(deg > 0 ? 'aim.right' : 'aim.left', { n: Math.abs(deg) });
 }

@@ -1,8 +1,12 @@
 // 用 Fish Audio TTS 把台詞表生成成語音檔：日文 src/audio/voice-lines.json → public/voice/，
-// 中文 src/audio/voice-lines.zh.json → public/voice/zh/；操作教學（--lang tutorial）src/audio/tutorial-lines.json → public/voice/tutorial/。
+// 中文 src/audio/voice-lines.zh.json → public/voice/zh/，英文 src/audio/voice-lines.en.json → public/voice/en/；
+// 操作教學（--lang tutorial）src/audio/tutorial-lines.json → public/voice/tutorial/，
+// 英文版的操作教學（--lang tutorial-en）src/audio/tutorial-lines.en.json → public/voice/tutorial/en/。
 // 用法（PowerShell 7）：
 //   npm run voice
 //   npm run voice -- --lang zh
+//   npm run voice -- --lang en
+//   npm run voice -- --lang tutorial-en
 //   npm run voice -- --force
 //   npm run voice -- --only countdown_3,go_shoot
 //   npm run voice -- --voice announcer=<voiceId> --voice rival=<voiceId>
@@ -22,8 +26,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LANGS = {
   ja: { lines: 'src/audio/voice-lines.json', out: 'public/voice' },
   zh: { lines: 'src/audio/voice-lines.zh.json', out: 'public/voice/zh' },
-  // 操作教學的中文解說（只有中文）
+  en: { lines: 'src/audio/voice-lines.en.json', out: 'public/voice/en' },
+  // 操作教學的中文解說（日文版、中文版共用）
   tutorial: { lines: 'src/audio/tutorial-lines.json', out: 'public/voice/tutorial' },
+  // 操作教學的英文解說（英文版用）
+  'tutorial-en': { lines: 'src/audio/tutorial-lines.en.json', out: 'public/voice/tutorial/en' },
 };
 const execFileP = promisify(execFile);
 
@@ -31,7 +38,7 @@ const API_URL = 'https://api.fish.audio/v1/tts';
 const MODEL = 's2.1-pro-free';
 const MAX_RETRY = 5;
 
-/** 解析命令列參數：--lang ja|zh、--force、--only a,b、--voice speaker=id（可重複）。 */
+/** 解析命令列參數：--lang ja|zh|en|tutorial|tutorial-en、--force、--only a,b、--voice speaker=id（可重複）。 */
 function parseArgs(argv) {
   const opts = { lang: 'ja', force: false, only: null, voices: {} };
   for (let i = 0; i < argv.length; i++) {

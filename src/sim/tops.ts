@@ -8,7 +8,9 @@ interface TopDef {
   type: TopType;
   nameJa: string;
   nameZh: string;
+  nameEn: string;
   origin: string | null;
+  originEn: string | null;
   spinDir: 1 | -1;
   emblem: string;
   look: TopLook;
@@ -39,7 +41,9 @@ const DEFS: TopDef[] = [
     type: 'attack',
     nameJa: 'ブレイズ・ドラゴン',
     nameZh: '烈焰龍',
+    nameEn: 'Blaze Dragon',
     origin: null,
+    originEn: null,
     spinDir: 1,
     emblem: '龍',
     look: {
@@ -55,7 +59,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ドラゴン・インパクト',
       nameZh: '烈龍衝擊',
+      nameEn: 'Dragon Impact',
       descZh: '朝對手猛烈突進，1 秒內攻擊力 1.3 倍。',
+      descEn: 'Charges hard at the opponent: 1.3× attack for 1 s.',
       cue: 'close',
       charge: 8,
       steps: [
@@ -71,7 +77,9 @@ const DEFS: TopDef[] = [
     type: 'defense',
     nameJa: 'アイアン・タートル',
     nameZh: '鐵壁龜',
+    nameEn: 'Iron Turtle',
     origin: null,
+    originEn: null,
     spinDir: 1,
     emblem: '亀',
     look: {
@@ -87,7 +95,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'アイアン・フォートレス',
       nameZh: '鋼鐵要塞',
+      nameEn: 'Iron Fortress',
       descZh: '急停紮根：3 秒內質量 3 倍、防禦 2.5 倍、牢牢抓地。',
+      descEn: 'Stops dead and digs in: 3× mass, 2.5× defense and a firm grip for 3 s.',
       cue: 'danger',
       charge: 7,
       steps: [
@@ -103,7 +113,9 @@ const DEFS: TopDef[] = [
     type: 'stamina',
     nameJa: 'ゲイル・フェニックス',
     nameZh: '疾風鳳',
+    nameEn: 'Gale Phoenix',
     origin: null,
+    originEn: null,
     spinDir: 1,
     emblem: '鳳',
     look: {
@@ -119,7 +131,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'エターナル・サイクロン',
       nameZh: '永恆旋風',
+      nameEn: 'Eternal Cyclone',
       descZh: '回復 16% 轉速、修復爆裂量，3 秒內轉速幾乎不流失。',
+      descEn: 'Restores 16% spin and repairs burst damage; spin barely drops for 3 s.',
       cue: 'lowSpin',
       charge: 8,
       steps: [
@@ -136,7 +150,9 @@ const DEFS: TopDef[] = [
     type: 'balance',
     nameJa: 'ギャラクシー・ウルフ',
     nameZh: '星河狼',
+    nameEn: 'Galaxy Wolf',
     origin: null,
+    originEn: null,
     spinDir: 1,
     emblem: '狼',
     look: {
@@ -152,7 +168,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ギャラクシー・ノヴァ',
       nameZh: '星河新星',
+      nameEn: 'Galaxy Nova',
       descZh: '回復 10% 轉速並突進，1.5 秒內攻防 1.4 倍。',
+      descEn: 'Restores 10% spin and charges: 1.4× attack and defense for 1.5 s.',
       cue: 'close',
       charge: 6,
       steps: [
@@ -171,7 +189,9 @@ const DEFS: TopDef[] = [
     type: 'attack',
     nameJa: 'アズール・ドラグナー',
     nameZh: '蒼嵐青龍',
+    nameEn: 'Azure Dragner',
     origin: 'Dragoon S（初代・青龍）',
+    originEn: 'Dragoon S (original series)',
     spinDir: -1,
     emblem: '蒼',
     look: {
@@ -187,7 +207,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ストーム・アサルト',
       nameZh: '蒼嵐突襲',
+      nameEn: 'Storm Assault',
       descZh: '捲起左旋風暴突進：2 秒內把附近的對手吸過來，攻擊 1.8 倍。',
+      descEn: 'Charges inside a left-spin storm: pulls nearby opponents in for 2 s, 1.8× attack.',
       cue: 'far',
       charge: 5.5,
       steps: [
@@ -203,7 +225,9 @@ const DEFS: TopDef[] = [
     type: 'attack',
     nameJa: 'テンペスト・ペガス',
     nameZh: '暴嵐天駒',
+    nameEn: 'Tempest Pegas',
     origin: 'Storm Pegasus 105RF（BB-28・天馬）',
+    originEn: 'Storm Pegasus 105RF (BB-28)',
     spinDir: 1,
     emblem: '馬',
     look: {
@@ -219,7 +243,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'テンペスト・ブリンガー',
       nameZh: '天馬急降',
+      nameEn: 'Tempest Bringer',
       descZh: '從天而降的重擊：朝對手俯衝，0.8 秒內質量 1.6 倍、攻擊 1.4 倍，撞了不容易被彈開。',
+      descEn: 'A heavy blow from the sky: dives at the opponent with 1.6× mass and 1.4× attack for 0.8 s, hard to bounce off.',
       cue: 'close',
       charge: 7.5,
       steps: [
@@ -235,7 +261,9 @@ const DEFS: TopDef[] = [
     type: 'attack',
     nameJa: 'ライトニング・エルドラ',
     nameZh: '雷皇龍',
+    nameEn: 'Lightning Eldra',
     origin: 'Lightning L-Drago 100HF（BB-43・左旋龍）',
+    originEn: 'Lightning L-Drago 100HF (BB-43)',
     spinDir: -1,
     emblem: '雷',
     look: {
@@ -251,7 +279,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: '竜皇翔咬撃',
       nameZh: '龍皇翔咬擊',
+      nameEn: 'Dragon Emperor Bite',
       descZh: '突進咬住對手：2 秒內每次撞擊吸走對手轉速（對右旋加倍），攻擊 1.25 倍。',
+      descEn: 'Charges and bites down: every hit for 2 s drains the opponent\'s spin (double against right spin), 1.25× attack.',
       cue: 'close',
       charge: 6,
       steps: [
@@ -267,7 +297,9 @@ const DEFS: TopDef[] = [
     type: 'attack',
     nameJa: 'ヴィクトル・ヴァルキュリア',
     nameZh: '凱旋武神',
+    nameEn: 'Victor Valkyria',
     origin: 'Victory Valkyrie Boost Variable（B-34・女武神）',
+    originEn: 'Victory Valkyrie Boost Variable (B-34)',
     spinDir: 1,
     emblem: '戦',
     look: {
@@ -283,7 +315,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ラッシュ・ストライク',
       nameZh: '疾風連擊',
+      nameEn: 'Rush Strike',
       descZh: '全速衝刺：朝對手突進，2 秒內巡航速度 1.3 倍、攻擊 1.4 倍，高速連撞。',
+      descEn: 'Full-speed dash at the opponent: 1.3× cruising speed and 1.4× attack for 2 s of rapid hits.',
       cue: 'far',
       charge: 6,
       steps: [
@@ -301,7 +335,9 @@ const DEFS: TopDef[] = [
     type: 'defense',
     nameJa: 'ブラック・トータス',
     nameZh: '玄武甲',
+    nameEn: 'Black Tortoise',
     origin: 'Draciel S（初代・玄武）',
+    originEn: 'Draciel S (original series)',
     spinDir: 1,
     emblem: '玄',
     look: {
@@ -317,7 +353,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'メタルボール・ガード',
       nameZh: '金屬球壁',
+      nameEn: 'Metal Ball Guard',
       descZh: '金屬珠軸心鎖死：4 秒內質量 2.5 倍、防禦 2.2 倍，撞上來的對手承受 1.2 倍反擊。',
+      descEn: 'Locks its metal-ball tip: 2.5× mass and 2.2× defense for 4 s; attackers take 1.2× recoil.',
       cue: 'danger',
       charge: 5.5,
       steps: [
@@ -333,7 +371,9 @@ const DEFS: TopDef[] = [
     type: 'defense',
     nameJa: 'ガイア・レオーネ',
     nameZh: '岩獅王',
+    nameEn: 'Gaia Leone',
     origin: 'Rock Leone 145WB（BB-30・獅子）',
+    originEn: 'Rock Leone 145WB (BB-30)',
     spinDir: 1,
     emblem: '獅',
     look: {
@@ -349,7 +389,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: '獅子暴風壁',
       nameZh: '獅子暴風壁',
+      nameEn: 'Lion Gale Wall',
       descZh: '颳起暴風牆：4 秒內把靠近的對手持續推開，防禦 1.8 倍。',
+      descEn: 'Raises a wall of wind: keeps pushing nearby opponents away for 4 s, 1.8× defense.',
       cue: 'danger',
       charge: 5.5,
       steps: [{ op: 'buff', time: 4.0, mods: { aura: { k: -18, range: 1.8 }, def: 1.8 } }],
@@ -362,7 +404,9 @@ const DEFS: TopDef[] = [
     type: 'defense',
     nameJa: 'ケルベロス・ガード',
     nameZh: '冥府犬',
+    nameEn: 'Kerberos Guard',
     origin: 'Kerbeus Central Defense（B-04・三頭犬）',
+    originEn: 'Kerbeus Central Defense (B-04)',
     spinDir: 1,
     emblem: '犬',
     look: {
@@ -378,7 +422,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'トリプル・ハウル',
       nameZh: '三首咆哮',
+      nameEn: 'Triple Howl',
       descZh: '三顆頭同時咆哮：對手 3.5 秒內防禦降到 50%、攻擊降到 70%，自己修復爆裂量。',
+      descEn: 'All three heads howl: the opponent\'s defense drops to 50% and attack to 70% for 3.5 s; repairs its own burst damage.',
       cue: 'close',
       charge: 5.5,
       steps: [
@@ -394,7 +440,9 @@ const DEFS: TopDef[] = [
     type: 'defense',
     nameJa: 'パラディン・シールド',
     nameZh: '聖騎盾',
+    nameEn: 'Paladin Shield',
     origin: 'KnightShield 3-80N（BX-04・騎士）',
+    originEn: 'KnightShield 3-80N (BX-04)',
     spinDir: 1,
     emblem: '騎',
     look: {
@@ -410,7 +458,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'シールド・インパクト',
       nameZh: '聖盾衝擊',
+      nameEn: 'Shield Impact',
       descZh: '舉盾反推：1.6 以內的對手被盾擊震開並累積爆裂量，2 秒內防禦 1.5 倍。',
+      descEn: 'Shield bash: opponents within 1.6 are knocked back and take burst damage; 1.5× defense for 2 s.',
       cue: 'close',
       charge: 6,
       steps: [
@@ -429,7 +479,9 @@ const DEFS: TopDef[] = [
     type: 'stamina',
     nameJa: 'ブリザード・ウルグ',
     nameZh: '冰原狼',
+    nameEn: 'Blizzard Wolg',
     origin: 'Wolborg 4（初代・銀狼）',
+    originEn: 'Wolborg 4 (original series)',
     spinDir: 1,
     emblem: '氷',
     look: {
@@ -445,7 +497,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ノヴァ・ブリザード',
       nameZh: '極光冰封',
+      nameEn: 'Nova Blizzard',
       descZh: '冰凍對手：3.5 秒內對手幾乎推不動、巡航速度剩 40%、轉速流失 2.6 倍、防禦下降。',
+      descEn: 'Freezes the opponent for 3.5 s: nearly impossible to push, 40% cruising speed, 2.6× spin loss and lower defense.',
       cue: 'close',
       charge: 6,
       steps: [{ op: 'hex', time: 3.5, mods: { ctrl: 0.2, cruise: 0.4, decay: 2.6, fric: 2.5, def: 0.75 } }],
@@ -458,7 +512,9 @@ const DEFS: TopDef[] = [
     type: 'stamina',
     nameJa: 'ミラージュ・オリオン',
     nameZh: '幻星獵戶',
+    nameEn: 'Mirage Orion',
     origin: 'Phantom Orion B:D（BB-118・獵戶座）',
+    originEn: 'Phantom Orion B:D (BB-118)',
     spinDir: 1,
     emblem: '星',
     look: {
@@ -474,7 +530,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'バーナード・ループ',
       nameZh: '巴納德環',
+      nameEn: 'Barnard Loop',
       descZh: '軸承空轉：回復 10% 轉速，4 秒內轉速流失只剩 15%。',
+      descEn: 'Free-spinning bearing: restores 10% spin; spin loss drops to 15% for 4 s.',
       cue: 'lowSpin',
       charge: 7.5,
       steps: [
@@ -490,7 +548,9 @@ const DEFS: TopDef[] = [
     type: 'stamina',
     nameJa: 'グリード・ファフナー',
     nameZh: '吸魂魔龍',
+    nameEn: 'Greed Fafner',
     origin: 'Drain Fafnir 8 Nothing（B-79・左旋法夫納）',
+    originEn: 'Drain Fafnir 8 Nothing (B-79)',
     spinDir: -1,
     emblem: '魔',
     look: {
@@ -506,7 +566,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ドレイン・スピン',
       nameZh: '吸轉魔旋',
+      nameEn: 'Drain Spin',
       descZh: '隔空吸走對手 4% 轉速，3 秒內每次撞擊再吸（對右旋加倍）。',
+      descEn: 'Drains 4% of the opponent\'s spin from afar, then more on every hit for 3 s (double against right spin).',
       cue: 'lowSpin',
       charge: 8,
       steps: [
@@ -522,7 +584,9 @@ const DEFS: TopDef[] = [
     type: 'stamina',
     nameJa: 'メイジ・アロー',
     nameZh: '魔導弓',
+    nameEn: 'Mage Arrow',
     origin: 'WizardArrow 4-80B（BX-03・巫師）',
+    originEn: 'WizardArrow 4-80B (BX-03)',
     spinDir: 1,
     emblem: '弓',
     look: {
@@ -538,7 +602,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ミラージュ・パリィ',
       nameZh: '幻影招架',
+      nameEn: 'Mirage Parry',
       descZh: '化成幻影瞬移回場地中央，2.5 秒內防禦 1.9 倍、撞上來的對手承受 80% 反擊。',
+      descEn: 'Turns into a phantom and warps to the center: 1.9× defense for 2.5 s; attackers take 80% recoil.',
       cue: 'danger',
       charge: 6,
       steps: [{ op: 'blink' }, { op: 'buff', time: 2.5, mods: { def: 1.9, reflect: 0.8, fric: 2 } }],
@@ -553,7 +619,9 @@ const DEFS: TopDef[] = [
     type: 'balance',
     nameJa: 'クリムゾン・スザク',
     nameZh: '紅蓮朱雀',
+    nameEn: 'Crimson Suzaku',
     origin: 'Dranzer S（初代・朱雀）',
+    originEn: 'Dranzer S (original series)',
     spinDir: 1,
     emblem: '朱',
     look: {
@@ -569,7 +637,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'ファイヤー・アロー',
       nameZh: '烈火飛箭',
+      nameEn: 'Fire Arrow',
       descZh: '化為火箭貫穿：回復 8% 轉速並突進，1.2 秒內造成的爆裂量 1.4 倍。',
+      descEn: 'Pierces like a flaming arrow: restores 8% spin and charges; 1.4× burst damage dealt for 1.2 s.',
       cue: 'close',
       charge: 7,
       steps: [
@@ -586,7 +656,9 @@ const DEFS: TopDef[] = [
     type: 'balance',
     nameJa: 'ディアボロ・ネメア',
     nameZh: '滅世魔神',
+    nameEn: 'Diablo Nemea',
     origin: 'Diablo Nemesis X:D（BB-122・破壞神）',
+    originEn: 'Diablo Nemesis X:D (BB-122)',
     spinDir: 1,
     emblem: '神',
     look: {
@@ -602,7 +674,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: '天地崩落',
       nameZh: '天地崩落',
+      nameEn: 'Cataclysm',
       descZh: '把對手硬拉過來再壓碎：2 秒內質量 2.2 倍、攻擊 1.8 倍、防禦 1.5 倍。',
+      descEn: 'Drags the opponent in and crushes it: 2.2× mass, 1.8× attack and 1.5× defense for 2 s.',
       cue: 'far',
       charge: 5.5,
       steps: [
@@ -618,7 +692,9 @@ const DEFS: TopDef[] = [
     type: 'balance',
     nameJa: 'ギガント・レクイエム',
     nameZh: '鎮魂巨人',
+    nameEn: 'Gigant Requiem',
     origin: 'Spriggan Requiem 0 Zeta（B-100・雙旋巨神）',
+    originEn: 'Spriggan Requiem 0 Zeta (B-100)',
     spinDir: 1,
     emblem: '巨',
     look: {
@@ -634,7 +710,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'カウンター・ブレイク',
       nameZh: '逆轉破擊',
+      nameEn: 'Counter Break',
       descZh: '雙旋切換：反轉旋轉方向，3 秒內攻擊 1.8 倍、撞上來的對手承受同等反擊。',
+      descEn: 'Dual-spin switch: reverses its spin direction; 1.8× attack for 3 s, and attackers take equal recoil.',
       cue: 'danger',
       charge: 5.5,
       steps: [{ op: 'reverse' }, { op: 'buff', time: 3.0, mods: { atk: 1.8, reflect: 1 } }],
@@ -647,7 +725,9 @@ const DEFS: TopDef[] = [
     type: 'balance',
     nameJa: 'ヘル・リーパー',
     nameZh: '冥鐮死神',
+    nameEn: 'Hell Reaper',
     origin: 'HellsScythe 4-60T（BX-02・死神）',
+    originEn: 'HellsScythe 4-60T (BX-02)',
     spinDir: 1,
     emblem: '鎌',
     look: {
@@ -663,7 +743,9 @@ const DEFS: TopDef[] = [
     special: {
       nameJa: 'クレセント・ジャッジ',
       nameZh: '新月審判',
+      nameEn: 'Crescent Judge',
       descZh: '瞬移到對手背後揮鐮：1 秒內造成的爆裂量 1.8 倍。',
+      descEn: 'Warps behind the opponent and swings its scythe: 1.8× burst damage dealt for 1 s.',
       cue: 'far',
       charge: 7,
       steps: [
@@ -694,5 +776,3 @@ export function buildSpec(id: TopId, lo: Loadout): TopSpec {
   return { ...base, stats, parts, ...derivePhysics(stats) };
 }
 
-/** 類型的顯示名稱 */
-export const TYPE_LABEL: Record<TopType, string> = { attack: '攻擊型', defense: '防禦型', stamina: '持久型', balance: '平衡型' };

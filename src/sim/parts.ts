@@ -20,12 +20,14 @@ export type PartId = string;
 export interface PartDef {
   id: PartId;
   slot: PartSlot;
-  /** 名稱（中文） */
+  /** 名稱（中文、英文） */
   nameZh: string;
+  nameEn: string;
   /** 簡碼（小標籤用，例如 RF） */
   code: string;
-  /** 特性說明 */
+  /** 特性說明（中文、英文） */
   descZh: string;
+  descEn: string;
   /**
    * 對六項基本屬性的增減。除了重量（公克）以外都是 1～10 分的增減，加總為 0（有得有失）。
    * 陀螺的屬性 = 攻擊環 + 盤 + 軸，攻擊環的值由「原本的屬性 − 原廠盤 − 原廠軸」反推，
@@ -55,22 +57,22 @@ export type TeamLoadouts = Partial<Record<TopId, Loadout>>;
 /** 零件型錄 */
 const DEFS: PartDef[] = [
   // ---------------- 重心盤 ----------------
-  { id: 'standard', slot: 'disk', nameZh: '標準盤', code: 'STD', descZh: '沒有特別的長處或短處。', mods: {} },
-  { id: 'light', slot: 'disk', nameZh: '輕量盤', code: 'LT', descZh: '減重 5 g：更靈活，但比較容易被撞開。', mods: { weight: -5, dash: 1 } },
-  { id: 'heavy', slot: 'disk', nameZh: '重量盤', code: 'HV', descZh: '加重 8 g：撞不太動，但動作變慢。', mods: { weight: 8, dash: -1 } },
-  { id: 'rim', slot: 'disk', nameZh: '外緣盤', code: 'RIM', descZh: '重量集中外圈：防禦與持久提升，攻擊與機動下降。', mods: { weight: 3, stamina: 1, defense: 1, attack: -1, dash: -1 } },
-  { id: 'blade', slot: 'disk', nameZh: '刃盤', code: 'BLD', descZh: '外緣帶刃：攻擊大幅提升，防禦與持久下降。', mods: { weight: 2, attack: 2, defense: -1, stamina: -1 } },
-  { id: 'guard', slot: 'disk', nameZh: '護鎖盤', code: 'GRD', descZh: '鎖緊攻擊環：不容易爆裂，機動下降。', mods: { weight: 2, burst: 2, dash: -1 } },
+  { id: 'standard', slot: 'disk', nameZh: '標準盤', nameEn: 'Standard Disk', code: 'STD', descZh: '沒有特別的長處或短處。', descEn: 'No particular strengths or weaknesses.', mods: {} },
+  { id: 'light', slot: 'disk', nameZh: '輕量盤', nameEn: 'Light Disk', code: 'LT', descZh: '減重 5 g：更靈活，但比較容易被撞開。', descEn: '5 g lighter: more agile, but easier to knock away.', mods: { weight: -5, dash: 1 } },
+  { id: 'heavy', slot: 'disk', nameZh: '重量盤', nameEn: 'Heavy Disk', code: 'HV', descZh: '加重 8 g：撞不太動，但動作變慢。', descEn: '8 g heavier: hard to budge, but slower.', mods: { weight: 8, dash: -1 } },
+  { id: 'rim', slot: 'disk', nameZh: '外緣盤', nameEn: 'Rim Disk', code: 'RIM', descZh: '重量集中外圈：防禦與持久提升，攻擊與機動下降。', descEn: 'Weight on the outer rim: more defense and stamina, less attack and dash.', mods: { weight: 3, stamina: 1, defense: 1, attack: -1, dash: -1 } },
+  { id: 'blade', slot: 'disk', nameZh: '刃盤', nameEn: 'Blade Disk', code: 'BLD', descZh: '外緣帶刃：攻擊大幅提升，防禦與持久下降。', descEn: 'Bladed edge: a big attack boost, less defense and stamina.', mods: { weight: 2, attack: 2, defense: -1, stamina: -1 } },
+  { id: 'guard', slot: 'disk', nameZh: '護鎖盤', nameEn: 'Guard Disk', code: 'GRD', descZh: '鎖緊攻擊環：不容易爆裂，機動下降。', descEn: 'Locks the attack ring tight: hard to burst, less dash.', mods: { weight: 2, burst: 2, dash: -1 } },
 
   // ---------------- 軸心 ----------------
-  { id: 'flat', slot: 'driver', nameZh: '平頭軸', code: 'F', descZh: '平頭：跑得快，持久稍差。', mods: { dash: 2, stamina: -1 } },
-  { id: 'rubber', slot: 'driver', nameZh: '橡膠平頭軸', code: 'RF', descZh: '橡膠平頭：抓地猛衝、攻擊提升，持久與防禦變差。', mods: { dash: 3, attack: 1, stamina: -1, defense: -1 } },
-  { id: 'taper', slot: 'driver', nameZh: '錐頭軸', code: 'T', descZh: '錐頭：前期衝、後期穩，攻守均衡。', mods: { dash: 1, defense: 1, stamina: -1 } },
-  { id: 'sharp', slot: 'driver', nameZh: '尖頭軸', code: 'S', descZh: '尖頭：原地站定、轉得久，幾乎不移動，撞人也不痛。', mods: { stamina: 2, dash: -2, attack: -1 } },
-  { id: 'needle', slot: 'driver', nameZh: '針頭軸', code: 'N', descZh: '細針：站得穩、轉得久，機動最差。', mods: { defense: 1, stamina: 1, dash: -3 } },
-  { id: 'ball', slot: 'driver', nameZh: '球頭軸', code: 'B', descZh: '球頭：被撞也能回正，防禦提升，移動變慢。', mods: { defense: 1, dash: -2 } },
-  { id: 'wideBall', slot: 'driver', nameZh: '寬球軸', code: 'WB', descZh: '寬球：接觸面大，防禦最好，移動遲緩、磨耗轉速。', mods: { defense: 2, dash: -2, stamina: -1 } },
-  { id: 'bearing', slot: 'driver', nameZh: '軸承軸', code: 'BD', descZh: '軸承空轉：持久最好，防禦與機動下降。', mods: { stamina: 3, dash: -2, defense: -2 } },
+  { id: 'flat', slot: 'driver', nameZh: '平頭軸', nameEn: 'Flat Driver', code: 'F', descZh: '平頭：跑得快，持久稍差。', descEn: 'Flat tip: moves fast, slightly less stamina.', mods: { dash: 2, stamina: -1 } },
+  { id: 'rubber', slot: 'driver', nameZh: '橡膠平頭軸', nameEn: 'Rubber Flat Driver', code: 'RF', descZh: '橡膠平頭：抓地猛衝、攻擊提升，持久與防禦變差。', descEn: 'Rubber flat tip: grips and rushes, more attack; less stamina and defense.', mods: { dash: 3, attack: 1, stamina: -1, defense: -1 } },
+  { id: 'taper', slot: 'driver', nameZh: '錐頭軸', nameEn: 'Taper Driver', code: 'T', descZh: '錐頭：前期衝、後期穩，攻守均衡。', descEn: 'Tapered tip: aggressive early, steady late, balanced.', mods: { dash: 1, defense: 1, stamina: -1 } },
+  { id: 'sharp', slot: 'driver', nameZh: '尖頭軸', nameEn: 'Sharp Driver', code: 'S', descZh: '尖頭：原地站定、轉得久，幾乎不移動，撞人也不痛。', descEn: 'Sharp tip: holds its spot and spins long, barely moves, weak hits.', mods: { stamina: 2, dash: -2, attack: -1 } },
+  { id: 'needle', slot: 'driver', nameZh: '針頭軸', nameEn: 'Needle Driver', code: 'N', descZh: '細針：站得穩、轉得久，機動最差。', descEn: 'Fine needle: stable and long-spinning, worst dash.', mods: { defense: 1, stamina: 1, dash: -3 } },
+  { id: 'ball', slot: 'driver', nameZh: '球頭軸', nameEn: 'Ball Driver', code: 'B', descZh: '球頭：被撞也能回正，防禦提升，移動變慢。', descEn: 'Ball tip: recovers from hits, more defense, slower movement.', mods: { defense: 1, dash: -2 } },
+  { id: 'wideBall', slot: 'driver', nameZh: '寬球軸', nameEn: 'Wide Ball Driver', code: 'WB', descZh: '寬球：接觸面大，防禦最好，移動遲緩、磨耗轉速。', descEn: 'Wide ball: big contact area, best defense; sluggish and wears down spin.', mods: { defense: 2, dash: -2, stamina: -1 } },
+  { id: 'bearing', slot: 'driver', nameZh: '軸承軸', nameEn: 'Bearing Driver', code: 'BD', descZh: '軸承空轉：持久最好，防禦與機動下降。', descEn: 'Free-spinning bearing: best stamina, less defense and dash.', mods: { stamina: 3, dash: -2, defense: -2 } },
 ];
 
 /** 零件代號 → 定義 */

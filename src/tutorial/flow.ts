@@ -1,4 +1,6 @@
+import enLines from '../audio/tutorial-lines.en.json';
 import lines from '../audio/tutorial-lines.json';
+import { lang, type Lang, type TextKey } from '../i18n';
 
 /**
  * 操作教學的步驟流程（純邏輯，不碰 DOM 與 three.js，可單元測試）。
@@ -63,11 +65,10 @@ export interface TutorialCtx {
 export interface StepDef {
   id: string;
   chapter: Chapter;
-  /** 面板上的小標題 */
-  title: string;
-  /** 解說語音與字幕（電腦版、手機版） */
+  /** 面板上的小標題（字串表 src/text.ts 的鍵） */
+  title: TextKey;
+  /** 解說語音（電腦版、手機版）；字幕就是這句台詞的文字（見 caption） */
   voice: Record<TutorialInput, GuideId>;
-  text: Record<TutorialInput, string>;
   /** 大畫面上的指引 */
   guide: Record<TutorialInput, GuideKind>;
   /** 面板裡的說明圖（只有計分那一步：四種終結的小動畫） */
@@ -80,14 +81,19 @@ export interface StepDef {
   done(ctx: TutorialCtx, base: TutorialCtx): boolean;
 }
 
-/** 台詞去掉方括號的語氣標記，當字幕 */
-const say = (id: GuideId) => lines.lines[id].text.replace(/\[[^\]]*\]/g, '').trim();
+/**
+ * 字幕：這一步解說台詞去掉方括號語氣標記的文字。英文版用英文台詞，日文版與中文版用中文台詞（和解說語音一致）。
+ */
+export function caption(s: StepDef, input: TutorialInput, l: Lang = lang()): string {
+  const table = l === 'en' ? enLines.lines : lines.lines;
+  return table[s.voice[input]].text.replace(/\[[^\]]*\]/g, '').trim();
+}
 
 /** 建立一步：電腦版與手機版用同一句（或同一種指引）時直接給一個值 */
 function step(
   id: string,
   chapter: Chapter,
-  title: string,
+  title: TextKey,
   voice: GuideId | Record<TutorialInput, GuideId>,
   guide: GuideKind | Record<TutorialInput, GuideKind>,
   done: StepDef['done'],
@@ -95,7 +101,7 @@ function step(
 ): StepDef {
   const v = typeof voice === 'string' ? { kb: voice, tc: voice } : voice;
   const g = typeof guide === 'string' ? { kb: guide, tc: guide } : guide;
-  return { id, chapter, title, voice: v, text: { kb: say(v.kb), tc: say(v.tc) }, guide: g, done, ...extra };
+  return { id, chapter, title, voice: v, guide: g, done, ...extra };
 }
 
 /** 選陀螺：推薦的三顆裡還沒選的第一顆（都選了就沒有目標） */
@@ -119,24 +125,24 @@ export const PULL_MIN = 0.25;
 
 /** 全部步驟（依序） */
 export const STEPS: StepDef[] = [
-  step('pick', 'team', '組隊：選三顆陀螺', 'tut_pick', 'tap', (c) => c.picked.length >= 3, { target: nextRecommended }),
-  step('next', 'team', '組隊：下一步', 'tut_next', 'tap', (c) => c.state === 'arrange', { target: '#select .go' }),
-  step('order', 'team', '調整出場順序', 'tut_order', 'tap', (c) => c.orderChanged, { target: '#arrange .ar-slot:nth-child(2) .ar-up' }),
-  step('parts', 'team', '換盤與軸', 'tut_parts', 'tap', (c) => c.partChanged, {
+  step('pick', 'team', 'tut.t.pick', 'tut_pick', 'tap', (c) => c.picked.length >= 3, { target: nextRecommended }),
+  step('next', 'team', 'tut.t.next', 'tut_next', 'tap', (c) => c.state === 'arrange', { target: '#select .go' }),
+  step('order', 'team', 'tut.t.order', 'tut_order', 'tap', (c) => c.orderChanged, { target: '#arrange .ar-slot:nth-child(2) .ar-up' }),
+  step('parts', 'team', 'tut.t.parts', 'tut_parts', 'tap', (c) => c.partChanged, {
     // 先指選到那一顆的「軸」按鈕；清單打開後指第一件還沒裝上的零件
     target: (c) => (c.partMenu ? '#part-menu .pm-opt:not(.current):not(:disabled)' : '#arrange .ar-slot.on .part-btn[data-slot="driver"]'),
   }),
-  step('ready', 'team', '出陣', 'tut_ready', 'tap', (c) => c.state === 'launch', { target: '#arrange .ar-ready' }),
-  step('launch', 'launch', '拉發射台', { kb: 'tut_launch_kb', tc: 'tut_launch_tc' }, 'drag', (c) => c.state === 'battle' && c.pulled),
-  step('push', 'control', '推移陀螺', { kb: 'tut_push_kb', tc: 'tut_push_tc' }, { kb: 'keysMove', tc: 'swipe' }, (c, b) => c.pushTime - b.pushTime >= PUSH_GOAL),
-  step('dash', 'control', '衝刺', { kb: 'tut_dash_kb', tc: 'tut_dash_tc' }, { kb: 'keysDash', tc: 'flick' }, (c, b) => c.dashes > b.dashes),
-  step('special', 'control', '必殺技', { kb: 'tut_special_kb', tc: 'tut_special_tc' }, { kb: 'keySpace', tc: 'tap' }, (c, b) => c.specials > b.specials, {
+  step('ready', 'team', 'tut.t.ready', 'tut_ready', 'tap', (c) => c.state === 'launch', { target: '#arrange .ar-ready' }),
+  step('launch', 'launch', 'tut.t.launch', { kb: 'tut_launch_kb', tc: 'tut_launch_tc' }, 'drag', (c) => c.state === 'battle' && c.pulled),
+  step('push', 'control', 'tut.t.push', { kb: 'tut_push_kb', tc: 'tut_push_tc' }, { kb: 'keysMove', tc: 'swipe' }, (c, b) => c.pushTime - b.pushTime >= PUSH_GOAL),
+  step('dash', 'control', 'tut.t.dash', { kb: 'tut_dash_kb', tc: 'tut_dash_tc' }, { kb: 'keysDash', tc: 'flick' }, (c, b) => c.dashes > b.dashes),
+  step('special', 'control', 'tut.t.special', { kb: 'tut_special_kb', tc: 'tut_special_tc' }, { kb: 'keySpace', tc: 'tap' }, (c, b) => c.specials > b.specials, {
     // 電腦框住必殺量表；手機指著集滿時右下角出現的必殺按鈕
     target: (c) => (c.input === 'tc' ? '#special-btn' : '#hud .panel[data-side="0"] .special'),
   }),
-  step('finish', 'score', '終結對手', 'tut_finish', 'arrow', (c) => c.finished),
-  step('points', 'score', '終結方式與得分', 'tut_points', 'none', (c) => c.next, { info: true, target: '#hud .score', illustration: 'finishes' }),
-  step('match', 'score', '三對三賽制', 'tut_match', 'none', (c) => c.next, { info: true, target: '#hud .lineup' }),
+  step('finish', 'score', 'tut.t.finish', 'tut_finish', 'arrow', (c) => c.finished),
+  step('points', 'score', 'tut.t.points', 'tut_points', 'none', (c) => c.next, { info: true, target: '#hud .score', illustration: 'finishes' }),
+  step('match', 'score', 'tut.t.match', 'tut_match', 'none', (c) => c.next, { info: true, target: '#hud .lineup' }),
 ];
 
 /** 空白狀態（還沒開始） */

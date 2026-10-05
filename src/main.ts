@@ -1,6 +1,6 @@
 import './style.css';
 import { Game } from './game/game';
-import { initLang } from './i18n';
+import { initLang, tr } from './i18n';
 import { ARENA_IDS, type ArenaId } from './sim/arena';
 import { TOP_IDS } from './sim/tops';
 import type { TopId } from './sim/types';
@@ -11,7 +11,7 @@ import type { TopId } from './sim/types';
  * - seed=數字：亂數種子
  * - p=blaze,turtle、c=…：展示模式指定雙方隊伍的前幾顆（陀螺代號見 src/sim/tops.ts，其餘隨機補滿）
  * - arena=practice / stadium / volcano / glacier / flooded：展示模式的場地
- * - lang=ja / zh：介面語言（日文版／全中文版；不給時沿用上次在標題畫面選的，預設日文）
+ * - lang=ja / zh / en：介面語言（日文版／全中文版／英文版；不給時沿用上次在標題畫面選的，沒選過就看瀏覽器語言）
  */
 const q = new URLSearchParams(location.search);
 /** 解析逗號分隔的陀螺清單（例如 p=blaze,turtle），忽略不認得的 */
@@ -25,7 +25,7 @@ const probe = document.createElement('canvas');
 if (!probe.getContext('webgl2') && !probe.getContext('webgl')) {
   const msg = document.createElement('p');
   msg.style.cssText = 'color:#fff;padding:24px;font-size:18px';
-  msg.textContent = '這個瀏覽器環境沒有 WebGL，無法顯示 3D 畫面。請改用 Chrome／Edge 並開啟硬體加速。';
+  msg.textContent = tr('webgl.none');
   document.body.replaceChildren(msg);
 } else {
   const game = new Game(document.getElementById('stage')!, {

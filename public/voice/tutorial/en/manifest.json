@@ -1,0 +1,146 @@
+{
+  "tut_pick": {
+    "file": "tut_pick.mp3",
+    "text": "[happy] Welcome to Battle Tops! First, let's build your team: follow the finger and pick three tops. The order you pick them in is the order they battle. You can choose other tops, too!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "b563057351c4646a",
+    "seconds": 9.966
+  },
+  "tut_next": {
+    "file": "tut_next.mp3",
+    "text": "[happy] Three tops picked! Now press \"Next\".",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "509b744b711dd7cb",
+    "seconds": 2.642
+  },
+  "tut_order": {
+    "file": "tut_order.mp3",
+    "text": "[happy] Here you can change the battle order. Press the up or down arrow next to a top to move it one battle earlier or later.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "e91c490ab6c925af",
+    "seconds": 6.851
+  },
+  "tut_parts": {
+    "file": "tut_parts.mp3",
+    "text": "[happy] Under each top are two buttons, Disk and Driver. Press one to swap in a different part, and the radar chart changes right away.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "6064473a0742fa0b",
+    "seconds": 7.561
+  },
+  "tut_ready": {
+    "file": "tut_ready.mp3",
+    "text": "[excited] All set! Press \"Battle!\" to start the match.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "2a218a3654ce4fd1",
+    "seconds": 2.911
+  },
+  "tut_launch_kb": {
+    "file": "tut_launch_kb.mp3",
+    "text": "[excited] Watch the demo first: hold the mouse button on the screen and drag down, then let go the moment the outer ring shrinks to the size of the inner ring! Drag left or right to aim. Now it's your turn!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "bdb0ed566cca22ee",
+    "seconds": 10.715
+  },
+  "tut_launch_tc": {
+    "file": "tut_launch_tc.mp3",
+    "text": "[excited] Watch the demo first: hold your finger on the screen and slide down, then let go the moment the outer ring shrinks to the size of the inner ring! Slide left or right to aim. Now it's your turn!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "508af6a7ed6e668f",
+    "seconds": 11.153
+  },
+  "tut_retry": {
+    "file": "tut_retry.mp3",
+    "text": "[happy] You didn't pull the cord that time. Try again, and remember to hold and pull down!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "81c3ae5372c6b50d",
+    "seconds": 4.87
+  },
+  "tut_push_kb": {
+    "file": "tut_push_kb.mp3",
+    "text": "[excited] Your top is spinning! Use the arrow keys or W, A, S, D to push it around.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "5d0c3e63ca256ee2",
+    "seconds": 5.158
+  },
+  "tut_push_tc": {
+    "file": "tut_push_tc.mp3",
+    "text": "[excited] Your top is spinning! Slide your finger on the screen to push it around.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "a5e9f38e2597f7c2",
+    "seconds": 3.85
+  },
+  "tut_dash_kb": {
+    "file": "tut_dash_kb.mp3",
+    "text": "[excited] Hold an arrow key, then tap Shift to dash a short way in that direction!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "783991461ce2673d",
+    "seconds": 4.35
+  },
+  "tut_dash_tc": {
+    "file": "tut_dash_tc.mp3",
+    "text": "[excited] Flick your finger quickly in one direction to dash a short way!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "1ad6a17f07760550",
+    "seconds": 3.354
+  },
+  "tut_special_kb": {
+    "file": "tut_special_kb.mp3",
+    "text": "[excited] Your special gauge is full! Press the space bar to unleash your special move!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "cd2d9341e4a5ccad",
+    "seconds": 4.895
+  },
+  "tut_special_tc": {
+    "file": "tut_special_tc.mp3",
+    "text": "[excited] Your special gauge is full! Tap the glowing special button in the bottom right to unleash your special move! A three-finger tap on the screen works too.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "bc217fbac1d8164d",
+    "seconds": 8.346
+  },
+  "tut_finish": {
+    "file": "tut_finish.mp3",
+    "text": "[excited] Now finish the battle! Ram your opponent in the direction of the arrow. Knock it out of the stadium, make it burst, or make it stop spinning to finish it.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "8a581fa0e0954e20",
+    "seconds": 8.296
+  },
+  "tut_points": {
+    "file": "tut_points.mp3",
+    "text": "[happy] A Spin Finish, when the opponent stops spinning, is worth one point. Over Finishes and Burst Finishes are worth two. In the Xtreme Stadium and the Double Xtreme Stadium, knocking the opponent into the wide center gap is an Xtreme Finish, worth three points!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "3f70a94b6b6620f3",
+    "seconds": 15.607
+  },
+  "tut_match": {
+    "file": "tut_match.mp3",
+    "text": "[happy] A real match is three on three: the side with more points after three battles wins, and a tie goes to overtime. Tutorial complete. Let's battle!",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "432723e7488d02f5",
+    "seconds": 9.186
+  },
+  "tut_restart": {
+    "file": "tut_restart.mp3",
+    "text": "[happy] You got finished! No worries, let's try that again.",
+    "speaker": "guide",
+    "voiceId": "9a9cf47702da476aa4629e2506d4a857",
+    "hash": "e0d28928dd6d1d99",
+    "seconds": 3.195
+  }
+}

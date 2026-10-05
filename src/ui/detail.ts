@@ -1,13 +1,13 @@
-import { lang, specialName, topName } from '../i18n';
+import { descOf, lang, originOf, plainName, specialName, topName, tr } from '../i18n';
 import { PARTS, type PartSlot } from '../sim/parts';
-import { TOP_SPECS, TYPE_LABEL } from '../sim/tops';
+import { TOP_SPECS } from '../sim/tops';
 import type { TopId, TopSpec } from '../sim/types';
-import { chargeLabel, css, el, radar, radarPoints, spinLabel, STAT_AXES } from './common';
-import { SLOT_LABEL } from './partMenu';
+import { chargeLabel, css, el, joinDot, radar, radarPoints, spinLabel, STAT_AXES, statLabel, typeLabel } from './common';
+import { slotLabel } from './partMenu';
 
 /**
  * 組隊畫面右側的詳細資料，分上下兩段：
- * - 上方固定（不捲動）：名稱一行（日文版是日文名＋中文名，中文版只有中文名）、雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
+ * - 上方固定（不捲動）：名稱一行（日文版是日文名＋中文名，中文版只有中文名，英文版只有英文名）、雷達圖（換零件時疊上原廠的淡色輪廓）與六項數值（標出增減）。
  *   最重要的比較資料一定看得到，切換陀螺時位置也不變。
  * - 下方捲動區：外觀・絕招示範的舞台窗（render/showcase.ts 畫在這個畫布上）、類型與原型、
  *   目前的盤與軸（opts.parts 為 false 時不顯示，例如組隊第 1 步；換零件用各畫面的「盤」「軸」按鈕，見 ui/partMenu.ts）、
@@ -38,7 +38,7 @@ export class DetailView {
     this.stage = el('div', 'd-stage');
     this.canvas = el('canvas', 'd-canvas');
     this.stageMove = el('div', 'd-move');
-    this.stage.append(this.canvas, el('span', 'd-cap', '外觀・絕招示範'), this.stageMove);
+    this.stage.append(this.canvas, el('span', 'd-cap', tr('detail.stage')), this.stageMove);
     this.ja = el('div', 'd-ja');
     this.zh = el('div', 'd-zh');
     this.meta = el('div', 'd-meta');
@@ -64,9 +64,11 @@ export class DetailView {
     this.root.style.setProperty('--c', css(spec.glow));
     this.root.dataset.id = spec.id;
     this.ja.textContent = topName(spec);
-    this.zh.textContent = spec.nameZh;
-    this.zh.hidden = lang() === 'zh';
-    this.meta.textContent = `${TYPE_LABEL[spec.type]}・${spinLabel(spec)}${spec.origin ? `・原型：${spec.origin}` : '・原創'}`;
+    // 日文版才在日文名旁附中文名（其他語言連隱藏的字都不放，英文版的 DOM 裡沒有中文）
+    this.zh.textContent = lang() === 'ja' ? spec.nameZh : '';
+    this.zh.hidden = lang() !== 'ja';
+    const origin = originOf(spec);
+    this.meta.textContent = joinDot(joinDot(typeLabel(spec.type), spinLabel(spec)), origin ? tr('detail.origin', { name: origin }) : tr('detail.original'));
     this.meta.title = this.meta.textContent;
 
     // 雷達圖：目前屬性；換過零件時疊上原廠輪廓
@@ -79,7 +81,7 @@ export class DetailView {
     // 數值列：與原廠相比的增減
     this.stats.replaceChildren(
       ...STAT_AXES.map((ax) => {
-        const li = el('li', '', ax.label);
+        const li = el('li', '', statLabel(ax.key));
         const v = spec.stats[ax.key];
         const d = v - stock.stats[ax.key];
         const b = el('b', '', ax.key === 'weight' ? `${v} g` : String(v));
@@ -94,15 +96,17 @@ export class DetailView {
       ...(['disk', 'driver'] as PartSlot[]).map((slot) => {
         const id = spec.parts[slot];
         const changed = id !== stock.stock[slot];
-        const s = el('span', changed ? 'changed' : '', `${SLOT_LABEL[slot]}：${PARTS[id].nameZh}（${PARTS[id].code}）${changed ? '' : '・原廠'}`);
-        s.title = PARTS[id].descZh;
+        const s = el('span', changed ? 'changed' : '', tr('detail.part', { slot: slotLabel(slot), name: plainName(PARTS[id]), code: PARTS[id].code }) + (changed ? '' : tr('detail.stock')));
+        s.title = descOf(PARTS[id]);
         return s;
       }),
     );
 
-    this.sp.textContent = lang() === 'zh' ? `必殺：${spec.special.nameZh}` : `必殺：${specialName(spec)}（${spec.special.nameZh}）`;
+    // 日文版：日文必殺名後面附中文名；中文版、英文版只有該語言的必殺名
+    this.sp.textContent =
+      lang() === 'ja' ? tr('card.specialWithZh', { name: specialName(spec), zh: spec.special.nameZh }) : tr('card.special', { name: specialName(spec) });
     this.charge.textContent = chargeLabel(spec);
-    this.desc.textContent = spec.special.descZh;
+    this.desc.textContent = descOf(spec.special);
   }
 
   /** 舞台上閃出招式名（絕招示範放招時） */

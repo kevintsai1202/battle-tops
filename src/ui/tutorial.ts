@@ -1,12 +1,13 @@
-import type { Chapter, GuideKind, StepDef, TutorialInput } from '../tutorial/flow';
+import { tr, type TextKey } from '../i18n';
+import { caption, type Chapter, type GuideKind, type StepDef, type TutorialInput } from '../tutorial/flow';
 import { el } from './common';
 
-/** 章節名稱 */
-const CHAPTER: Record<Chapter, string> = {
-  team: '第 1 章　組隊',
-  launch: '第 2 章　發射',
-  control: '第 3 章　操控',
-  score: '第 4 章　計分',
+/** 章節名稱（字串表的鍵） */
+const CHAPTER: Record<Chapter, TextKey> = {
+  team: 'tut.ch.team',
+  launch: 'tut.ch.launch',
+  control: 'tut.ch.control',
+  score: 'tut.ch.score',
 };
 
 /** 面板的位置：畫面下方、上方，或目標旁邊的右側、左側（直欄） */
@@ -134,15 +135,16 @@ export class TutorialOverlay {
     // 大畫面指引：容器放在要點的位置（data-x、data-y），手指在容器裡移動
     this.guide = el('div', 'tut-guide');
     this.hand = el('div', 'tut-hand');
-    this.pressHint = el('div', 'tut-press-hint', '按住往下拉 ⇩');
+    this.pressHint = el('div', 'tut-press-hint', tr('tut.press'));
     this.guide.append(this.hand, this.pressHint);
     this.keys = el('div', 'tut-keys');
     this.arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.arrow.classList.add('tut-arrow');
     this.arrow.innerHTML =
-      '<defs><marker id="tut-arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd23a"/></marker></defs><line marker-end="url(#tut-arrowhead)"/><text text-anchor="middle">撞過去！</text>';
+      '<defs><marker id="tut-arrowhead" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#ffd23a"/></marker></defs><line marker-end="url(#tut-arrowhead)"/><text text-anchor="middle"></text>';
     this.arrowLine = this.arrow.querySelector('line')!;
     this.arrowLabel = this.arrow.querySelector('text')!;
+    this.arrowLabel.textContent = tr('tut.ram');
     this.goText = el('div', 'tut-go', 'GO SHOOT!');
 
     this.panel = el('div', 'tut-panel');
@@ -171,8 +173,8 @@ export class TutorialOverlay {
       };
       return b;
     };
-    this.next = button('tut-next', '下一步 ▶', h.onNext);
-    actions.append(button('tut-replay', '🔊 重聽', h.onReplay), button('tut-skip', '跳過這步', h.onSkip), this.next, button('tut-exit', '結束教學', h.onExit));
+    this.next = button('tut-next', tr('tut.next'), h.onNext);
+    actions.append(button('tut-replay', tr('tut.replay'), h.onReplay), button('tut-skip', tr('tut.skip'), h.onSkip), this.next, button('tut-exit', tr('tut.exit'), h.onExit));
     this.panel.append(head, this.title, body, actions);
     this.toastEl = el('div', 'tut-toast');
     this.toastEl.hidden = true;
@@ -186,12 +188,12 @@ export class TutorialOverlay {
   /** 顯示一步：字幕、大畫面指引的種類、說明圖；說明型步驟才有「下一步／完成」 */
   show(step: StepDef, input: TutorialInput, index: number, total: number): void {
     this.root.dataset.step = step.id;
-    this.chapter.textContent = CHAPTER[step.chapter];
-    this.count.textContent = `${index + 1}／${total}`;
-    this.title.textContent = step.title;
-    this.text.textContent = step.text[input];
+    this.chapter.textContent = tr(CHAPTER[step.chapter]);
+    this.count.textContent = tr('tut.count', { i: index + 1, n: total });
+    this.title.textContent = tr(step.title);
+    this.text.textContent = caption(step, input);
     this.next.hidden = !step.info;
-    this.next.textContent = index === total - 1 ? '完成 ✓' : '下一步 ▶';
+    this.next.textContent = tr(index === total - 1 ? 'tut.done' : 'tut.next');
     this.kind = step.guide[input];
     this.guide.dataset.kind = this.kind;
     this.setIcon(input === 'tc' ? 'finger' : 'cursor');
@@ -437,13 +439,13 @@ export class TutorialOverlay {
     if (kind === 'keysMove') {
       const pad = el('div', 'tut-keypad');
       pad.append(key('↑', 'k-up'), key('←', 'k-left'), key('↓', 'k-down'), key('→', 'k-right'));
-      parts.push(pad, el('small', 'tut-keys-alt', '或 W A S D'));
+      parts.push(pad, el('small', 'tut-keys-alt', tr('tut.orWasd')));
     } else if (kind === 'keysDash') {
       const row = el('div', 'tut-keyrow');
-      row.append(key('↑', 'k-hold on'), el('span', 'tut-plus', '＋'), key('Shift', 'k-wide k-shift'));
-      parts.push(row, el('small', 'tut-keys-alt', '按住方向鍵，再按一下 Shift'));
+      row.append(key('↑', 'k-hold on'), el('span', 'tut-plus', tr('tut.plus')), key('Shift', 'k-wide k-shift'));
+      parts.push(row, el('small', 'tut-keys-alt', tr('tut.dashKeys')));
     } else if (kind === 'keySpace') {
-      parts.push(key('SPACE', 'k-space'), el('small', 'tut-keys-alt', '空白鍵'));
+      parts.push(key('SPACE', 'k-space'), el('small', 'tut-keys-alt', tr('tut.space')));
     }
     this.keys.replaceChildren(...parts);
     this.keys.dataset.kind = kind;
@@ -502,12 +504,12 @@ export class TutorialOverlay {
 
 /** 計分那一步的說明圖：四種終結的小動畫（停轉倒下、飛出場外、爆裂、撞進實體戰鬥盤中間的寬口）與得分 */
 function finishCards(): HTMLElement[] {
-  const card = (cls: string, name: string, pts: string) => {
+  const card = (cls: string, name: TextKey, pts: number) => {
     const c = el('div', `fin ${cls}`);
     const bowl = el('div', 'bowl');
     bowl.append(el('i', 'mini'), el('i', 'piece p1'), el('i', 'piece p2'), el('i', 'piece p3'));
-    c.append(bowl, el('span', 'fin-name', name), el('b', 'fin-pts', pts));
+    c.append(bowl, el('span', 'fin-name', tr(name)), el('b', 'fin-pts', tr(pts === 1 ? 'tut.pt' : 'tut.pts', { n: pts })));
     return c;
   };
-  return [card('f-spin', '旋轉終結', '1 分'), card('f-over', '場外終結', '2 分'), card('f-burst', '爆裂終結', '2 分'), card('f-xtreme', '極限終結', '3 分')];
+  return [card('f-spin', 'tut.fin.spin', 1), card('f-over', 'tut.fin.over', 2), card('f-burst', 'tut.fin.burst', 2), card('f-xtreme', 'tut.fin.xtreme', 3)];
 }

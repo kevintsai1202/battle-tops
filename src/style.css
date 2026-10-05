@@ -1326,6 +1326,16 @@ body.touch .tc {
   #result .diff {
     font-size: 11px;
   }
+  /*
+   * 英文版：顯示字型（Dela Gothic One）的英文字很寬，難度、場地、電腦隊伍擠不進一行
+   * （換成兩行會把組隊畫面的「Next」擠出畫面下緣），這一列改用一般字型
+   */
+  html:lang(en) .difficulty button,
+  html:lang(en) .arena button,
+  html:lang(en) .cpu-team {
+    font-family: system-ui, sans-serif;
+    font-weight: 700;
+  }
 }
 
 /* ---------- 組隊：名鑑小格（3D 縮圖）、詳細資料（絕招示範、雷達圖、零件）、場地選擇 ---------- */
@@ -2074,6 +2084,15 @@ body.selecting #help {
   font-size: 13px;
 }
 
+/* 英文版：欄位名是 Disk／Driver（中文只有一個字「盤／軸」），圓形放不下，改成自動寬度的膠囊 */
+html:lang(en) .part-btn .pb-slot {
+  width: auto;
+  min-width: 24px;
+  padding: 0 6px;
+  border-radius: 12px;
+  font-size: 10px;
+}
+
 .part-btn.changed .pb-slot {
   background: #ffe35a;
 }
@@ -2292,6 +2311,11 @@ body.selecting #help {
     height: 22px;
     font-size: 12px;
   }
+  html:lang(en) .part-btn .pb-slot {
+    width: auto;
+    padding: 0 5px;
+    font-size: 9px;
+  }
   .part-btn .pb-code,
   .part-btn .pb-tag {
     display: none;
@@ -2377,24 +2401,36 @@ body.selecting #help {
   background: rgba(20, 60, 120, 0.85);
 }
 
-/* ---------- 語言切換（日文版／全中文版，見 src/i18n.ts） ---------- */
-/* 標題畫面右上角的切換鈕：疊在大標題上層（標題換行時元素框橫跨整個畫面，又有 transform，不疊上層會吃掉點擊） */
+/* ---------- 語言切換（日文版／全中文版／英文版，見 src/i18n.ts） ---------- */
+/*
+ * 標題畫面右上角的切換鈕：疊在大標題上層（標題換行時元素框橫跨整個畫面，又有 transform，不疊上層會吃掉點擊）。
+ * 三種語言直向排：橫排要約 230 px 寬，桌機 1280 寬與手機橫向都會蓋到大標題的右端（標題寬約畫面的 63%，置中）。
+ */
 #title .lang-switch {
   position: absolute;
   z-index: 2;
   top: max(12px, env(safe-area-inset-top));
   right: max(12px, env(safe-area-inset-right));
   display: flex;
+  flex-direction: column;
   gap: 2px;
   padding: 3px;
   border: 1px solid rgba(127, 240, 255, 0.5);
-  border-radius: 999px;
+  border-radius: 22px;
   background: rgba(8, 20, 50, 0.7);
+}
+
+/* 直向畫面：大標題在畫面中段、上方有空間，切換鈕改回橫排（直排太高，會碰到較寬的英文標題） */
+@media (orientation: portrait) {
+  #title .lang-switch {
+    flex-direction: row;
+    border-radius: 999px;
+  }
 }
 
 #title .lang-switch button {
   min-width: 64px;
-  min-height: 40px;
+  min-height: 38px;
   padding: 6px 14px;
   border: 0;
   border-radius: 999px;
@@ -2422,14 +2458,14 @@ body.selecting #help {
 
   #title .lang-switch button {
     min-width: 0;
-    min-height: 36px;
-    padding: 4px 10px;
+    min-height: 32px;
+    padding: 3px 10px;
     font-size: 13px;
   }
 }
 
-/* 只在日文版顯示的中文小註解：中文版的主文字已經是中文，不重複 */
-html:lang(zh) .ja-only {
+/* 只在日文版顯示的中文小註解：中文版的主文字已經是中文、英文版不顯示中文，都不需要 */
+html:not(:lang(ja)) .ja-only {
   display: none !important;
 }
 

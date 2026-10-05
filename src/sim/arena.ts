@@ -93,8 +93,10 @@ export interface ArenaSpec {
   id: ArenaId;
   nameJa: string;
   nameZh: string;
-  /** 場地說明（選單顯示） */
+  nameEn: string;
+  /** 場地說明（選單顯示；中文、英文） */
   descZh: string;
+  descEn: string;
   /** 場地半徑（牆的位置） */
   radius: number;
   /** 碗形曲率：地面高度 y = bowlK r² */
@@ -171,7 +173,7 @@ const BASE = {
   vents: [],
   pillars: [],
   water: null,
-} satisfies Omit<ArenaSpec, 'id' | 'nameJa' | 'nameZh' | 'descZh' | 'theme'>;
+} satisfies Omit<ArenaSpec, 'id' | 'nameJa' | 'nameZh' | 'nameEn' | 'descZh' | 'descEn' | 'theme'>;
 
 /** 在極座標 (r, φ) 的點 */
 const at = (r: number, phi: number) => ({ x: r * Math.cos(phi), z: r * Math.sin(phi) });
@@ -183,7 +185,9 @@ export const ARENAS: Record<ArenaId, ArenaSpec> = {
     id: 'practice',
     nameJa: 'トレーニング',
     nameZh: '練習場',
+    nameEn: 'Training',
     descZh: '標準碗形場，三個出場口，沒有機關。',
+    descEn: 'Standard bowl with three exits and no gimmicks.',
     theme: { floor: 0x0a1226, grid: 0x1a7fff, neon: 0x55f0ff, accent: 0xff3df0, wall: 0x1b2440 },
   },
   stadium: {
@@ -191,7 +195,9 @@ export const ARENAS: Record<ArenaId, ArenaSpec> = {
     id: 'stadium',
     nameJa: 'エクストリーム',
     nameZh: '標準戰鬥盤',
+    nameEn: 'Xtreme',
     descZh: '照正式比賽用的實體戰鬥盤：內圈平台＋外圈極限軌道（沿切線加速，機動力越高越快）；出場口集中在同一邊，撞進中間寬口是極限終結（3 分），兩角是場外終結（2 分）。',
+    descEn: 'Modeled on the official battle stadium: an inner platform plus an outer Xtreme rail (speeds tops up along the rail, more for higher dash). All exits are on one side: knocking the opponent into the wide center gap is an Xtreme Finish (3 pts); the corners are Over Finishes (2 pts).',
     bowlK: 0.062,
     ridge: PHYSICAL_RIDGE,
     outer: PHYSICAL_OUTER,
@@ -206,7 +212,9 @@ export const ARENAS: Record<ArenaId, ArenaSpec> = {
     id: 'double',
     nameJa: 'ダブルエクストリーム',
     nameZh: '雙層戰鬥盤',
+    nameEn: 'Double Xtreme',
     descZh: '照實體的雙層戰鬥盤：中央定時降下變成凹槽（降下前會發光預告），凹槽邊緣多一條內圈極限軌道；升起時和標準戰鬥盤一樣。出場口同標準戰鬥盤（中間寬口 3 分）。',
+    descEn: 'Modeled on the two-level stadium: the center sinks into a pit at set times (it glows first), adding an inner Xtreme rail around the pit; when raised it plays like the Xtreme Stadium. Same exits as the Xtreme Stadium (center gap 3 pts).',
     bowlK: 0.062,
     ridge: PHYSICAL_RIDGE,
     outer: PHYSICAL_OUTER,
@@ -222,7 +230,9 @@ export const ARENAS: Record<ArenaId, ArenaSpec> = {
     id: 'volcano',
     nameJa: 'ボルケーノ',
     nameZh: '火山',
+    nameEn: 'Volcano',
     descZh: '中央火山錐把陀螺推向外圈溝槽；三個熔岩噴口會灼燒轉速，並定期噴發把陀螺轟開。',
+    descEn: 'The central volcanic cone pushes tops toward the outer trench; three lava vents burn spin and erupt periodically, blasting tops away.',
     bowlK: 0.075,
     mound: { h: 0.38, sigma: 0.9 },
     vents: [0, 1, 2].map((i) => ({ ...at(2.05, Math.PI / 2 + TAU / 6 + (i * TAU) / 3), r: 0.5, period: 5.5, phase: i * 1.8 })),
@@ -233,7 +243,9 @@ export const ARENAS: Record<ArenaId, ArenaSpec> = {
     id: 'glacier',
     nameJa: 'グレイシャー',
     nameZh: '冰川',
+    nameEn: 'Glacier',
     descZh: '冰面幾乎沒有摩擦，軸心打滑、推移吃力、容易滑出場；三根冰柱會把陀螺彈開。',
+    descEn: 'Almost frictionless ice: tips slip, pushing is hard and tops slide out easily; three ice pillars bounce tops away.',
     frictionMul: 0.2,
     gripMul: 0.35,
     decayMul: 0.85,
@@ -246,7 +258,9 @@ export const ARENAS: Record<ArenaId, ArenaSpec> = {
     id: 'flooded',
     nameJa: 'アクア',
     nameZh: '積水',
+    nameEn: 'Aqua',
     descZh: '中央積水：水中阻力大、轉速流失快，逆時針的水流會把陀螺帶著繞圈。',
+    descEn: 'A flooded center: heavy water drag drains spin fast, and a counterclockwise current carries tops around.',
     water: { r: 1.55, drag: 1.4, spinDrag: 1.9, current: 1.3 },
     theme: { floor: 0x061a22, grid: 0x20c8d0, neon: 0x40f0e0, accent: 0x2a7bff, wall: 0x143038 },
   },

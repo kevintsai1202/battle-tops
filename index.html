@@ -19,9 +19,9 @@
           <div class="bar spin"><i></i></div>
           <div class="label" data-i18n="hud.burst">BURST</div>
           <div class="bar burst"><i></i></div>
-          <div class="label">必殺</div>
+          <div class="label" data-i18n="hud.special">必殺</div>
           <div class="bar special"><i></i></div>
-          <div class="ready"><span data-i18n="hud.readyKey">必殺 READY ▶</span> <span class="kb">SPACE</span><span class="tc">按鈕／三指</span></div>
+          <div class="ready"><span data-i18n="hud.readyKey">必殺 READY ▶</span> <span class="kb">SPACE</span><span class="tc" data-i18n="hud.readyTc">按鈕／三指</span></div>
         </div>
         <div class="score">
           <span class="s0">0</span><em>-</em><span class="s1">0</span>
@@ -34,7 +34,7 @@
           <div class="bar spin"><i></i></div>
           <div class="label" data-i18n="hud.burst">BURST</div>
           <div class="bar burst"><i></i></div>
-          <div class="label">必殺</div>
+          <div class="label" data-i18n="hud.special">必殺</div>
           <div class="bar special"><i></i></div>
           <div class="ready" data-i18n="hud.ready">必殺 READY</div>
         </div>
@@ -60,11 +60,16 @@
         <div class="band"><div class="who"></div><div class="move"></div></div>
       </div>
 
-      <!-- 標題畫面：模式選單（電腦對戰／試驗模式／線上對戰／操作教學，點按鈕才開始）；右上角切換語言（日文版／全中文版，記住選擇），文字由 src/i18n.ts 依 data-i18n 換掉 -->
+      <!--
+        標題畫面：模式選單（電腦對戰／試驗模式／線上對戰／操作教學，點按鈕才開始）；右上角切換語言（日文版／全中文版／英文版，記住選擇）。
+        畫面文字由 src/i18n.ts 依 data-i18n（文字）、data-i18n-aria（aria-label）、data-i18n-ph（placeholder）換成目前語言（字串表在 src/text.ts）；
+        這裡寫的預設內容是日文版的字。語言按鈕的字是各語言自己的名稱，不翻譯。
+      -->
       <section id="title" class="screen">
-        <div class="lang-switch" role="group" aria-label="語言">
+        <div class="lang-switch" role="group" aria-label="語言" data-i18n-aria="title.langAria">
           <button type="button" data-lang="ja">日本語</button>
           <button type="button" data-lang="zh">中文</button>
+          <button type="button" data-lang="en">English</button>
         </div>
         <h1 data-i18n="title.logo">BATTLE TOPS</h1>
         <p class="en" data-i18n="title.sub">爆転バトル ・ 戰鬥陀螺</p>
@@ -74,39 +79,53 @@
           <button type="button" class="to-online" data-i18n="title.online">オンライン対戦 ／ 線上對戰（找朋友）</button>
           <button type="button" class="to-tutorial" data-i18n="title.tutorial">チュートリアル ／ 操作教學</button>
         </div>
-        <!-- 第一次玩的提示（沒看過也沒拒絕過才顯示；教學是中文，兩種語言都顯示中文） -->
+        <!-- 第一次玩的提示（沒看過也沒拒絕過才顯示；教學在日文版與中文版是中文，英文版是英文） -->
         <div class="tut-offer" hidden>
-          <span>第一次玩？建議先看操作教學（約 3 分鐘）</span>
-          <button type="button" class="tut-offer-go">開始教學</button>
-          <button type="button" class="tut-offer-no">不用了</button>
+          <span data-i18n="title.offer">第一次玩？建議先看操作教學（約 3 分鐘）</span>
+          <button type="button" class="tut-offer-go" data-i18n="title.offerGo">開始教學</button>
+          <button type="button" class="tut-offer-no" data-i18n="title.offerNo">不用了</button>
         </div>
-        <p class="note">請開啟聲音（建議戴耳機，3D 立體音效）</p>
-        <p class="rotate-hint">📱 橫向遊玩效果較好</p>
+        <p class="note" data-i18n="title.note">請開啟聲音（建議戴耳機，3D 立體音效）</p>
+        <p class="rotate-hint" data-i18n="title.rotate">📱 橫向遊玩效果較好</p>
       </section>
 
       <section id="select" class="screen" hidden>
-        <h2><span data-i18n="select.title">チームを組め！</span><small>第 1 步：選場地與三顆陀螺（點選順序是預設的出場順序，下一步可以調整順序與零件）（<span class="kb">方向鍵移動、Space 選取／取消、Enter 下一步、1／2／3 難度、Q／E 場地</span><span class="tc">點小格選取／取消</span>）</small></h2>
+        <h2>
+          <span data-i18n="select.title">チームを組め！</span
+          ><small
+            ><span data-i18n="select.step">第 1 步：選場地與三顆陀螺（點選順序是預設的出場順序，下一步可以調整順序與零件）</span
+            ><span class="kb" data-i18n="select.keysKb">（方向鍵移動、Space 選取／取消、Enter 下一步、1／2／3 難度、Q／E 場地）</span
+            ><span class="tc" data-i18n="select.keysTc">（點小格選取／取消）</span></small
+          >
+        </h2>
         <div class="select-row">
-          <div class="difficulty" role="group" aria-label="難易度">
+          <div class="difficulty" role="group" aria-label="難易度" data-i18n-aria="diff.aria">
             <!-- 中文小註解只在日文版顯示（ja-only），中文版的主文字已經是中文 -->
             <button type="button" data-id="easy"><span data-i18n="diff.easy">かんたん</span><small class="ja-only">簡單</small></button>
             <button type="button" data-id="normal"><span data-i18n="diff.normal">ふつう</span><small class="ja-only">普通</small></button>
             <button type="button" data-id="hard"><span data-i18n="diff.hard">むずかしい</span><small class="ja-only">困難</small></button>
           </div>
-          <div class="arena" role="group" aria-label="場地"></div>
-          <div class="cpu-team"><span class="ct-label" data-i18n="select.cpuTeam">CPU チーム</span> <span class="chips"></span><small>出場順序保密</small></div>
+          <div class="arena" role="group" aria-label="場地" data-i18n-aria="arena.aria"></div>
+          <div class="cpu-team"><span class="ct-label" data-i18n="select.cpuTeam">CPU チーム</span> <span class="chips"></span><small data-i18n="select.cpuNote">出場順序保密</small></div>
         </div>
         <p class="arena-desc"></p>
         <div class="select-main">
           <div class="cards"></div>
           <div class="detail"></div>
         </div>
-        <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled>下一步 ▶</button></div>
+        <div class="team-bar"><span class="slots"></span><button type="button" class="go" disabled data-i18n="select.next">下一步 ▶</button></div>
       </section>
 
       <!-- 組隊第 2 步：出場順序與零件（線上限時，雙方都準備完成才開戰） -->
       <section id="arrange" class="screen" hidden>
-        <h2><span data-i18n="arrange.title">出場順と部品</span><small>第 2 步：調整出場順序與零件，第 1 戰先上場（<span class="kb">↑↓ 選擇、Shift＋↑↓ 調換順序、Q／E 換盤／軸、Enter 確定</span><span class="tc">點「盤」「軸」換零件，▲▼ 調換順序</span>）</small></h2>
+        <h2>
+          <span data-i18n="arrange.title">出場順と部品</span
+          ><small
+            ><span data-i18n="arrange.step">第 2 步：調整出場順序與零件，第 1 戰先上場</span
+            ><span class="kb" data-i18n="arrange.keysKb">（↑↓ 選擇、Shift＋↑↓ 調換順序、Q／E 換盤／軸、Enter 確定）</span
+            ><span class="tc" data-i18n="arrange.keysTc">（點「盤」「軸」換零件，▲▼ 調換順序）</span></small
+          >
+        </h2>
         <div class="ar-head">
           <div class="ar-opp"><span class="ar-opp-label"></span><span class="chips"></span><small class="ar-opp-note"></small></div>
           <span class="ar-arena"></span>
@@ -117,8 +136,8 @@
           <div class="ar-left">
             <ol class="ar-slots"></ol>
             <div class="ar-actions">
-              <button type="button" class="ar-back">◀ 回上一步</button>
-              <button type="button" class="ar-ready">出陣！</button>
+              <button type="button" class="ar-back" data-i18n="arrange.back">◀ 回上一步</button>
+              <button type="button" class="ar-ready" data-i18n="arrange.ready">出陣！</button>
             </div>
             <p class="ar-status"></p>
           </div>
@@ -128,14 +147,21 @@
 
       <!-- 試驗模式：一對一，自己挑你和電腦的陀螺與零件（比較搭配的效果）；選場地與難度，可以直接開打或讓電腦自動對打 100 場 -->
       <section id="trial" class="screen" hidden>
-        <h2><span data-i18n="trial.title">トライアル</span><small>試驗模式：一對一，自己挑雙方的陀螺與零件，比較搭配的效果（<span class="kb">點「你」或「電腦」再點名鑑換陀螺；方向鍵移動、Space 換上、X 切換你／電腦、Enter 開始、1／2／3 難度、Q／E 場地</span><span class="tc">點「你」或「電腦」，再點名鑑換陀螺</span>）</small></h2>
+        <h2>
+          <span data-i18n="trial.title">トライアル</span
+          ><small
+            ><span data-i18n="trial.step">試驗模式：一對一，自己挑雙方的陀螺與零件，比較搭配的效果</span
+            ><span class="kb" data-i18n="trial.keysKb">（點「你」或「電腦」再點名鑑換陀螺；方向鍵移動、Space 換上、X 切換你／電腦、Enter 開始、1／2／3 難度、Q／E 場地）</span
+            ><span class="tc" data-i18n="trial.keysTc">（點「你」或「電腦」，再點名鑑換陀螺）</span></small
+          >
+        </h2>
         <div class="select-row">
-          <div class="difficulty" role="group" aria-label="難易度">
+          <div class="difficulty" role="group" aria-label="難易度" data-i18n-aria="diff.aria">
             <button type="button" data-id="easy"><span data-i18n="diff.easy">かんたん</span><small class="ja-only">簡單</small></button>
             <button type="button" data-id="normal"><span data-i18n="diff.normal">ふつう</span><small class="ja-only">普通</small></button>
             <button type="button" data-id="hard"><span data-i18n="diff.hard">むずかしい</span><small class="ja-only">困難</small></button>
           </div>
-          <div class="arena" role="group" aria-label="場地"></div>
+          <div class="arena" role="group" aria-label="場地" data-i18n-aria="arena.aria"></div>
         </div>
         <p class="arena-desc"></p>
         <div class="select-main">
@@ -147,9 +173,9 @@
           <div class="detail"></div>
         </div>
         <div class="tr-actions">
-          <button type="button" class="tr-back">◀ 回標題</button>
-          <button type="button" class="tr-go">開始試驗 ▶</button>
-          <button type="button" class="tr-auto">電腦自動對打 1000 場</button>
+          <button type="button" class="tr-back" data-i18n="trial.back">◀ 回標題</button>
+          <button type="button" class="tr-go" data-i18n="trial.go">開始試驗 ▶</button>
+          <button type="button" class="tr-auto" data-i18n="trial.auto">電腦自動對打 1000 場</button>
         </div>
       </section>
 
@@ -163,19 +189,26 @@
           <p class="tr-auto-title"></p>
           <div class="tr-progress"><i></i></div>
           <div class="tr-auto-result"></div>
-          <button type="button" class="tr-auto-cancel">停止</button>
+          <button type="button" class="tr-auto-cancel" data-i18n="trial.stop">停止</button>
         </div>
         <div class="tr-result-actions">
-          <button type="button" class="tr-retry">同設定再戰</button>
-          <button type="button" class="tr-change">換設定</button>
-          <button type="button" class="tr-auto-run">電腦自動對打 1000 場</button>
-          <button type="button" class="tr-clear">清除紀錄</button>
-          <button type="button" class="tr-title">回標題</button>
+          <button type="button" class="tr-retry" data-i18n="trial.retry">同設定再戰</button>
+          <button type="button" class="tr-change" data-i18n="trial.change">換設定</button>
+          <button type="button" class="tr-auto-run" data-i18n="trial.auto">電腦自動對打 1000 場</button>
+          <button type="button" class="tr-clear" data-i18n="trial.clear">清除紀錄</button>
+          <button type="button" class="tr-title" data-i18n="trial.toTitle">回標題</button>
         </div>
       </section>
 
       <section id="overtime" class="screen" hidden>
-        <h2><span data-i18n="overtime.title">延長戦！</span><small>總分平手・<span data-i18n="overtime.sudden">サドンデス</span>：從你的隊伍挑一顆出戰（<span class="kb">← → 移動、Enter 決定</span><span class="tc">點一下出戰</span>）</small></h2>
+        <h2>
+          <span data-i18n="overtime.title">延長戦！</span
+          ><small
+            ><span data-i18n="overtime.tie">總分平手・</span><span data-i18n="overtime.sudden">サドンデス</span
+            ><span data-i18n="overtime.pick">：從你的隊伍挑一顆出戰</span><span class="kb" data-i18n="overtime.keysKb">（← → 移動、Enter 決定）</span
+            ><span class="tc" data-i18n="overtime.keysTc">（點一下出戰）</span></small
+          >
+        </h2>
         <div class="cards"></div>
       </section>
 
@@ -187,36 +220,36 @@
         <p class="rm-status"></p>
         <div class="result-actions">
           <button type="button" class="retry" data-i18n="result.retry">もう一度！／再來一場</button>
-          <button type="button" class="leave" hidden>離開</button>
+          <button type="button" class="leave" hidden data-i18n="result.leave">離開</button>
         </div>
       </section>
 
       <!-- 線上對戰的房間：輸入名稱，建立房間（拿到房號與分享連結）或用房號加入 -->
       <section id="online" class="screen" hidden>
-        <h2><span data-i18n="online.title">オンライン対戦</span><small>線上對戰：從房間列表點一下就加入，或按「快速加入」自動配對</small></h2>
+        <h2><span data-i18n="online.title">オンライン対戦</span><small data-i18n="online.desc">線上對戰：從房間列表點一下就加入，或按「快速加入」自動配對</small></h2>
         <div class="ol-panel">
           <div class="ol-form">
-            <label class="ol-name">你的名稱 <input type="text" maxlength="12" autocomplete="nickname" /></label>
-            <button type="button" class="ol-quick">快速加入</button>
+            <label class="ol-name"><span data-i18n="online.name">你的名稱</span> <input type="text" maxlength="12" autocomplete="nickname" /></label>
+            <button type="button" class="ol-quick" data-i18n="online.quick">快速加入</button>
             <div class="ol-create-row">
-              <button type="button" class="ol-create">建立房間</button>
-              <label class="ol-private"><input type="checkbox" />不公開</label>
+              <button type="button" class="ol-create" data-i18n="online.create">建立房間</button>
+              <label class="ol-private"><input type="checkbox" /><span data-i18n="online.private">不公開</span></label>
             </div>
-            <div class="ol-join"><input class="ol-code" maxlength="4" placeholder="房號（4 碼）" autocomplete="off" /><button type="button" class="ol-join-btn">加入</button></div>
+            <div class="ol-join"><input class="ol-code" maxlength="4" placeholder="房號（4 碼）" data-i18n-ph="online.codePh" autocomplete="off" /><button type="button" class="ol-join-btn" data-i18n="online.join">加入</button></div>
             <!-- 房間列表：等人中的可以點一下加入，對戰中的灰色顯示 -->
             <div class="ol-list">
-              <p class="ol-list-head">房間列表<small class="ol-list-note"></small></p>
+              <p class="ol-list-head"><span data-i18n="online.rooms">房間列表</span><small class="ol-list-note"></small></p>
               <div class="ol-rooms"></div>
             </div>
           </div>
           <div class="ol-room" hidden>
-            <p class="ol-label">房號</p>
+            <p class="ol-label" data-i18n="online.code">房號</p>
             <div class="ol-code-big"></div>
-            <div class="ol-share"><input class="ol-link" readonly /><button type="button" class="ol-copy">複製連結</button></div>
+            <div class="ol-share"><input class="ol-link" readonly /><button type="button" class="ol-copy" data-i18n="online.copy">複製連結</button></div>
             <p class="ol-status"></p>
           </div>
           <p class="ol-msg"></p>
-          <button type="button" class="ol-back">返回</button>
+          <button type="button" class="ol-back" data-i18n="online.back">返回</button>
         </div>
       </section>
 
@@ -227,9 +260,12 @@
       <!-- 手機觸控操作：畫面任意處滑動推移（圓圈 = 按下處、圓點 = 手指）、快甩衝刺、三指觸控必殺；必殺集滿時右下角出現必殺按鈕 -->
       <div id="swipe" hidden><div class="ring"></div><div class="dot"></div></div>
       <div id="touch-hint" hidden></div>
-      <button type="button" id="special-btn" hidden aria-label="必殺技">必殺！</button>
+      <button type="button" id="special-btn" hidden aria-label="必殺技" data-i18n-aria="special.aria" data-i18n="special.btn">必殺！</button>
 
-      <div id="help"><span class="kb">WASD／方向鍵：推移陀螺　Shift＋方向：衝刺　SPACE：必殺技　M：音樂開關</span><span class="tc">滑動：推移　快甩：衝刺　必殺：按鈕或三指</span></div>
+      <div id="help">
+        <span class="kb" data-i18n="help.kb">WASD／方向鍵：推移陀螺　Shift＋方向：衝刺　SPACE：必殺技　M：音樂開關</span
+        ><span class="tc" data-i18n="help.tc">滑動：推移　快甩：衝刺　必殺：按鈕或三指</span>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

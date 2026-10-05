@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { AudioEngine, type Hum } from '../audio/engine';
 import { specialVoice, VoicePlayer, type VoiceId } from '../audio/voice';
-import { CLASH_WORDS, lang, onLangChange, topName, tr, type TextKey } from '../i18n';
+import { CLASH_WORDS, diffLabel, lang, onLangChange, plainName, serverError, serverReason, topName, tr, type TextKey } from '../i18n';
 import { CameraDirector } from '../director/director';
 import { CameraRig, type Shot } from '../render/cameraRig';
 import { Effects } from '../render/effects';
@@ -451,10 +451,10 @@ export class Game {
       specs: TOP_SPECS,
       order: picks,
       loadouts,
-      opponent: { label: tr('select.cpuTeam'), team: TOP_IDS.filter((t) => this.cpuTeam.includes(t)), note: '出場順序保密' },
-      arena: this.arenaChoice === 'random' ? '隨機（開打時抽）' : ARENAS[this.arenaChoice].nameZh,
+      opponent: { label: tr('select.cpuTeam'), team: TOP_IDS.filter((t) => this.cpuTeam.includes(t)), note: tr('select.cpuNote') },
+      arena: this.arenaChoice === 'random' ? tr('arena.randomPick') : plainName(ARENAS[this.arenaChoice]),
       deadline: null,
-      readyLabel: '出陣！',
+      readyLabel: tr('arrange.ready'),
       onBack: (order, lo) => {
         this.closeShowcase();
         this.enterSelect({ picks: order, loadouts: lo });
@@ -599,7 +599,7 @@ export class Game {
       replay: false,
       line: record?.games ? 'round_ready' : 'battle_1',
       score: record ? [record.wins, record.losses] : [0, 0],
-      info: () => this.hud.setTrialInfo(this.playerSpec, this.cpuSpec, this.arena.nameZh),
+      info: () => this.hud.setTrialInfo(this.playerSpec, this.cpuSpec, plainName(this.arena)),
     });
     this.trial.clashes = this.counters.clashes;
     this.trial.bigClashes = this.counters.bigClashes;
@@ -646,7 +646,7 @@ export class Game {
     this.hud.showTrialResult({
       player: buildSpec(cfg.player.top, cfg.player.loadout),
       cpu: buildSpec(cfg.cpu.top, cfg.cpu.loadout),
-      arenaName: ARENAS[cfg.arena].nameZh,
+      arenaName: plainName(ARENAS[cfg.arena]),
       difficulty: cfg.difficulty,
       battle,
       record: this.trialStore.entries[trialKey(cfg)]?.record ?? emptyTrialRecord(),
@@ -787,7 +787,7 @@ export class Game {
     const m = this.match!;
     const title = pair.overtime ? tr('banner.overtime') : pair.battle === 3 ? tr('banner.final') : tr('banner.battle', { n: pair.battle });
     const line: VoiceId = replay ? 'round_ready' : pair.overtime || pair.battle === 3 ? 'battle_final' : pair.battle === 1 ? 'battle_1' : 'battle_2';
-    this.openRound({ title, replay, line, score: m.score, info: () => this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh, current) });
+    this.openRound({ title, replay, line, score: m.score, info: () => this.hud.setMatchInfo(m, TOP_SPECS, plainName(this.arena), current) });
   }
 
   /**
@@ -813,7 +813,7 @@ export class Game {
     this.pullResult = null;
     this.setState('launch');
     this.hud.banner(o.title, `${topName(this.playerSpec)}  ${tr('vs')}  ${topName(this.cpuSpec)}${o.replay ? tr('banner.replay') : ''}
-＠${this.arena.nameZh}`, {
+${tr('banner.at', { arena: plainName(this.arena) })}`, {
       small: true,
       seconds: 0,
     });
@@ -957,7 +957,7 @@ export class Game {
       const aim = pull ? this.worldAim(pull.aim) : 0;
       this.online.sendLaunch(error, aim, pull);
       this.lastLaunch = { ratio: 0, label: '', cpu: 0, aim, pull };
-      this.hud.banner(tr('banner.shoot'), `等待${this.oppLabel}發射…`, { small: true, seconds: 1.2 });
+      this.hud.banner(tr('banner.shoot'), tr('banner.waitLaunch', { name: this.oppLabel }), { small: true, seconds: 1.2 });
       return;
     }
     const d = this.difficulty;
@@ -1167,7 +1167,7 @@ export class Game {
     if (ev === 'done') this.endTutorial(true);
     else if (ev === 'advanced') this.showTutorialStep();
     else {
-      t.ui.toast('這次沒有拉條！再試一次');
+      t.ui.toast(tr('tut.toastRetry'));
       this.voice?.guide('tut_retry');
       this.restartTutorialRound(1.6);
     }
@@ -1191,7 +1191,7 @@ export class Game {
   private tutorialKnockedOut(): void {
     const t = this.tut!;
     this.hud.clearBanner();
-    t.ui.toast('被終結了！重來一次');
+    t.ui.toast(tr('tut.toastRestart'));
     this.voice?.guide('tut_restart');
     this.restartTutorialRound(2);
   }
@@ -1313,22 +1313,23 @@ export class Game {
     const o = this.online;
     if (!o || this.state !== 'online' || o.code) return;
     const st = o.net.status;
-    const note =
+    const note = tr(
       st === 'open'
         ? o.roomsSeen
-          ? '每 3 秒自動更新'
-          : '讀取中…'
+          ? 'online.autoRefresh'
+          : 'net.loading'
         : st === 'reconnecting'
-          ? '連線中斷，重新連線中…'
+          ? 'net.reconnecting'
           : st === 'closed'
-            ? '連不上對戰伺服器，稍後自動重試…'
-            : '連線中…';
+            ? 'net.retrying'
+            : 'net.connecting',
+    );
     this.hud.setRoomList(o.rooms, note);
   }
 
   /** 房主等人時的提示（公開房間會列在房間列表） */
   private waitingText(o: OnlineSession): string {
-    return o.isPublic ? '等待對手加入…（已列在房間列表，別人點一下就能加入）' : '等待對手加入…（不公開：把房號或連結傳給朋友）';
+    return tr(o.isPublic ? 'online.waitPublic' : 'online.waitPrivate');
   }
 
   /** 連上對戰伺服器後建立房間、用房號加入或快速加入（連不上時保留連線，房間列表會自動重試） */
@@ -1341,13 +1342,13 @@ export class Game {
     const o = this.ensureOnline(name);
     o.name = name;
     this.hud.setOnlineBusy(true);
-    this.hud.setOnlineMessage('連線中…');
+    this.hud.setOnlineMessage(tr('net.connecting'));
     try {
       await o.connect();
     } catch {
       if (this.online !== o) return;
       this.hud.setOnlineBusy(false);
-      this.hud.setOnlineMessage('連不上對戰伺服器，請稍後再試', true);
+      this.hud.setOnlineMessage(tr('net.cantConnect'), true);
       return;
     }
     // 連線途中按了「返回」
@@ -1381,7 +1382,7 @@ export class Game {
       this.renderRooms();
       return;
     }
-    if (s === 'reconnecting') this.hud.showNetOverlay('連線中斷，重新連線中…', '會自動回到房間');
+    if (s === 'reconnecting') this.hud.showNetOverlay(tr('net.reconnecting'), tr('net.backToRoom'));
     else if (s === 'open' && !o.pausedUntil && this.state !== 'waiting') this.hud.hideNetOverlay();
   }
 
@@ -1396,7 +1397,7 @@ export class Game {
         break;
       case 'room':
         o.onRoom(m);
-        if (this.state === 'online') this.hud.setOnlineRoom(m.code, o.shareLink(), m.host ? this.waitingText(o) : '已加入，準備組隊…');
+        if (this.state === 'online') this.hud.setOnlineRoom(m.code, o.shareLink(), m.host ? this.waitingText(o) : tr('online.joined'));
         break;
       case 'lobby':
         this.onLobby(m);
@@ -1441,18 +1442,21 @@ export class Game {
       case 'closed':
         o.net.close();
         this.online = null;
-        this.enterOnline('', `房間已關閉：${m.reason}`);
+        this.enterOnline('', tr('online.closed', { reason: serverReason(m.reason) }));
         break;
-      case 'error':
+      case 'error': {
+        // 伺服器的訊息是中文：英文版依錯誤碼換成英文
+        const text = serverError(m.code, m.message);
         if (m.code === 'RESUME_FAILED') {
           o.net.close();
           this.online = null;
-          this.enterOnline('', m.message);
+          this.enterOnline('', text);
         } else if (this.state === 'online') {
           this.hud.setOnlineBusy(false);
-          this.hud.setOnlineMessage(m.message, true);
-        } else this.hud.banner(tr('banner.error'), m.message, { small: true, seconds: 2 });
+          this.hud.setOnlineMessage(text, true);
+        } else this.hud.banner(tr('banner.error'), text, { small: true, seconds: 2 });
         break;
+      }
       default:
         break;
     }
@@ -1462,22 +1466,26 @@ export class Game {
   private onLobby(m: Msg<'lobby'>): void {
     const o = this.online!;
     o.lobby = m;
-    this.oppLabel = m.opponent?.name ?? '對手';
+    this.oppLabel = m.opponent?.name ?? tr('opp.default');
     const op = m.opponent;
     if (m.phase === 'lobby') {
       // 還沒有對手，或對手離開了：回到房間畫面等人
-      if (this.state !== 'online') this.enterOnline('', op ? '' : this.state === 'title' ? '' : '對手離開了，等待新的對手加入');
+      if (this.state !== 'online') this.enterOnline('', op ? '' : this.state === 'title' ? '' : tr('online.oppLeft'));
       this.hud.setOnlineRoom(o.code, o.shareLink(), this.waitingText(o));
     } else if (m.phase === 'picking') {
       if (this.state !== 'select' && this.state !== 'waiting') this.enterOnlineSelect(m);
       else {
-        this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', !op ? '離開了' : !op.connected ? '連線中斷…' : op.ready ? '已選好三顆' : '選擇中…');
+        this.hud.updateSelectOnline(
+          m.arena,
+          op?.name ?? tr('opp.default'),
+          tr(!op ? 'opp.left' : !op.connected ? 'opp.disconnected' : op.ready ? 'opp.picked' : 'opp.choosing'),
+        );
         if (m.arena !== 'random' && this.state === 'select') this.setArena(ARENAS[m.arena]);
       }
     } else if (m.phase === 'arranging') {
       if (this.state === 'arrange') this.hud.updateArrangeOpponent(this.arrangeOpponentText(op));
     } else if (m.phase === 'result' && this.state === 'result') {
-      this.hud.setResultStatus(!op ? '對手已離開，無法再來一場' : op.ready ? `${op.name} 想再來一場` : m.me.ready ? '等待對手…' : '');
+      this.hud.setResultStatus(!op ? tr('result.oppGone') : op.ready ? tr('result.oppWants', { name: op.name }) : m.me.ready ? tr('result.waitOpp') : '');
     }
   }
 
@@ -1500,7 +1508,7 @@ export class Game {
       cpuTeam: [],
       difficulty: this.difficulty.id,
       arena: m.arena,
-      online: { host: o.host, opponent: m.opponent?.name ?? '對手' },
+      online: { host: o.host, opponent: m.opponent?.name ?? tr('opp.default') },
       onDifficulty: () => undefined,
       onArena: (a) => {
         if (!o.host) return;
@@ -1513,11 +1521,11 @@ export class Game {
         this.closeShowcase();
         o.sendPicks(picks);
         this.setState('waiting');
-        this.hud.showNetOverlay('等待對手選好三顆…', `對手：${o.opponentName}`);
+        this.hud.showNetOverlay(tr('net.waitPick'), tr('opp.label', { name: o.opponentName }));
       },
     });
     const op = m.opponent;
-    this.hud.updateSelectOnline(m.arena, op?.name ?? '對手', op?.ready ? '已選好三顆' : '選擇中…');
+    this.hud.updateSelectOnline(m.arena, op?.name ?? tr('opp.default'), tr(op?.ready ? 'opp.picked' : 'opp.choosing'));
   }
 
   /**
@@ -1535,24 +1543,24 @@ export class Game {
       specs: TOP_SPECS,
       order: m.order,
       loadouts: m.loadouts,
-      opponent: { label: `對手：${o.opponentName}`, team: m.theirs, note: this.arrangeOpponentText(o.lobby?.opponent ?? null) },
-      arena: arena === 'random' ? '隨機（開打時抽）' : ARENAS[arena].nameZh,
+      opponent: { label: tr('opp.label', { name: o.opponentName }), team: m.theirs, note: this.arrangeOpponentText(o.lobby?.opponent ?? null) },
+      arena: arena === 'random' ? tr('arena.randomPick') : plainName(ARENAS[arena]),
       deadline: o.toLocal(m.deadline),
-      readyLabel: '準備完成',
+      readyLabel: tr('arrange.readyOnline'),
       onChange: (order, lo) => o.sendArrange(order, lo),
       onReady: (order, lo) => {
         o.sendReady(order, lo);
-        this.hud.lockArrange('已準備完成，等待對手…');
+        this.hud.lockArrange(tr('arrange.waitOpp'));
       },
       onHover: (sp) => this.ensureShowcase()?.setSpec(sp),
       thumb: (sp, cb) => this.ensureShowcase()?.thumb(sp, cb),
     });
-    if (m.ready) this.hud.lockArrange('已準備完成，等待對手…');
+    if (m.ready) this.hud.lockArrange(tr('arrange.waitOpp'));
   }
 
   /** 第 2 步的對手狀態文字 */
   private arrangeOpponentText(op: { connected: boolean; ready: boolean } | null): string {
-    return !op ? '離開了' : !op.connected ? '連線中斷…' : op.ready ? '準備完成 ✓' : '調整中…';
+    return tr(!op ? 'opp.left' : !op.connected ? 'opp.disconnected' : op.ready ? 'opp.ready' : 'opp.adjusting');
   }
 
   /** 線上的一戰開場：座位、雙方規格與賽況由伺服器決定；倒數對齊伺服器的「ゴー」 */
@@ -1653,7 +1661,7 @@ export class Game {
         this.setPreview(null);
         o.sendOvertime(t);
         this.setState('waiting');
-        this.hud.showNetOverlay('等待對手挑選延長賽的陀螺…');
+        this.hud.showNetOverlay(tr('net.waitOvertime'));
       },
     );
   }
@@ -1673,15 +1681,15 @@ export class Game {
     window.setTimeout(() => this.voice?.play(win ? 'p_win' : 'r_win', 2), 2700);
     window.setTimeout(() => this.voice?.play(win ? 'r_lose' : 'p_lose', 2), 5600);
     this.match = perspectiveMatch(o.teams?.mine ?? [], o.teams?.theirs ?? [], m.results, m.score, m.winner);
-    const forfeit = m.forfeit ? (win ? '・對手棄權' : '・判定棄權') : '';
+    const forfeit = m.forfeit ? tr(win ? 'result.oppForfeit' : 'result.forfeit') : '';
     this.hud.showResult(
       win,
       this.match,
       TOP_SPECS,
-      `線上對戰・房號 ${o.code ?? ''}・場地：${this.arena.nameZh}${forfeit}`,
+      tr('result.onlineFoot', { code: o.code ?? '', arena: plainName(this.arena), forfeit }),
       () => {
         o.rematch();
-        this.hud.setResultStatus('等待對手…');
+        this.hud.setResultStatus(tr('result.waitOpp'));
       },
       { opponent: o.opponentName, keepOpen: true, onLeave: () => this.leaveOnline() },
     );
@@ -1790,7 +1798,7 @@ export class Game {
     }
     if (this.online?.pausedUntil) {
       const left = Math.max(0, Math.ceil((this.online.pausedUntil - Date.now()) / 1000));
-      this.hud.showNetOverlay(`${this.oppLabel} 連線中斷`, `等待重新連線… ${left} 秒後判對手棄權`);
+      this.hud.showNetOverlay(tr('net.oppDropped', { name: this.oppLabel }), tr('net.oppDropSub', { n: left }));
     }
 
     // 試驗模式的電腦自動對打（沒有 Worker 時的退路）：每幀最多算約 12 毫秒（至少一場）；打完顯示結果
@@ -2005,7 +2013,7 @@ export class Game {
           // 賽況仍標示剛打完的這一戰（記分後 currentPairing 會跳到下一戰）
           const pair = currentPairing(this.match!);
           recordResult(this.match!, res);
-          this.hud.setMatchInfo(this.match!, TOP_SPECS, this.arena.nameZh, pair);
+          this.hud.setMatchInfo(this.match!, TOP_SPECS, plainName(this.arena), pair);
         }
         break;
       }
@@ -2023,7 +2031,7 @@ export class Game {
     this.counters.rounds++;
     if (res) recordResult(m, res);
     this.hud.updateHud(this.sim?.tops ?? [], m.score);
-    this.hud.setMatchInfo(m, TOP_SPECS, this.arena.nameZh);
+    this.hud.setMatchInfo(m, TOP_SPECS, plainName(this.arena));
     if (m.phase === 'done') this.finishMatch();
     else if (m.phase === 'overtime' && !m.overtimePick) this.enterOvertimePick();
     else this.startRound();
@@ -2066,7 +2074,7 @@ export class Game {
     this.voice?.play(win ? 'winner_player' : 'winner_rival', 2);
     window.setTimeout(() => this.voice?.play(win ? 'p_win' : 'r_win', 2), 2700);
     window.setTimeout(() => this.voice?.play(win ? 'r_lose' : 'p_lose', 2), 5600);
-    this.hud.showResult(win, m, TOP_SPECS, `難易度：${this.difficulty.labelZh}・場地：${this.arena.nameZh}`, () => this.enterSelect());
+    this.hud.showResult(win, m, TOP_SPECS, tr('result.cpuFoot', { diff: diffLabel(this.difficulty), arena: plainName(this.arena) }), () => this.enterSelect());
   }
 
   /**
@@ -2150,9 +2158,9 @@ export class Game {
     if (!on) return;
     if (hint.classList.contains('ready') !== ready) {
       hint.classList.toggle('ready', ready);
-      hint.textContent = ready ? tr('touch.ready') : '滑動：推移　快甩：衝刺　必殺：按鈕或三指';
+      hint.textContent = ready ? tr('touch.ready') : tr('help.tc');
     } else if (!hint.textContent) {
-      hint.textContent = '滑動：推移　快甩：衝刺　必殺：按鈕或三指';
+      hint.textContent = tr('help.tc');
     }
   }
 

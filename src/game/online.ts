@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { gameServerUrl, NetClient } from '../net/client';
 import { Predictor } from '../net/predict';
 import { PROTOCOL_VERSION, type ArenaChoice, type ClientMessage, type ResultRow, type RoomSummary, type ServerMessage } from '../net/protocol';
@@ -157,9 +158,9 @@ export class OnlineSession {
     this.roomsSeen++;
   }
 
-  /** 對手的名稱（還沒有對手時為「對手」） */
+  /** 對手的名稱（還沒有對手時為「對手」，英文版 Opponent） */
   get opponentName(): string {
-    return this.lobby?.opponent?.name ?? '對手';
+    return this.lobby?.opponent?.name ?? tr('opp.default');
   }
 
   send(m: ClientMessage): void {

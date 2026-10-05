@@ -1,14 +1,18 @@
 import { devices, expect, test, type Page } from '@playwright/test';
+import { TOP_SPECS } from '../src/sim/tops';
 import { expectInViewport, expectNoHorizontalScroll } from './mobile.helpers';
 import { confirmArrange, pickTeam, pickTops } from './team.helpers';
 
 /**
- * 語言切換（日文版／全中文版）：
+ * 語言切換（日文版／全中文版／英文版）：
  * 1. 桌機：標題畫面切到中文（不會開始遊戲），重新整理後仍是中文；組隊兩步、發射、延長賽、對戰、終結、結果畫面全中文：
  *    整段過程畫面上出現過的文字（含一閃即逝的橫幅、擬聲字、必殺 cut-in）都沒有日文假名，對戰相關的字也沒有英文（按鍵名稱除外）；
  *    語音只載入 voice/zh/ 的 49 句中文音檔，播出的是中文語音。
  * 2. 桌機：語音已經開始用之後（進過線上房間）在標題畫面切換，語音跟著換語言；切回日文後畫面還原成日文版並記住。
  * 3. 手機橫向、直向：切換鈕在畫面內、觸控切換；組隊兩步全中文且不超出畫面。
+ * 4. 英文版（瀏覽器語言是英文時第一次打開就是英文版）：試驗模式、線上房間、組隊兩步、延長賽、對戰到結果畫面全英文
+ *    （整段出現過的文字沒有中日文字，只有當裝飾的紋章漢字與語言按鈕例外），只載入 voice/en/ 的 49 句英文語音；
+ *    操作教學是英文字幕與英文解說語音；手機橫向、直向觸控切到英文，版面不超出畫面。
  */
 
 /** 日文假名（平假名、片假名、長音符；中黑點「・」是中文介面也用的標點，不算） */
@@ -88,13 +92,26 @@ async function expectSwitchClickable(page: Page): Promise<void> {
     const apart = sw.x + sw.width <= t.x || t.x + t.width <= sw.x || sw.y + sw.height <= t.y || t.y + t.height <= sw.y;
     expect(apart, `切換鈕 ${JSON.stringify(sw)} 蓋到標題的字 ${JSON.stringify(t)}`).toBe(true);
   }
-  for (const l of ['ja', 'zh']) {
+  for (const l of ['ja', 'zh', 'en']) {
     const hit = await page.locator(`#title .lang-switch [data-lang="${l}"]`).evaluate((b) => {
       const r = b.getBoundingClientRect();
       return document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2) === b;
     });
     expect(hit, `${l} 按鈕被其他元素蓋住`).toBe(true);
   }
+}
+
+/** 中日文字：漢字、假名、中黑點、全形標點與全形字（英文版畫面上不能有） */
+const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}・　-〿＀-￯]/u;
+/** 英文版畫面上允許的中日文字：紋章字（日文漢字當裝飾，含展示用假人陀螺的「練」）與語言按鈕上各語言自己的名稱 */
+const EMBLEMS = new RegExp(`[${Object.values(TOP_SPECS).map((sp) => sp.emblem).join('')}練]`, 'g');
+const withoutAllowed = (t: string) => t.replace(/日本語|中文/g, '').replace(EMBLEMS, '');
+
+/** 英文版：目前畫面上看得到的文字沒有中日文字（紋章與語言按鈕除外） */
+async function expectNoCjkVisible(page: Page, where: string): Promise<void> {
+  const text = await page.evaluate(() => document.body.innerText);
+  const bad = text.split('\n').filter((l) => CJK.test(withoutAllowed(l)));
+  expect(bad, `${where}：畫面上還有中日文字`).toEqual([]);
 }
 
 /** 收集頁面錯誤，測試最後斷言為空 */
@@ -312,5 +329,232 @@ test.describe('手機直向', () => {
     await expectSwitchClickable(page);
     await expectNoHorizontalScroll(page);
     await page.screenshot({ path: 'e2e/screenshots/99-lang-portrait-title.png' });
+  });
+});
+
+test.describe('英文版（瀏覽器語言是英文）', () => {
+  test.use({ locale: 'en-US' });
+
+  test('第一次打開自動是英文版；試驗模式、線上房間、組隊、延長賽、對戰到結果畫面全英文，播的是英文語音', async ({ page }) => {
+    test.setTimeout(600_000);
+    const errors = watchErrors(page);
+    /** 下載過的語音檔路徑 */
+    const voiceFiles: string[] = [];
+    page.on('request', (r) => {
+      const p = new URL(r.url()).pathname;
+      if (p.endsWith('.mp3')) voiceFiles.push(p);
+    });
+    await recordTexts(page);
+
+    // 沒選過語言：瀏覽器是英文 → 英文版
+    await page.goto(`./?seed=61&server=${encodeURIComponent(SERVER)}`);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page).toHaveTitle('Battle Tops');
+    await expect(page.locator('#title h1')).toHaveText('BATTLE TOPS');
+    await expect(page.locator('#title .to-cpu')).toHaveText('VS CPU');
+    await expect(page.locator('#title .to-online')).toHaveText('Online with Friends');
+    await expect(page.locator('#title .to-tutorial')).toHaveText('Tutorial');
+    await expect(page.locator('#title .lang-switch [data-lang="en"]')).toHaveAttribute('aria-pressed', 'true');
+    await expectSwitchClickable(page);
+    await expectNoCjkVisible(page, '標題畫面');
+    await page.screenshot({ path: 'e2e/screenshots/100-lang-title-en.png' });
+    // 之後才開始累計：頁面解析時 index.html 的預設內容（日文版的字）在換成英文之前也會被記到
+    await clearTexts(page);
+
+    // 試驗模式的設定畫面
+    await page.locator('#title .to-trial').click();
+    await expect(page.locator('#trial')).toBeVisible();
+    await expect(page.locator('#trial h2 > span')).toHaveText('Trial');
+    await expect(page.locator('#trial .tr-go')).toHaveText('Start Trial ▶');
+    await expect(page.locator('#trial .arena button[data-id="practice"]')).toHaveText('Training');
+    await expect(page.locator('#trial .tr-side[data-side="cpu"] .tr-who')).toHaveText('CPU');
+    await expectNoCjkVisible(page, '試驗模式');
+    await page.screenshot({ path: 'e2e/screenshots/101-lang-trial-en.png' });
+    await page.locator('#trial .tr-back').click();
+
+    // 線上房間
+    await page.locator('#title .to-online').click();
+    await expect(page.locator('#online')).toBeVisible();
+    await expect(page.locator('#online h2 > span')).toHaveText('Online Battle');
+    await expect(page.locator('#online .ol-quick')).toHaveText('Quick Join');
+    await expect(page.locator('#online .ol-code')).toHaveAttribute('placeholder', 'Room code (4 chars)');
+    await expect(page.locator('#online .ol-list-note')).toHaveText(/^(Connecting…|Loading…|Updates every 3 s)$/);
+    await expectNoCjkVisible(page, '線上房間');
+    await page.screenshot({ path: 'e2e/screenshots/102-lang-online-en.png' });
+    await page.locator('#online .ol-back').click();
+    await expect(page.locator('#title')).toBeVisible();
+
+    // 組隊第 1 步
+    await page.locator('#title .to-cpu').click();
+    await expect(page.locator('#select h2 > span')).toHaveText('Build Your Team!');
+    await expect(page.locator('#select .difficulty button[data-id="easy"]')).toHaveText('Easy', { useInnerText: true });
+    await expect(page.locator('#select .cpu-team .ct-label')).toHaveText('CPU Team');
+    await expect(page.locator('#select .go')).toHaveText('Next ▶');
+    await page.locator('#select .card[data-id="blaze"]').hover();
+    await expect(page.locator('#select .detail .d-ja')).toHaveText('Blaze Dragon');
+    await expect(page.locator('#select .detail .d-zh')).toBeHidden();
+    await expect(page.locator('#select .detail .d-sp')).toHaveText('Special: Dragon Impact');
+    await expect(page.locator('#select .card.tile[data-id="turtle"] .nm')).toHaveText('Iron Turtle');
+    await expect(page.locator('#select .card.tile[data-id="turtle"] .emb')).toHaveText('亀');
+    await expectNoCjkVisible(page, '組隊第 1 步');
+    await page.screenshot({ path: 'e2e/screenshots/103-lang-select-en.png' });
+
+    // 組隊第 2 步：零件按鈕與清單也是英文
+    await pickTops(page, ['blaze', 'turtle', 'gale']);
+    await expect(page.locator('#arrange h2 > span')).toHaveText('Order & Parts');
+    await expect(page.locator('#arrange .ar-opp-label')).toHaveText('CPU Team');
+    await expect(page.locator('#arrange .ar-ready')).toHaveText('Battle!');
+    await expect(page.locator('#arrange .ar-slot[data-id="blaze"] .part-btn[data-slot="disk"] .pb-slot')).toHaveText('Disk');
+    await page.locator('#arrange .ar-slot[data-id="blaze"] .part-btn[data-slot="driver"]').click();
+    await expect(page.locator('#part-menu .pm-head')).toHaveText('Change Driver: Blaze Dragon');
+    await expectNoCjkVisible(page, '零件清單');
+    await page.screenshot({ path: 'e2e/screenshots/104-lang-parts-en.png' });
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#part-menu')).toHaveCount(0);
+    await expectNoCjkVisible(page, '組隊第 2 步');
+    await page.screenshot({ path: 'e2e/screenshots/105-lang-arrange-en.png' });
+    await confirmArrange(page);
+
+    // 對戰 HUD（開場介紹中）
+    await expect(page.locator('#hud')).toBeVisible();
+    await expect(page.locator('#hud .info')).toHaveText('BATTLE 1/3 · Training');
+    await expect(page.locator('#hud .panel[data-side="0"] .name')).toHaveText('YOU · Blaze Dragon');
+    await expect(page.locator('#hud .panel[data-side="1"] .name')).toHaveText(/ · CPU$/);
+    await expect(page.locator('#hud .panel[data-side="0"] .label').first()).toHaveText('BURST');
+    await expect(page.locator('#banner .bn')).toHaveText('BATTLE 1');
+    await page.waitForFunction(() => (window as any).__game.debug().state === 'launch');
+
+    // 延長賽（用除錯鉤子直接進入三戰平手）
+    await page.evaluate(() => (window as any).__game.debugForceOvertime());
+    await expect(page.locator('#overtime')).toBeVisible();
+    await expect(page.locator('#overtime h2 > span')).toHaveText('Overtime!');
+    await expect(page.locator('#overtime h2 small')).toContainText('Sudden Death');
+    await expect(page.locator('#overtime .card').first().locator('.ja')).toHaveText('Blaze Dragon');
+    await expect(page.locator('#overtime .card').first().locator('.zh')).toBeHidden();
+    await expect(page.locator('#overtime .card').first().locator('.sp')).toHaveText('Special: Dragon Impact');
+    await expectNoCjkVisible(page, '延長賽選擇');
+    await page.screenshot({ path: 'e2e/screenshots/106-lang-overtime-en.png' });
+    await page.locator('#overtime .card').first().click();
+
+    // 倒數到「GO SHOOT!!」時按 Space
+    await page.locator('#banner .bn', { hasText: 'GO SHOOT' }).waitFor({ timeout: 45_000 });
+    await expect(page.locator('#launch .hint .kb')).toContainText('let go on "Go Shoot"');
+    await page.keyboard.press('Space');
+    await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
+    await expect(page.locator('#banner .bn-sub')).toContainText('POWER');
+    await page.screenshot({ path: 'e2e/screenshots/107-lang-battle-en.png' });
+
+    // 打到結果畫面（headless 軟體渲染一回合要 2～3 分鐘；平手會重賽）
+    await page.waitForFunction(() => (window as any).__game.debug().state === 'result', null, { timeout: 480_000, polling: 500 });
+    await expect(page.locator('#result .headline')).toHaveText(/^(YOU WIN!!|YOU LOSE…)$/);
+    await expect(page.locator('#result .breakdown li')).toHaveCount(4);
+    for (const li of await page.locator('#result .breakdown li').allTextContents()) {
+      expect(li).toMatch(/^(Battle \d|Overtime) · .+ VS .+ · (SPIN|OVER|BURST|XTREME) FINISH · (YOU|CPU) \+\d$/);
+    }
+    await expect(page.locator('#result .diff')).toHaveText(/^Difficulty: (Easy|Normal|Hard) · Stadium: Training$/);
+    await expect(page.locator('#result .retry')).toHaveText('Play Again!');
+    await expectNoCjkVisible(page, '結果畫面');
+    await page.screenshot({ path: 'e2e/screenshots/108-lang-result-en.png' });
+
+    // 整段過程出現過的文字都沒有中日文字（紋章與語言按鈕除外）
+    const texts = await recordedTexts(page);
+    expect(texts.length).toBeGreaterThan(50);
+    expect(texts.filter(([, t]) => CJK.test(withoutAllowed(t)))).toEqual([]);
+    expect(texts.some(([id, t]) => id === 'banner' && /^(SPIN|OVER|BURST|XTREME) FINISH!/.test(t))).toBe(true);
+
+    // 語音：只載入英文的 49 句，播出開場、倒數、發射、終結與勝負宣告
+    await expect.poll(async () => (await dbg(page)).voice.played, { timeout: 10_000 }).toBeGreaterThanOrEqual(7);
+    const d = await dbg(page);
+    expect(d.voice).toMatchObject({ lang: 'en', mode: 'fish-files', loaded: 49 });
+    expect(voiceFiles.filter((p) => p.includes('/voice/en/')).length).toBe(49);
+    expect(voiceFiles.filter((p) => !p.includes('/voice/en/'))).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('操作教學：英文字幕、英文按鈕與英文解說語音（不載入中文解說）', async ({ page }) => {
+    test.setTimeout(180_000);
+    const errors = watchErrors(page);
+    const voiceFiles: string[] = [];
+    page.on('request', (r) => {
+      const p = new URL(r.url()).pathname;
+      if (p.endsWith('.mp3')) voiceFiles.push(p);
+    });
+    type TutDbg = { voice: { guideLast: string | null }; tutorial: { step: string } | null };
+    const tdbg = () => page.evaluate(() => (window as unknown as { __game: { debug(): TutDbg } }).__game.debug());
+
+    await page.goto('./?seed=62');
+    await page.locator('#title .to-tutorial').click();
+    await expect(page.locator('#tutorial .tut-panel')).toBeVisible();
+    await expect(page.locator('#tutorial .tut-chapter')).toHaveText('Chapter 1 · Team');
+    await expect(page.locator('#tutorial .tut-count')).toHaveText('1/12');
+    await expect(page.locator('#tutorial .tut-title')).toHaveText('Team: Pick Three Tops');
+    await expect(page.locator('#tutorial .tut-text')).toHaveText(/^Welcome to Battle Tops! First, let's build your team/);
+    await expect(page.locator('#tutorial .tut-skip')).toHaveText('Skip Step');
+    await expect(page.locator('#tutorial .tut-exit')).toHaveText('End Tutorial');
+    await expect.poll(async () => (await tdbg()).voice.guideLast, { timeout: 30_000 }).toBe('tut_pick');
+    await expectNoCjkVisible(page, '教學第 1 步');
+    await page.screenshot({ path: 'e2e/screenshots/109-lang-tutorial-en.png' });
+
+    // 選好推薦的三顆 → 第 2 步要按「Next」
+    for (const id of ['blaze', 'turtle', 'gale']) await page.locator(`#select .card[data-id="${id}"]`).click();
+    await expect.poll(async () => (await tdbg()).tutorial?.step, { timeout: 10_000 }).toBe('next');
+    await expect(page.locator('#tutorial .tut-text')).toHaveText('Three tops picked! Now press "Next".');
+    await expect.poll(async () => (await tdbg()).voice.guideLast, { timeout: 10_000 }).toBe('tut_next');
+    await expectNoCjkVisible(page, '教學第 2 步');
+
+    // 解說語音只從英文那一套載入
+    expect(voiceFiles.filter((p) => p.includes('/voice/tutorial/en/')).length).toBe(18);
+    expect(voiceFiles.filter((p) => p.includes('/voice/tutorial/') && !p.includes('/voice/tutorial/en/'))).toEqual([]);
+    await page.locator('#tutorial .tut-exit').click();
+    await expect(page.locator('#title')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('英文版：手機橫向', () => {
+  test.use(phone('Pixel 7 landscape'));
+  test('觸控切到英文；組隊兩步全英文且不超出畫面', async ({ page }) => {
+    test.setTimeout(240_000);
+    const errors = watchErrors(page);
+    await page.goto('./?seed=63');
+    await page.locator('#title .lang-switch [data-lang="en"]').tap();
+    await expect(page.locator('#title h1')).toHaveText('BATTLE TOPS');
+    await expect(page.locator('#title .to-cpu')).toHaveText('VS CPU');
+    await expectSwitchClickable(page);
+    await expectNoHorizontalScroll(page);
+    await expectNoCjkVisible(page, '手機標題');
+    await page.screenshot({ path: 'e2e/screenshots/110-lang-mobile-title-en.png' });
+
+    await page.locator('#title .to-cpu').tap();
+    await expect(page.locator('#select')).toBeVisible();
+    await page.screenshot({ path: 'e2e/screenshots/111-lang-mobile-select-en.png' });
+    await expectNoCjkVisible(page, '手機組隊第 1 步');
+    await expectInViewport(page, '#select .go');
+    await pickTops(page, ['orion', 'blaze', 'turtle'], true);
+    await expect(page.locator('#arrange')).toBeVisible();
+    for (const sel of ['#arrange .ar-slots', '#arrange .ar-ready', '#arrange .ar-opp']) await expectInViewport(page, sel);
+    await expectNoHorizontalScroll(page);
+    await expectNoCjkVisible(page, '手機組隊第 2 步');
+    await page.screenshot({ path: 'e2e/screenshots/112-lang-mobile-arrange-en.png' });
+    await confirmArrange(page, true);
+
+    await expect(page.locator('#hud .panel[data-side="0"] .name')).toHaveText('YOU · Mirage Orion');
+    await expect(page.locator('#launch .hint .tc')).toHaveText('Hold your finger and slide down (pull the cord), then let go on "Go Shoot"! Slide left/right to aim');
+    await expectNoCjkVisible(page, '手機對戰畫面');
+    await page.screenshot({ path: 'e2e/screenshots/113-lang-mobile-hud-en.png' });
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('英文版：手機直向', () => {
+  test.use(phone('Pixel 7'));
+  test('三個語言鈕都在畫面內、不蓋到標題', async ({ page }) => {
+    await page.goto('./?seed=64');
+    await page.locator('#title .lang-switch [data-lang="en"]').tap();
+    await expect(page.locator('#title .to-cpu')).toHaveText('VS CPU');
+    await expectSwitchClickable(page);
+    await expectNoHorizontalScroll(page);
+    await expectNoCjkVisible(page, '手機直向標題');
+    await page.screenshot({ path: 'e2e/screenshots/114-lang-portrait-title-en.png' });
   });
 });

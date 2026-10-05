@@ -1,25 +1,30 @@
 import { lang as currentLang, type Lang } from '../i18n';
 import type { TopSpec } from '../sim/types';
 import type { AudioEngine } from './engine';
+import tutorialEnLines from './tutorial-lines.en.json';
 import tutorialLines from './tutorial-lines.json';
 import { trimRange } from './trim';
+import enLines from './voice-lines.en.json';
 import jaLines from './voice-lines.json';
 import zhLines from './voice-lines.zh.json';
 
-/** 台詞 id（對應 voice-lines.json 的 lines；中文表 voice-lines.zh.json 用同一組 id） */
+/** 台詞 id（對應 voice-lines.json 的 lines；中文表 voice-lines.zh.json、英文表 voice-lines.en.json 用同一組 id） */
 export type VoiceId = keyof typeof jaLines.lines;
 
 /** 語音來源：預先生成的音檔、瀏覽器語音合成（退路）、都沒有（含載入中） */
 export type VoiceMode = 'fish-files' | 'speechSynthesis' | 'none';
 
-/** 操作教學的解說台詞 id（tutorial-lines.json，只有中文） */
+/** 操作教學的解說台詞 id（中文 tutorial-lines.json 與英文 tutorial-lines.en.json 用同一組 id） */
 export type GuideId = keyof typeof tutorialLines.lines;
 
 /** 播放優先權：0 閒聊（有人講話就放棄）、1 一般、2 重要（倒數、終結、勝負）、3 教學解說（最優先） */
 export type Priority = 0 | 1 | 2 | 3;
 
-/** 一套音檔：日文、中文，或操作教學的解說 */
-type SetId = Lang | 'tutorial';
+/** 操作教學的解說：中文（日文版、中文版共用）或英文（英文版） */
+type GuideSet = 'tutorial' | 'tutorial-en';
+
+/** 一套音檔：日文、中文、英文，或操作教學的解說 */
+type SetId = Lang | GuideSet;
 
 /** 一句台詞：角色與文字（方括號是語氣標記） */
 interface Line {
@@ -27,12 +32,26 @@ interface Line {
   text: string;
 }
 
-/** 各語言的台詞表；中文表少了任何一句時，這裡的型別檢查會報錯 */
-const LINES: Record<Lang, Record<VoiceId, Line>> = { ja: jaLines.lines, zh: zhLines.lines };
-/** 各套音檔的資料夾（相對 BASE_URL）：日文沿用原本的 voice/，中文在 voice/zh/，教學解說在 voice/tutorial/ */
-export const VOICE_DIR: Record<SetId, string> = { ja: 'voice/', zh: 'voice/zh/', tutorial: 'voice/tutorial/' };
+/** 各語言的台詞表；中文表或英文表少了任何一句時，這裡的型別檢查會報錯 */
+const LINES: Record<Lang, Record<VoiceId, Line>> = { ja: jaLines.lines, zh: zhLines.lines, en: enLines.lines };
+/** 教學解說的台詞表（英文表少了任何一句時型別檢查會報錯） */
+const GUIDE_LINES: Record<GuideSet, Record<GuideId, Line>> = { tutorial: tutorialLines.lines, 'tutorial-en': tutorialEnLines.lines };
+/**
+ * 各套音檔的資料夾（相對 BASE_URL）：日文沿用原本的 voice/，中文在 voice/zh/，英文在 voice/en/；
+ * 教學解說中文在 voice/tutorial/，英文在 voice/tutorial/en/
+ */
+export const VOICE_DIR: Record<SetId, string> = {
+  ja: 'voice/',
+  zh: 'voice/zh/',
+  en: 'voice/en/',
+  tutorial: 'voice/tutorial/',
+  'tutorial-en': 'voice/tutorial/en/',
+};
 /** 語音合成退路用的語言 */
-const SYNTH_LANG: Record<Lang, string> = { ja: 'ja-JP', zh: 'zh-TW' };
+const SYNTH_LANG: Record<Lang, string> = { ja: 'ja-JP', zh: 'zh-TW', en: 'en-US' };
+
+/** 某個介面語言用的教學解說：英文版用英文，日文版與中文版用中文 */
+export const guideSetOf = (l: Lang): GuideSet => (l === 'en' ? 'tutorial-en' : 'tutorial');
 
 /** 原創四顆沿用舊的必殺語音檔（依類型命名），其餘用 p_special_<代號> */
 const LEGACY_SPECIAL_VOICE: Record<string, VoiceId> = {
@@ -53,8 +72,8 @@ function plainText(l: Lang, id: VoiceId): string {
 }
 
 /** 教學解說去掉語氣標記的文字 */
-function guideText(id: GuideId): string {
-  return tutorialLines.lines[id].text.replace(/\[[^\]]*\]/g, '').trim();
+function guideText(set: GuideSet, id: GuideId): string {
+  return GUIDE_LINES[set][id].text.replace(/\[[^\]]*\]/g, '').trim();
 }
 
 /** 一套音檔：解碼後的音訊（依台詞 id）、來源（載入完成前為 none） */
@@ -65,7 +84,7 @@ interface VoiceSet {
 }
 
 /**
- * 台詞播放器（日語或中文，跟著介面語言）。
+ * 台詞播放器（日語、中文或英文，跟著介面語言）。
  * 載入該語言 manifest.json 列出的 Fish Audio 音檔並解碼，
  * 去掉開頭與結尾的靜音（讓「ゴー・シュート！」「發射！」準確落在倒數節拍上）。
  * 同一時間只講一句：高優先權可以打斷低優先權，閒聊類台詞遇到有人在講就略過。
@@ -112,9 +131,9 @@ export class VoicePlayer {
     void this.load();
   }
 
-  /** 載入教學解說的音檔（開始教學時呼叫；已載過就沿用） */
+  /** 載入目前語言用的教學解說音檔（開始教學時呼叫；已載過就沿用） */
   loadGuide(): Promise<void> {
-    return this.loadSet('tutorial').loading;
+    return this.loadSet(guideSetOf(this.lang)).loading;
   }
 
   /** 取得（必要時開始載入）某一套音檔；失敗時那一套改用語音合成退路 */
@@ -162,20 +181,23 @@ export class VoicePlayer {
     return b ? b.duration : 0.12 * plainText(this.lang, id).length + 0.3;
   }
 
-  /** 教學解說的長度（秒）；還沒載好時依字數粗估 */
+  /** 教學解說的長度（秒）；還沒載好時依字數粗估（英文一個字母念得比中文一個字快） */
   guideDuration(id: GuideId): number {
-    const b = this.sets.get('tutorial')?.buffers.get(id);
-    return b ? b.duration : 0.2 * guideText(id).length + 0.3;
+    const gs = guideSetOf(this.lang);
+    const b = this.sets.get(gs)?.buffers.get(id);
+    return b ? b.duration : (gs === 'tutorial-en' ? 0.065 : 0.2) * guideText(gs, id).length + 0.3;
   }
 
   /**
-   * 播放教學解說（最優先，會打斷主播與角色台詞；中文，不跟介面語言切換）。
-   * 音檔還沒載好或缺檔時用瀏覽器的中文語音合成。回傳是否真的播出。
+   * 播放教學解說（最優先，會打斷主播與角色台詞）：英文版講英文，日文版與中文版講中文。
+   * 音檔還沒載好或缺檔時用瀏覽器的語音合成。回傳是否真的播出。
    */
   guide(id: GuideId): boolean {
-    const set = this.sets.get('tutorial');
+    const gs = guideSetOf(this.lang);
+    const set = this.sets.get(gs);
     const buf = set?.mode === 'fish-files' ? set.buffers.get(id) : undefined;
-    const ok = this.start(buf, guideText(id), 'guide', 'zh-TW', 3, buf ? buf.duration : this.guideDuration(id));
+    const synth = gs === 'tutorial-en' ? SYNTH_LANG.en : SYNTH_LANG.zh;
+    const ok = this.start(buf, guideText(gs, id), 'guide', synth, 3, buf ? buf.duration : this.guideDuration(id));
     if (ok) {
       this.guidePlayed++;
       this.guideLast = id;

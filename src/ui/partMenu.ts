@@ -1,13 +1,14 @@
+import { descOf, plainName, tr } from '../i18n';
 import { DISK_IDS, DRIVER_IDS, PARTS, spareHolder, STOCK, type PartDef, type PartId, type PartSlot, type TeamLoadouts } from '../sim/parts';
 import { buildSpec, TOP_SPECS } from '../sim/tops';
 import type { BaseStats, TopId } from '../sim/types';
-import { el } from './common';
+import { el, statLabel } from './common';
 
-/** 欄位的中文名 */
-export const SLOT_LABEL: Record<PartSlot, string> = { disk: '盤', driver: '軸' };
+/** 欄位名稱（盤／軸；英文版 Disk／Driver） */
+export const slotLabel = (slot: PartSlot) => tr(slot === 'disk' ? 'slot.disk' : 'slot.driver');
 
-/** 數值增減的短標籤（零件清單裡的小膠囊） */
-const SHORT: Record<keyof BaseStats, string> = { attack: '攻', defense: '防', stamina: '持', weight: '重', burst: '爆', dash: '機' };
+/** 會列出增減的六項屬性（零件清單裡的小膠囊，依這個順序） */
+const STAT_KEYS: (keyof BaseStats)[] = ['attack', 'defense', 'stamina', 'weight', 'burst', 'dash'];
 
 /** 零件清單的一個選項 */
 export interface PartOption {
@@ -37,18 +38,18 @@ export function partOptions(top: TopId, slot: PartSlot, loadouts: TeamLoadouts):
   const option = (part: PartId | null): PartOption => {
     const stats = buildSpec(top, { ...lo, [slot]: part }).stats;
     const delta: PartOption['delta'] = {};
-    for (const k of Object.keys(SHORT) as (keyof BaseStats)[]) if (stats[k] !== base[k]) delta[k] = stats[k] - base[k];
+    for (const k of STAT_KEYS) if (stats[k] !== base[k]) delta[k] = stats[k] - base[k];
     const holder = part ? spareHolder(loadouts, part) : null;
     return { part, def: PARTS[part ?? stockId], stock: part === null, delta, takenBy: holder !== top ? holder : null, current: lo[slot] === part };
   };
   return [option(null), ...ids.map(option)];
 }
 
-/** 零件按鈕上的文字：零件名、簡碼與是不是原廠 */
+/** 零件按鈕上的文字：零件名（目前語言）、簡碼與是不是原廠 */
 export function partButtonText(top: TopId, slot: PartSlot, loadouts: TeamLoadouts): { name: string; code: string; stock: boolean } {
   const id = loadouts[top]?.[slot] ?? null;
   const def = PARTS[id ?? TOP_SPECS[top].stock[slot]];
-  return { name: def.nameZh, code: def.code, stock: id === null };
+  return { name: plainName(def), code: def.code, stock: id === null };
 }
 
 /** 零件清單的開啟參數 */
@@ -110,20 +111,20 @@ class PartMenu {
     const root = el('div', 'part-menu');
     root.id = 'part-menu';
     root.setAttribute('role', 'listbox');
-    root.append(el('div', 'pm-head', `換${SLOT_LABEL[req.slot]}：${TOP_SPECS[req.top].nameZh}`));
+    root.append(el('div', 'pm-head', tr('part.menuHead', { slot: slotLabel(req.slot), name: plainName(TOP_SPECS[req.top]) })));
     for (const o of partOptions(req.top, req.slot, req.loadouts)) {
       const b = el('button', `pm-opt${o.current ? ' current' : ''}`);
       b.type = 'button';
       b.dataset.part = o.part ?? '';
       b.disabled = o.takenBy !== null;
-      const name = el('span', 'pm-name', `${o.def.nameZh}（${o.def.code}）`);
-      if (o.stock) name.append(el('small', 'pm-tag', '原廠'));
-      if (o.current) name.append(el('small', 'pm-tag on', '使用中'));
+      const name = el('span', 'pm-name', tr('part.option', { name: plainName(o.def), code: o.def.code }));
+      if (o.stock) name.append(el('small', 'pm-tag', tr('part.stock')));
+      if (o.current) name.append(el('small', 'pm-tag on', tr('part.current')));
       const deltas = el('span', 'pm-delta');
       for (const [k, v] of Object.entries(o.delta) as [keyof BaseStats, number][]) {
-        deltas.append(el('i', v > 0 ? 'up' : 'down', `${SHORT[k]}${v > 0 ? '+' : ''}${v}${k === 'weight' ? 'g' : ''}`));
+        deltas.append(el('i', v > 0 ? 'up' : 'down', `${statLabel(k, 'tiny')}${v > 0 ? '+' : ''}${v}${k === 'weight' ? 'g' : ''}`));
       }
-      const desc = el('span', 'pm-desc', o.takenBy ? `裝在${TOP_SPECS[o.takenBy].nameZh}（備用零件每種一件）` : o.def.descZh);
+      const desc = el('span', 'pm-desc', o.takenBy ? tr('part.takenBy', { name: plainName(TOP_SPECS[o.takenBy]) }) : descOf(o.def));
       b.append(name, deltas, desc);
       b.onclick = () => {
         const r = this.req;
@@ -188,10 +189,10 @@ export function partButton(top: TopId, slot: PartSlot, loadouts: TeamLoadouts, o
   b.classList.toggle('changed', !t.stock);
   const name = el('span', 'pb-name', t.name);
   name.append(el('small', 'pb-code', t.code));
-  b.append(el('b', 'pb-slot', SLOT_LABEL[slot]), name);
-  if (t.stock) b.append(el('small', 'pb-tag', '原廠'));
+  b.append(el('b', 'pb-slot', slotLabel(slot)), name);
+  if (t.stock) b.append(el('small', 'pb-tag', tr('part.stock')));
   b.append(el('span', 'pb-caret', '▾'));
-  b.setAttribute('aria-label', `換${SLOT_LABEL[slot]}（目前：${t.name}（${t.code}）${t.stock ? '，原廠' : ''}）`);
+  b.setAttribute('aria-label', tr('part.aria', { slot: slotLabel(slot), name: t.name, code: t.code, stock: t.stock ? tr('part.ariaStock') : '' }));
   b.disabled = disabled;
   b.onclick = (e) => {
     e.stopPropagation();

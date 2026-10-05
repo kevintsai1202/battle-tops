@@ -1,0 +1,394 @@
+{
+  "countdown_3": {
+    "file": "countdown_3.mp3",
+    "text": "[excited] Three!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "7991cd8754d71ae7",
+    "seconds": 0.663
+  },
+  "countdown_2": {
+    "file": "countdown_2.mp3",
+    "text": "[excited] Two!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "3af6dd4e476db1fe",
+    "seconds": 0.508
+  },
+  "countdown_1": {
+    "file": "countdown_1.mp3",
+    "text": "[excited] One!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "bcd183976aae2825",
+    "seconds": 0.501
+  },
+  "go_shoot": {
+    "file": "go_shoot.mp3",
+    "text": "[shouting][excited] Go Shoot!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "9ce56df602cfb4f2",
+    "seconds": 1.122
+  },
+  "clash_1": {
+    "file": "clash_1.mp3",
+    "text": "[shouting][excited] What a collision!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "6db78e334cb6b8e6",
+    "seconds": 0.979
+  },
+  "clash_2": {
+    "file": "clash_2.mp3",
+    "text": "[excited] Incredible power!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "c09a52d05b8b5a88",
+    "seconds": 1.187
+  },
+  "clash_3": {
+    "file": "clash_3.mp3",
+    "text": "[shouting] What a massive impact!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "eedb42e278953235",
+    "seconds": 1.362
+  },
+  "clash_4": {
+    "file": "clash_4.mp3",
+    "text": "[excited] Sparks are flying!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "4d6371edcad7ab23",
+    "seconds": 1.176
+  },
+  "spin_finish": {
+    "file": "spin_finish.mp3",
+    "text": "[excited] Spin Finish!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "728b0e8731f80994",
+    "seconds": 0.927
+  },
+  "over_finish": {
+    "file": "over_finish.mp3",
+    "text": "[shouting][excited] Over Finish!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "56931731e2a739c9",
+    "seconds": 1.023
+  },
+  "burst_finish": {
+    "file": "burst_finish.mp3",
+    "text": "[shouting][excited] BURST Finish!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "f6be730befe3a401",
+    "seconds": 1.179
+  },
+  "xtreme_finish": {
+    "file": "xtreme_finish.mp3",
+    "text": "[shouting][excited] Xtreme Finish!!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "4a38c5673599cc71",
+    "seconds": 1.253
+  },
+  "battle_1": {
+    "file": "battle_1.mp3",
+    "text": "[excited] Battle one, stand by!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "225f4f427f49afc6",
+    "seconds": 2.114
+  },
+  "battle_2": {
+    "file": "battle_2.mp3",
+    "text": "[excited] Battle two, stand by!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "8537d53016e544c7",
+    "seconds": 1.952
+  },
+  "battle_final": {
+    "file": "battle_final.mp3",
+    "text": "[shouting][excited] Final battle!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "c38f5d3f55fb017d",
+    "seconds": 0.93
+  },
+  "overtime": {
+    "file": "overtime.mp3",
+    "text": "[shouting][excited] Overtime! Sudden death!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "d6bf49ca20e2e8c4",
+    "seconds": 1.878
+  },
+  "round_ready": {
+    "file": "round_ready.mp3",
+    "text": "[excited] Next round, stand by!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "8c20eaab13cefaf4",
+    "seconds": 1.886
+  },
+  "match_point": {
+    "file": "match_point.mp3",
+    "text": "[excited] Match point!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "dcc110af1de41886",
+    "seconds": 0.837
+  },
+  "winner_player": {
+    "file": "winner_player.mp3",
+    "text": "[shouting][excited] It's over! The winner is you!!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "04b2bb1d60a2a785",
+    "seconds": 2.103
+  },
+  "winner_rival": {
+    "file": "winner_rival.mp3",
+    "text": "[excited] It's over! Your rival wins this time!",
+    "speaker": "announcer",
+    "voiceId": "79d0bd3e4e5444b18f7b6d89b5927bf1",
+    "hash": "842e30a546a24c21",
+    "seconds": 2.559
+  },
+  "p_launch": {
+    "file": "p_launch.mp3",
+    "text": "[shouting] Let's goooo!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "3485774cfc540def",
+    "seconds": 1.189
+  },
+  "p_hit": {
+    "file": "p_hit.mp3",
+    "text": "[shouting] Not done yet!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "50890b1e86ffb7ad",
+    "seconds": 1.318
+  },
+  "p_hurt": {
+    "file": "p_hurt.mp3",
+    "text": "[shouting] Ugh... I won't lose!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "91657d7b3ee0b04f",
+    "seconds": 2.208
+  },
+  "p_special_attack": {
+    "file": "p_special_attack.mp3",
+    "text": "[shouting][excited] Special move! Dragon Impact!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "3c43d155ea5fb62b",
+    "seconds": 3.076
+  },
+  "p_special_defense": {
+    "file": "p_special_defense.mp3",
+    "text": "[shouting][excited] Special move! Iron Fortress!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "dc84dd1d4b91d3cf",
+    "seconds": 2.769
+  },
+  "p_special_stamina": {
+    "file": "p_special_stamina.mp3",
+    "text": "[shouting][excited] Special move! Eternal Cyclone!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "bcde29f6c9fa5c75",
+    "seconds": 2.663
+  },
+  "p_special_balance": {
+    "file": "p_special_balance.mp3",
+    "text": "[shouting][excited] Special move! Galaxy Nova!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "725f41a22aba6c64",
+    "seconds": 2.492
+  },
+  "p_special_azure": {
+    "file": "p_special_azure.mp3",
+    "text": "[shouting][excited] Special move! Storm Assault!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "2cabd28e5a3aff4e",
+    "seconds": 3.091
+  },
+  "p_special_pegasus": {
+    "file": "p_special_pegasus.mp3",
+    "text": "[shouting][excited] Special move! Tempest Bringer!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "5758621fb20b83ab",
+    "seconds": 3.055
+  },
+  "p_special_ldrago": {
+    "file": "p_special_ldrago.mp3",
+    "text": "[shouting][excited] Special move! Dragon Emperor Bite!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "d05f69a76e073dc8",
+    "seconds": 3.123
+  },
+  "p_special_valkyrie": {
+    "file": "p_special_valkyrie.mp3",
+    "text": "[shouting][excited] Special move! Rush Strike!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "de0da4ae6e2c87c7",
+    "seconds": 2.369
+  },
+  "p_special_draciel": {
+    "file": "p_special_draciel.mp3",
+    "text": "[shouting][excited] Special move! Metal Ball Guard!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "cefc663fed27ed73",
+    "seconds": 3.586
+  },
+  "p_special_leone": {
+    "file": "p_special_leone.mp3",
+    "text": "[shouting][excited] Special move! Lion Gale Wall!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "ea421b1e753901a8",
+    "seconds": 3.594
+  },
+  "p_special_kerbeus": {
+    "file": "p_special_kerbeus.mp3",
+    "text": "[shouting][excited] Special move! Triple Howl!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "b1e43ceb2eb56114",
+    "seconds": 2.936
+  },
+  "p_special_knight": {
+    "file": "p_special_knight.mp3",
+    "text": "[shouting][excited] Special move! Shield Impact!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "51da094b665e86c3",
+    "seconds": 2.683
+  },
+  "p_special_wolborg": {
+    "file": "p_special_wolborg.mp3",
+    "text": "[shouting][excited] Special move! Nova Blizzard!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "1edd9455c6b74375",
+    "seconds": 2.777
+  },
+  "p_special_orion": {
+    "file": "p_special_orion.mp3",
+    "text": "[shouting][excited] Special move! Barnard Loop!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "f2f9bee7a2f543ec",
+    "seconds": 2.058
+  },
+  "p_special_fafnir": {
+    "file": "p_special_fafnir.mp3",
+    "text": "[shouting][excited] Special move! Drain Spin!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "4d09f10948fee07a",
+    "seconds": 2.202
+  },
+  "p_special_wizard": {
+    "file": "p_special_wizard.mp3",
+    "text": "[shouting][excited] Special move! Mirage Parry!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "40c04d8529548c20",
+    "seconds": 2.856
+  },
+  "p_special_dranzer": {
+    "file": "p_special_dranzer.mp3",
+    "text": "[shouting][excited] Special move! Fire Arrow!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "b47ffcf11d877351",
+    "seconds": 1.838
+  },
+  "p_special_nemesis": {
+    "file": "p_special_nemesis.mp3",
+    "text": "[shouting][excited] Special move! Cataclysm!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "3f30e500f04b17f4",
+    "seconds": 2.253
+  },
+  "p_special_requiem": {
+    "file": "p_special_requiem.mp3",
+    "text": "[shouting][excited] Special move! Counter Break!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "e7cbd8221bb24a80",
+    "seconds": 2.239
+  },
+  "p_special_scythe": {
+    "file": "p_special_scythe.mp3",
+    "text": "[shouting][excited] Special move! Crescent Judge!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "65f3fed4958b9b47",
+    "seconds": 2.688
+  },
+  "p_win": {
+    "file": "p_win.mp3",
+    "text": "[excited] Yes! We won!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "459f6922408b19ac",
+    "seconds": 1.761
+  },
+  "p_lose": {
+    "file": "p_lose.mp3",
+    "text": "[sad] Darn... Next time, I'll win!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "3924ec84ceb20e22",
+    "seconds": 3.339
+  },
+  "r_taunt": {
+    "file": "r_taunt.mp3",
+    "text": "[confident] Hmph. Is that all you've got?",
+    "speaker": "rival",
+    "voiceId": "536d3a5e000945adb7038665781a4aca",
+    "hash": "80e4e774a260acd9",
+    "seconds": 1.767
+  },
+  "r_special": {
+    "file": "r_special.mp3",
+    "text": "[shouting] Behold my special move!!",
+    "speaker": "rival",
+    "voiceId": "536d3a5e000945adb7038665781a4aca",
+    "hash": "3aee90570376a81e",
+    "seconds": 1.516
+  },
+  "r_win": {
+    "file": "r_win.mp3",
+    "text": "[confident] You're not even close.",
+    "speaker": "rival",
+    "voiceId": "536d3a5e000945adb7038665781a4aca",
+    "hash": "f9eb68ad69e26cbe",
+    "seconds": 1.132
+  },
+  "r_lose": {
+    "file": "r_lose.mp3",
+    "text": "[shocked] Impossible... How could I lose...!",
+    "speaker": "rival",
+    "voiceId": "536d3a5e000945adb7038665781a4aca",
+    "hash": "5f6a25ddab443f0a",
+    "seconds": 2.242
+  }
+}
