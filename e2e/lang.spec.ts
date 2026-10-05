@@ -114,6 +114,33 @@ async function expectNoCjkVisible(page: Page, where: string): Promise<void> {
   expect(bad, `${where}：畫面上還有中日文字`).toEqual([]);
 }
 
+/**
+ * 英文版名鑑小格的名字完整：沒有被截斷（單行省略號、單字太長被裁、超過兩行被裁），
+ * 換行只在空白處（逐字量文字範圍，跨兩行的字會有兩個以上的矩形）。
+ */
+async function expectTileNamesWhole(page: Page, where: string): Promise<void> {
+  const bad = await page.locator('#select .card.tile .nm').evaluateAll((els) =>
+    els.flatMap((el) => {
+      const text = el.textContent ?? '';
+      const problems: string[] = [];
+      if (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1) problems.push(`${text}：被截斷`);
+      const node = el.firstChild;
+      let i = 0;
+      for (const w of text.split(' ')) {
+        if (node) {
+          const r = document.createRange();
+          r.setStart(node, i);
+          r.setEnd(node, i + w.length);
+          if (new Set([...r.getClientRects()].map((c) => Math.round(c.top))).size > 1) problems.push(`${text}：「${w}」被拆開`);
+        }
+        i += w.length + 1;
+      }
+      return problems;
+    }),
+  );
+  expect(bad, `${where}：名鑑名字不完整`).toEqual([]);
+}
+
 /** 收集頁面錯誤，測試最後斷言為空 */
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -127,11 +154,11 @@ function watchErrors(page: Page): string[] {
 test('桌機：切到中文並記住；組隊、發射、延長賽、對戰到結果畫面全中文，播的是中文語音', async ({ page }) => {
   test.setTimeout(600_000);
   const errors = watchErrors(page);
-  /** 下載過的語音檔路徑 */
+  /** 下載過的語音檔路徑（觀眾歡呼等音效檔不算） */
   const voiceFiles: string[] = [];
   page.on('request', (r) => {
     const p = new URL(r.url()).pathname;
-    if (p.endsWith('.mp3')) voiceFiles.push(p);
+    if (p.endsWith('.mp3') && p.includes('/voice/')) voiceFiles.push(p);
   });
   await recordTexts(page);
 
@@ -338,11 +365,11 @@ test.describe('英文版（瀏覽器語言是英文）', () => {
   test('第一次打開自動是英文版；試驗模式、線上房間、組隊、延長賽、對戰到結果畫面全英文，播的是英文語音', async ({ page }) => {
     test.setTimeout(600_000);
     const errors = watchErrors(page);
-    /** 下載過的語音檔路徑 */
+    /** 下載過的語音檔路徑（觀眾歡呼等音效檔不算） */
     const voiceFiles: string[] = [];
     page.on('request', (r) => {
       const p = new URL(r.url()).pathname;
-      if (p.endsWith('.mp3')) voiceFiles.push(p);
+      if (p.endsWith('.mp3') && p.includes('/voice/')) voiceFiles.push(p);
     });
     await recordTexts(page);
 
@@ -397,6 +424,7 @@ test.describe('英文版（瀏覽器語言是英文）', () => {
     await expect(page.locator('#select .card.tile[data-id="turtle"] .nm')).toHaveText('Iron Turtle');
     await expect(page.locator('#select .card.tile[data-id="turtle"] .emb')).toHaveText('亀');
     await expectNoCjkVisible(page, '組隊第 1 步');
+    await expectTileNamesWhole(page, '桌機組隊第 1 步');
     await page.screenshot({ path: 'e2e/screenshots/103-lang-select-en.png' });
 
     // 組隊第 2 步：零件按鈕與清單也是英文
@@ -477,7 +505,7 @@ test.describe('英文版（瀏覽器語言是英文）', () => {
     const voiceFiles: string[] = [];
     page.on('request', (r) => {
       const p = new URL(r.url()).pathname;
-      if (p.endsWith('.mp3')) voiceFiles.push(p);
+      if (p.endsWith('.mp3') && p.includes('/voice/')) voiceFiles.push(p);
     });
     type TutDbg = { voice: { guideLast: string | null }; tutorial: { step: string } | null };
     const tdbg = () => page.evaluate(() => (window as unknown as { __game: { debug(): TutDbg } }).__game.debug());
@@ -530,6 +558,7 @@ test.describe('英文版：手機橫向', () => {
     await page.screenshot({ path: 'e2e/screenshots/111-lang-mobile-select-en.png' });
     await expectNoCjkVisible(page, '手機組隊第 1 步');
     await expectInViewport(page, '#select .go');
+    await expectTileNamesWhole(page, '手機橫向組隊第 1 步');
     await pickTops(page, ['orion', 'blaze', 'turtle'], true);
     await expect(page.locator('#arrange')).toBeVisible();
     for (const sel of ['#arrange .ar-slots', '#arrange .ar-ready', '#arrange .ar-opp']) await expectInViewport(page, sel);

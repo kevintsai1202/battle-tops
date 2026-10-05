@@ -1,12 +1,12 @@
-import { test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 /**
- * 停轉倒下與出場飛出兩種終結動畫的畫面（爆裂在 battle.spec.ts 已截圖）。
+ * 停轉倒下與出場飛出兩種終結動畫的畫面（爆裂在 battle.spec.ts 已截圖）；終結時觀眾歡呼（錄音 public/sfx/cheer.mp3）真的有播。
  * 瀏覽器裡的對戰受影格時間影響不完全可重現，所以等到想要的終結方式出現為止（最多 8 回合）。
  * headless 軟體渲染時一回合要 2～3 分鐘牆鐘時間（撞擊特寫與必殺 cut-in 都會放慢時間），等待上限要留寬。
  */
 
-type Dbg = { counters: { finishes: number }; lastFinish: string | null; round: number };
+type Dbg = { counters: { finishes: number }; lastFinish: string | null; round: number; cheers: number };
 const dbg = (page: Page) => page.evaluate(() => (window as unknown as { __game: { debug(): Dbg } }).__game.debug());
 
 /**
@@ -21,6 +21,8 @@ async function shootFinish(page: Page, url: string, want: string, file: string):
     const d = await dbg(page);
     seen = d.counters.finishes;
     console.log(`第 ${d.round} 回合終結：${d.lastFinish}`);
+    // 終結時播觀眾歡呼（錄音在開始時背景載入，終結後 0.25 秒才開始）
+    await expect.poll(async () => (await dbg(page)).cheers, { timeout: 5_000 }).toBeGreaterThan(0);
     if (d.lastFinish === want) {
       await page.waitForTimeout(1200);
       await page.evaluate(() => ((window as any).__game.paused = true));

@@ -367,7 +367,8 @@ export class Game {
     // 給瀏覽器一點時間套用剛才的手勢，仍是暫停才顯示提示
     window.setTimeout(() => (hint.hidden = audio.ctx.state === 'running'), 300);
     this.voice = new VoicePlayer(this.audio);
-    this.audio.startCrowd();
+    // 觀眾歡呼的錄音：背景載入，不擋住遊戲；失敗就不歡呼（只記警告，不當成錯誤）
+    this.audio.loadCheer(`${import.meta.env.BASE_URL}sfx/cheer.mp3`).catch((e) => console.warn('[audio] cheer', e));
     this.audio.setMusic(this.musicOn, false);
     return this.voice.load();
   }
@@ -2194,6 +2195,7 @@ ${tr('banner.at', { arena: plainName(this.arena) })}`, {
       counters: { ...this.counters },
       sparks: this.effects.sparksEmitted,
       sfx: this.audio?.sfxCount ?? 0,
+      cheers: this.audio?.cheerCount ?? 0,
       audioLevel: this.audio?.peakLevel ?? 0,
       audioState: this.audio?.ctx.state ?? 'none',
       voice: {

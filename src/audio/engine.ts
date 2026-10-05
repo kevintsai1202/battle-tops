@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CHEER_LEVEL, CheerGate, cheerLength } from './cheer';
 
 /** 一顆陀螺的轉動聲（持續播放，音高與音量跟著轉速） */
 export interface Hum {
@@ -8,9 +9,16 @@ export interface Hum {
 }
 
 /**
- * Web Audio 音效引擎：所有音效都以程式合成（沒有素材授權問題）。
+ * 觀眾歡呼最大聲時的音量：錄音已統一到 −21 LUFS（scripts/cheer-samples.mjs --export），
+ * 使用者試聽後要比試聽版小聲：先調小約 5 dB，聽過遊戲裡的音量後再小 3 dB。主輸出的壓縮器會自動補償增益（約 +4.5 dB），
+ * 所以用離線合成實測校準（scripts/render-bgm.mjs 的 cheerOnly 版本）：只播歡呼時約比原始音檔小 8 dB。
+ */
+const CHEER_GAIN = 0.26;
+
+/**
+ * Web Audio 音效引擎：音效以程式合成（沒有素材授權問題）；只有觀眾歡呼是真實錄音（CC0，見 src/audio/cheer.ts）。
  * - 空間化：PannerNode（HRTF），聆聽者跟著鏡頭走，音效從撞擊點的方向傳來。
- * - 匯流排：sfx / music / voice 三條，語音播放時壓低 sfx 與 music（ducking）。
+ * - 匯流排：sfx / music / voice / crowd（觀眾歡呼）四條，語音播放時壓低 sfx、music 與 crowd（ducking）。
  * - 殘響：以雜訊生成的 impulse response 模擬場館迴響。
  * - 主輸出前有壓縮器，避免撞擊、重低音、喊聲疊加時破音。
  * - 慢動作：所有持續音的音高跟著時間流速往下掉，做出動畫式的「時間凍結」聲。
@@ -21,13 +29,20 @@ export class AudioEngine {
   readonly sfx: GainNode;
   readonly music: GainNode;
   readonly voice: GainNode;
+  /** 觀眾歡呼的匯流排（語音播放時只稍微壓低：觀眾聲在主播底下才像轉播） */
+  readonly crowd: GainNode;
   /** 送往殘響的輸入 */
   readonly reverbSend: GainNode;
   private readonly noise: AudioBuffer;
   private readonly hums = new Set<{ osc: OscillatorNode[]; base: number[]; filters: BiquadFilterNode[]; fbase: number[] }>();
   private pitch = 1;
-  private crowdGain: GainNode | null = null;
   private excitement = 0;
+  /** 觀眾歡呼的錄音（loadCheer 載入；沒載到就不歡呼）、閘門與正在播的那一聲 */
+  private cheerBuf: AudioBuffer | null = null;
+  private readonly cheerGate = new CheerGate();
+  private cheerNow: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  /** 累計播放的歡呼次數（e2e 觀察用） */
+  cheerCount = 0;
   private bgm: Bgm | null = null;
   /** 累計播放的音效數（e2e 觀察用） */
   sfxCount = 0;
@@ -37,8 +52,12 @@ export class AudioEngine {
   /** 最近一段時間的輸出峰值 RMS */
   peakLevel = 0;
 
-  constructor() {
-    this.ctx = new AudioContext({ latencyHint: 'interactive' });
+  /**
+   * opts.ctx：外部提供的音訊環境（試聽腳本用 OfflineAudioContext 離線合成，見 scripts/render-bgm.mjs）；
+   * 不給時建立即時播放的 AudioContext。
+   */
+  constructor(opts: { ctx?: AudioContext } = {}) {
+    this.ctx = opts.ctx ?? new AudioContext({ latencyHint: 'interactive' });
     const ctx = this.ctx;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
@@ -62,6 +81,8 @@ export class AudioEngine {
     this.sfx.connect(this.master);
     this.music.connect(this.master);
     this.voice.connect(this.master);
+    this.crowd = ctx.createGain();
+    this.crowd.connect(this.master);
 
     const conv = ctx.createConvolver();
     conv.buffer = this.impulse(2.6, 2.4);
@@ -307,6 +328,7 @@ export class AudioEngine {
       this.noiseHit(this.sfx, t0, 'lowpass', 900, 120, 0.8, 1.0, 1.6, 0.005);
       this.tone(this.sfx, t0, 'sine', 70, 26, 1.0, 1.8, 0.01);
       this.tone(this.reverbSend, t0, 'triangle', base * 0.5, base * 0.45, 0.4, 2.2);
+      this.cheer(CHEER_LEVEL.bigClash);
     }
     this.excitement = Math.min(1, this.excitement + intensity * 0.05);
     this.sfxCount++;
@@ -364,11 +386,12 @@ export class AudioEngine {
       this.tone(out, t0 + 0.9, 'sine', fr, fr, 0.18, d);
     }
     this.tone(this.sfx, t0 + 0.9, 'sine', 110, 40, 0.8, 0.6);
+    this.cheer(CHEER_LEVEL.special);
     this.excitement = 1;
     this.sfxCount++;
   }
 
-  /** 回合終結：大爆炸 + 觀眾歡呼 */
+  /** 回合終結：大爆炸 + 觀眾歡呼（錄音） */
   finish(pos: THREE.Vector3): void {
     const t0 = this.ctx.currentTime + 0.01;
     const out = this.panner(pos);
@@ -376,10 +399,7 @@ export class AudioEngine {
     this.noiseHit(this.sfx, t0, 'lowpass', 2500, 90, 0.7, 1.0, 2.4, 0.005);
     this.tone(this.sfx, t0, 'sine', 90, 24, 1.0, 2.0, 0.01);
     this.clash(pos, 12, false, false);
-    // 歡呼：多段帶通雜訊慢慢湧起再退去
-    for (const [f, q] of [[700, 0.8], [1500, 1.2], [3000, 1.5]] as const) {
-      this.noiseHit(this.sfx, t0 + 0.15, 'bandpass', f, f * 1.1, q, 0.28, 3.2, 0.5);
-    }
+    this.cheer(CHEER_LEVEL.finish);
     this.excitement = 1;
     this.sfxCount++;
   }
@@ -417,6 +437,7 @@ export class AudioEngine {
     for (const [bus, low, normal] of [
       [this.sfx, 0.4, 1],
       [this.music, 0.12, 0.32],
+      [this.crowd, 0.65, 1],
     ] as const) {
       bus.gain.cancelScheduledValues(t);
       bus.gain.setTargetAtTime(low, t, 0.03);
@@ -424,33 +445,7 @@ export class AudioEngine {
     }
   }
 
-  /** 觀眾席環境音（持續），音量跟著比賽激烈程度 */
-  startCrowd(): void {
-    if (this.crowdGain) return;
-    const ctx = this.ctx;
-    this.crowdGain = ctx.createGain();
-    this.crowdGain.gain.value = 0.03;
-    for (const [f, q] of [[600, 0.7], [1400, 1], [2600, 1.3]] as const) {
-      const s = this.noiseSrc();
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = f;
-      bp.Q.value = q;
-      const g = ctx.createGain();
-      const lfo = ctx.createOscillator();
-      lfo.frequency.value = 0.3 + Math.random() * 0.6;
-      const depth = ctx.createGain();
-      depth.gain.value = 0.3;
-      g.gain.value = 0.7;
-      lfo.connect(depth).connect(g.gain);
-      s.connect(bp).connect(g).connect(this.crowdGain);
-      s.start();
-      lfo.start();
-    }
-    this.crowdGain.connect(this.sfx);
-  }
-
-  /** 每幀：激烈程度衰減、更新觀眾音量、量測輸出音量 */
+  /** 每幀：激烈程度衰減（場館燈光用）、量測輸出音量 */
   update(dt: number): number {
     this.excitement *= Math.exp(-dt * 0.5);
     this.analyser.getFloatTimeDomainData(this.analyserBuf);
@@ -458,8 +453,50 @@ export class AudioEngine {
     for (const v of this.analyserBuf) sum += v * v;
     const rms = Math.sqrt(sum / this.analyserBuf.length);
     this.peakLevel = Math.max(rms, this.peakLevel * Math.exp(-dt * 0.3));
-    if (this.crowdGain) this.crowdGain.gain.setTargetAtTime(0.03 + this.excitement * 0.14, this.ctx.currentTime, 0.2);
     return this.excitement;
+  }
+
+  /** 載入觀眾歡呼的錄音（不會擋住遊戲；失敗時就不歡呼） */
+  async loadCheer(url: string): Promise<void> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`cheer ${res.status}`);
+    this.cheerBuf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+  }
+
+  /**
+   * 觀眾歡呼：level 為強度（CHEER_LEVEL；越小聲播得越短），delay 秒後開始（觀眾的反應比撞擊慢一點才像真的）。
+   * 同一段時間只播一聲：更大聲的會讓正在播的那一聲淡出（見 CheerGate）。每次播放速度隨機差一點，重複時才不會一模一樣。
+   */
+  cheer(level: number, delay = 0.25): void {
+    const buf = this.cheerBuf;
+    if (!buf) return;
+    const now = this.ctx.currentTime;
+    const r = this.cheerGate.request(now, level);
+    if (!r) return;
+    if (r === 'replace' && this.cheerNow) {
+      const old = this.cheerNow;
+      old.gain.gain.cancelScheduledValues(now);
+      old.gain.gain.setTargetAtTime(0, now, 0.03);
+      old.src.stop(now + 0.15);
+    }
+    const t0 = now + delay;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.96 + Math.random() * 0.08;
+    const g = this.ctx.createGain();
+    const vol = CHEER_GAIN * level;
+    const len = cheerLength(level, buf.duration / src.playbackRate.value);
+    g.gain.setValueAtTime(vol, t0);
+    // 比完整段短時，最後 0.6 秒淡出
+    if (len < buf.duration / src.playbackRate.value) {
+      g.gain.setValueAtTime(vol, t0 + Math.max(0, len - 0.6));
+      g.gain.linearRampToValueAtTime(0.0001, t0 + len);
+    }
+    src.connect(g).connect(this.crowd);
+    src.start(t0);
+    src.stop(t0 + len + 0.05);
+    this.cheerNow = { src, gain: g };
+    this.cheerCount++;
   }
 
   /** 開始／停止戰鬥 BGM */
@@ -472,6 +509,17 @@ export class AudioEngine {
       this.bgm = null;
     }
     this.bgm?.setIntense(intense);
+  }
+
+  /**
+   * 離線試聽用：從 t0 開始一次排好 seconds 秒的 BGM（不啟動計時器；即時播放用 setMusic）。
+   * intense 為 true 是對戰中的完整版，false 是選單畫面的輕量版。
+   */
+  scheduleMusic(intense: boolean, t0: number, seconds: number): void {
+    const bgm = new Bgm(this);
+    bgm.setIntense(intense);
+    bgm.startAt(t0);
+    bgm.scheduleUntil(t0 + seconds);
   }
 
   /** 供 BGM 使用的內部工具 */
@@ -503,8 +551,14 @@ class Bgm {
   }
 
   start(): void {
-    this.next = this.a.ctx.currentTime + 0.1;
-    this.timer = window.setInterval(() => this.schedule(), 25);
+    this.startAt(this.a.ctx.currentTime + 0.1);
+    this.timer = window.setInterval(() => this.scheduleUntil(this.a.ctx.currentTime + 0.15), 25);
+  }
+
+  /** 第一個音符的時間（從頭開始） */
+  startAt(t: number): void {
+    this.next = t;
+    this.step = 0;
   }
 
   stop(): void {
@@ -520,10 +574,10 @@ class Bgm {
     this.intense = on;
   }
 
-  private schedule(): void {
-    const ctx = this.a.ctx;
+  /** 把時間 t 之前的音符都排好（即時播放每 25ms 排到 0.15 秒後；離線試聽一次排完整段） */
+  scheduleUntil(t: number): void {
     const sixteenth = 60 / this.bpm / 4 / this.rate;
-    while (this.next < ctx.currentTime + 0.15) {
+    while (this.next < t) {
       this.play(this.step, this.next);
       this.next += sixteenth;
       this.step = (this.step + 1) % 256;

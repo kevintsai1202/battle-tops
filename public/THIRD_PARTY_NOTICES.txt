@@ -1,6 +1,6 @@
 第三方軟體授權聲明（Third-party notices）
 
-本遊戲使用下列開放原始碼軟體與字型，依各自的授權條款散布。
+本遊戲使用下列開放原始碼軟體、字型與錄音，依各自的授權條款散布。
 
 ================================================================
 three.js 0.186.1（網頁端，MIT License）
@@ -52,6 +52,17 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+================================================================
+觀眾歡呼錄音（public/sfx/cheer.mp3，CC0 1.0 公眾領域貢獻宣告）
+"cheering and clapping crowd 1" by AlaskaRobotics
+https://freesound.org/s/221568/
+================================================================
+原作者以 CC0 1.0 放棄著作權，可以自由使用、修改與散布，不需要標示姓名：
+https://creativecommons.org/publicdomain/zero/1.0/
+本遊戲使用的版本：取 Freesound 的 128 kbps 預覽檔，從 1.5 秒起剪 4 秒、加淡入淡出、
+響度統一為 -21 LUFS，重新編碼為 48 kHz 立體聲 128 kbps MP3
+（產生方式：node scripts/cheer-samples.mjs --export 221568）。
 
 ================================================================
 Dela Gothic One（標題字型，SIL Open Font License 1.1）

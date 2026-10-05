@@ -1422,6 +1422,23 @@ body.touch .tc {
   opacity: 0.7;
 }
 
+/*
+ * 英文版：名字多半是兩個單字，單行會被截成「Blaze Dr…」。改成在空白處換行、最多兩行，單字不拆開。
+ * 比較過縮小字級（手機上仍有 11 個名字被截斷）與換兩行（三種畫面都完整、名鑑高度不變），見 scripts/tile-name-probe.mjs。
+ */
+html:lang(en) .card.tile .nm {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  line-height: 1.1;
+  text-overflow: clip;
+}
+
 .card.tile .left {
   position: absolute;
   top: 3px;

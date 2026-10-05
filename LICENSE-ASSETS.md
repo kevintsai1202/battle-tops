@@ -8,7 +8,7 @@ Battle Tops 免費提供，原始碼公開，**禁止商業使用**。本專案�
 | --- | --- |
 | 程式碼：`src/`、`server/`、`scripts/`、`tests/`、`e2e/`、`index.html` 與各設定檔 | [PolyForm Noncommercial License 1.0.0](LICENSE) |
 | 作者自己製作的素材：語音檔（`public/voice/`）、台詞文字、說明文件與截圖（`docs/`） | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)（姓名標示－非商業性） |
-| 第三方套件與字型：three.js、ws、Dela Gothic One | 依各自的授權，見 [public/THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt) |
+| 第三方套件、字型與錄音：three.js、ws、Dela Gothic One、觀眾歡呼錄音（Freesound #221568，CC0） | 依各自的授權，見 [public/THIRD_PARTY_NOTICES.txt](public/THIRD_PARTY_NOTICES.txt) |
 
 兩種授權都允許免費遊玩、研究、修改與再散布，條件是**非商業用途**，並保留作者姓名與授權聲明。商業使用要另外取得作者的書面同意。
 
