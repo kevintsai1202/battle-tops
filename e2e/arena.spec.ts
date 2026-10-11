@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * 場地與名鑑：
- * 1. 組隊畫面有 20 格陀螺、詳細資料（雷達圖）；切換場地會換掉場館外觀，重新整理後仍記得。
+ * 1. 組隊畫面有 26 格陀螺、詳細資料（雷達圖）；切換場地會換掉場館外觀，重新整理後仍記得。
  * 2. 五個特殊場地各跑一段展示對戰並截圖；火山的熔岩會噴發（場地機關事件）；
  *    雙層戰鬥盤把模擬時間撥到中央降下的時段，確認凹槽出現（升降狀態 level = 1）再截圖。
  */
@@ -10,12 +10,12 @@ import { expect, test, type Page } from '@playwright/test';
 type ArenaDbg = { state: string; arena: string; arenaChoice: string; counters: { hazards: number; clashes: number }; lift: { level: number; warn: number } };
 const dbg = (page: Page) => page.evaluate(() => (window as unknown as { __game: { debug(): ArenaDbg } }).__game.debug());
 
-test('組隊畫面：20 顆名鑑、雷達圖、切換場地並記住', async ({ page }) => {
+test('組隊畫面：26 顆名鑑、雷達圖、切換場地並記住', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto('./?seed=61');
   await page.locator('#title .to-cpu').click();
-  await expect(page.locator('#select .card')).toHaveCount(20);
+  await expect(page.locator('#select .card')).toHaveCount(26);
   await expect(page.locator('#select .arena button')).toHaveCount(7);
   await expect(page.locator('#select .arena button.on')).toHaveAttribute('data-id', 'practice');
 

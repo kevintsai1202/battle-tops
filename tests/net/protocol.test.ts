@@ -85,6 +85,9 @@ describe('客戶端訊息檢查', () => {
 describe('隊伍檢查', () => {
   test('三顆不重複的合法陀螺', () => {
     expect(validateTeam(['blaze', 'turtle', 'gale'], {})).toBeNull();
+    // 2026-10-11 新增的 6 顆（協定版本 4）
+    expect(validateTeam(['shark', 'rod', 'emperor'], {})).toBeNull();
+    expect(validateTeam(['phoenix', 'drake', 'bahamut'], { drake: { disk: null, driver: 'rubber' } })).toBeNull();
     expect(validateTeam(['blaze', 'blaze', 'gale'], {})).not.toBeNull();
     expect(validateTeam(['blaze', 'turtle'], {})).not.toBeNull();
     expect(validateTeam(['blaze', 'turtle', 'nope'], {})).not.toBeNull();
@@ -128,7 +131,7 @@ describe('房間列表與快速加入', () => {
 describe('協定版本', () => {
   test('建房、加入、快速加入、重連都帶協定版本；沒帶或不是數字（舊版網頁）為 0，由伺服器回「請重新整理」', () => {
     const parse = (m: unknown) => parseClientMessage(JSON.stringify(m));
-    expect(PROTOCOL_VERSION).toBe(3);
+    expect(PROTOCOL_VERSION).toBe(4);
     expect(parse({ t: 'create', name: 'A' })).toMatchObject({ v: 0 });
     expect(parse({ t: 'join', code: 'ABCD', name: 'A', v: 2 })).toMatchObject({ v: 2 });
     expect(parse({ t: 'quick', name: 'A', v: 'x' })).toMatchObject({ v: 0 });

@@ -132,7 +132,7 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#select .card .badge')).toHaveText(['1', '2', '3', ...Array(17).fill('')]);
+  await expect(page.locator('#select .card .badge')).toHaveText(['1', '2', '3', ...Array(23).fill('')]);
   // 右側詳細資料：游標在第三顆（疾風鳳），有雷達圖與必殺技說明
   await expect(page.locator('#select .detail .d-zh')).toHaveText('疾風鳳');
   await expect(page.locator('#select .detail .radar')).toBeVisible();

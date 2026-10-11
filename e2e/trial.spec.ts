@@ -53,7 +53,7 @@ test('試驗模式：指定雙方的陀螺與零件 → 一戰的數據與累計
   await page.goto('./?seed=41');
   await page.locator('#title .to-trial').click();
   await expect(page.locator('#trial')).toBeVisible();
-  await expect(page.locator('#trial .card')).toHaveCount(20);
+  await expect(page.locator('#trial .card')).toHaveCount(26);
   // 預設：你＝烈焰龍、電腦＝鐵壁龜，選取「你」；場地沒有「隨機」
   await expect(page.locator('#trial .tr-side[data-side="player"]')).toHaveClass(/on/);
   await expect(page.locator('#trial .tr-side[data-side="player"] .tr-name')).toContainText('烈焰龍');

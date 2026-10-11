@@ -57,6 +57,26 @@ describe('陀螺名鑑', () => {
     }
   });
 
+  test('2026-10-11 新增的 6 顆 X 世代致敬陀螺：類型、旋轉方向與原型型號照官方資料', () => {
+    const expected: Record<string, { type: string; model: string }> = {
+      shark: { type: 'attack', model: 'UX-15' },
+      rod: { type: 'stamina', model: 'UX-03' },
+      phoenix: { type: 'attack', model: 'BX-23' },
+      drake: { type: 'attack', model: 'UX-11' },
+      emperor: { type: 'balance', model: 'CX-11' },
+      bahamut: { type: 'attack', model: 'CX-13' },
+    };
+    for (const [id, e] of Object.entries(expected)) {
+      const s = TOP_SPECS[id];
+      expect(s, id).toBeDefined();
+      expect(s.type, id).toBe(e.type);
+      expect(s.spinDir, id).toBe(1);
+      expect(s.origin, id).toContain(e.model);
+      expect(s.originEn, id).toContain(e.model);
+    }
+    expect(TOP_IDS).toHaveLength(26);
+  });
+
   test('有左旋陀螺；代號、名稱、紋章、必殺技名都不重複', () => {
     const all = TOP_IDS.map((id) => TOP_SPECS[id]);
     expect(all.some((s) => s.spinDir === -1)).toBe(true);

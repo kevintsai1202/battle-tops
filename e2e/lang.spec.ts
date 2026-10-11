@@ -7,11 +7,11 @@ import { confirmArrange, pickTeam, pickTops } from './team.helpers';
  * 語言切換（日文版／全中文版／英文版）：
  * 1. 桌機：標題畫面切到中文（不會開始遊戲），重新整理後仍是中文；組隊兩步、發射、延長賽、對戰、終結、結果畫面全中文：
  *    整段過程畫面上出現過的文字（含一閃即逝的橫幅、擬聲字、必殺 cut-in）都沒有日文假名，對戰相關的字也沒有英文（按鍵名稱除外）；
- *    語音只載入 voice/zh/ 的 49 句中文音檔，播出的是中文語音。
+ *    語音只載入 voice/zh/ 的 55 句中文音檔，播出的是中文語音。
  * 2. 桌機：語音已經開始用之後（進過線上房間）在標題畫面切換，語音跟著換語言；切回日文後畫面還原成日文版並記住。
  * 3. 手機橫向、直向：切換鈕在畫面內、觸控切換；組隊兩步全中文且不超出畫面。
  * 4. 英文版（瀏覽器語言是英文時第一次打開就是英文版）：試驗模式、線上房間、組隊兩步、延長賽、對戰到結果畫面全英文
- *    （整段出現過的文字沒有中日文字，只有當裝飾的紋章漢字與語言按鈕例外），只載入 voice/en/ 的 49 句英文語音；
+ *    （整段出現過的文字沒有中日文字，只有當裝飾的紋章漢字與語言按鈕例外），只載入 voice/en/ 的 55 句英文語音；
  *    操作教學是英文字幕與英文解說語音；手機橫向、直向觸控切到英文，版面不超出畫面。
  */
 
@@ -259,11 +259,11 @@ test('桌機：切到中文並記住；組隊、發射、延長賽、對戰到�
   // 終結的大字是中文
   expect(texts.some(([id, t]) => id === 'banner' && /^(旋轉|場外|爆裂)終結！/.test(t))).toBe(true);
 
-  // 語音：只載入中文的 49 句，播出開場、倒數、發射、終結與勝負宣告
+  // 語音：只載入中文的 55 句，播出開場、倒數、發射、終結與勝負宣告
   await expect.poll(async () => (await dbg(page)).voice.played, { timeout: 10_000 }).toBeGreaterThanOrEqual(7);
   const d = await dbg(page);
-  expect(d.voice).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 49 });
-  expect(voiceFiles.filter((p) => p.includes('/voice/zh/')).length).toBe(49);
+  expect(d.voice).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 55 });
+  expect(voiceFiles.filter((p) => p.includes('/voice/zh/')).length).toBe(55);
   expect(voiceFiles.filter((p) => !p.includes('/voice/zh/'))).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -277,20 +277,20 @@ test('桌機：語音開始用之後在標題切換，語音跟著換；切回�
   await page.locator('#title .to-online').click();
   await expect(page.locator('#online')).toBeVisible();
   await expect(page.locator('#online h2 > span')).toHaveText('オンライン対戦');
-  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 49 });
+  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 55 });
   await page.locator('#online .ol-back').click();
   await expect(page.locator('#title')).toBeVisible();
 
   // 切到中文：語音換成中文並在背景載入
   await page.locator('#title .lang-switch [data-lang="zh"]').click();
-  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 49 });
+  await expect.poll(async () => (await dbg(page)).voice, { timeout: 30_000 }).toMatchObject({ lang: 'zh', mode: 'fish-files', loaded: 55 });
   await page.locator('#title .to-online').click();
   await expect(page.locator('#online h2 > span')).toHaveText('線上對戰');
   await page.locator('#online .ol-back').click();
 
   // 切回日文：語音換回日文（已經載過，立刻可用），畫面恢復日文版
   await page.locator('#title .lang-switch [data-lang="ja"]').click();
-  expect((await dbg(page)).voice).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 49 });
+  expect((await dbg(page)).voice).toMatchObject({ lang: 'ja', mode: 'fish-files', loaded: 55 });
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
   await expect(page.locator('#title h1')).toHaveText('BATTLE TOPS');
   await expect(page.locator('#title .to-cpu')).toHaveText('CPU 対戦 ／ 電腦對戰');
@@ -490,11 +490,11 @@ test.describe('英文版（瀏覽器語言是英文）', () => {
     expect(texts.filter(([, t]) => CJK.test(withoutAllowed(t)))).toEqual([]);
     expect(texts.some(([id, t]) => id === 'banner' && /^(SPIN|OVER|BURST|XTREME) FINISH!/.test(t))).toBe(true);
 
-    // 語音：只載入英文的 49 句，播出開場、倒數、發射、終結與勝負宣告
+    // 語音：只載入英文的 55 句，播出開場、倒數、發射、終結與勝負宣告
     await expect.poll(async () => (await dbg(page)).voice.played, { timeout: 10_000 }).toBeGreaterThanOrEqual(7);
     const d = await dbg(page);
-    expect(d.voice).toMatchObject({ lang: 'en', mode: 'fish-files', loaded: 49 });
-    expect(voiceFiles.filter((p) => p.includes('/voice/en/')).length).toBe(49);
+    expect(d.voice).toMatchObject({ lang: 'en', mode: 'fish-files', loaded: 55 });
+    expect(voiceFiles.filter((p) => p.includes('/voice/en/')).length).toBe(55);
     expect(voiceFiles.filter((p) => !p.includes('/voice/en/'))).toEqual([]);
     expect(errors).toEqual([]);
   });

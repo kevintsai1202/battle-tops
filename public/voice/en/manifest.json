@@ -390,5 +390,53 @@
     "voiceId": "536d3a5e000945adb7038665781a4aca",
     "hash": "5f6a25ddab443f0a",
     "seconds": 2.242
+  },
+  "p_special_shark": {
+    "file": "p_special_shark.mp3",
+    "text": "[shouting][excited] Special move! Abyss Upper!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "abd7800dde7f9661",
+    "seconds": 2.716
+  },
+  "p_special_phoenix": {
+    "file": "p_special_phoenix.mp3",
+    "text": "[shouting][excited] Special move! Revive Flare!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "73c3a796efcfa970",
+    "seconds": 2.703
+  },
+  "p_special_drake": {
+    "file": "p_special_drake.mp3",
+    "text": "[shouting][excited] Special move! Rubber Rebound!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "eaa848a309c836bf",
+    "seconds": 2.675
+  },
+  "p_special_bahamut": {
+    "file": "p_special_bahamut.mp3",
+    "text": "[shouting][excited] Special move! Pinpoint Crush!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "15277e91e876f2ef",
+    "seconds": 2.595
+  },
+  "p_special_rod": {
+    "file": "p_special_rod.mp3",
+    "text": "[shouting][excited] Special move! Wind Waltz!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "af508698d9da002e",
+    "seconds": 2.623
+  },
+  "p_special_emperor": {
+    "file": "p_special_emperor.mp3",
+    "text": "[shouting][excited] Special move! Kaiser Shift!!",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "efdc1cc6d10653a9",
+    "seconds": 2.321
   }
 }

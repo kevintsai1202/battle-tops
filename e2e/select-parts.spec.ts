@@ -37,8 +37,8 @@ test('組隊兩步：第 1 步縮圖與絕招示範；第 2 步調順序、換�
   await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select')).toBeVisible();
 
-  // 20 格都換上 3D 縮圖（dataURL）
-  await expect(page.locator('#select .card.tile img.thumb:not([hidden])')).toHaveCount(20, { timeout: 30_000 });
+  // 26 格都換上 3D 縮圖（dataURL）
+  await expect(page.locator('#select .card.tile img.thumb:not([hidden])')).toHaveCount(26, { timeout: 30_000 });
   const src = await page.locator('#select .card.tile img.thumb').first().getAttribute('src');
   expect(src?.startsWith('data:image/png')).toBe(true);
 

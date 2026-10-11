@@ -218,6 +218,61 @@ describe('每顆陀螺的必殺技', () => {
     expect(a.spin).toBeGreaterThan(sa);
   });
 
+  /** 讓 id 在對手附近（距離 1.2）發動必殺，回傳模擬與雙方發動前的轉速、爆裂量 */
+  function fire(id: TopId) {
+    const sim = new BattleSim(TOP_SPECS[id], TOP_SPECS.wolf, { seed: 1, launch: [0.9, 0.9] });
+    const [a, b] = sim.tops;
+    a.pos = { x: -0.6, z: 0 };
+    b.pos = { x: 0.6, z: 0 };
+    a.vel = { x: 0, z: 0 };
+    b.vel = { x: 0, z: 0 };
+    a.spin *= 0.6;
+    a.burst = 0.5;
+    const before = { spinA: a.spin, burstA: a.burst, burstB: b.burst };
+    a.special = 1;
+    expect(sim.useSpecial(0), `${id} 無法發動`).toBe(true);
+    return { sim, a, b, before };
+  }
+
+  test('深淵上顎：對手抓地與防禦下降（容易被撞出場）', () => {
+    const { b } = fire('shark');
+    expect(b.hex?.mods.fric).toBeLessThan(1);
+    expect(b.hex?.mods.def).toBeLessThan(1);
+  });
+
+  test('風之圓舞：自己轉速流失變慢、防禦提升，對手轉速流失變快', () => {
+    const { a, b } = fire('rod');
+    expect(a.buff?.mods.decay).toBeLessThan(1);
+    expect(a.buff?.mods.def).toBeGreaterThan(1);
+    expect(b.hex?.mods.decay).toBeGreaterThan(1);
+  });
+
+  test('浴火重生：修復爆裂量並回復轉速', () => {
+    const { a, before } = fire('phoenix');
+    expect(a.burst).toBeLessThan(before.burstA);
+    expect(a.spin).toBeGreaterThan(before.spinA);
+  });
+
+  test('橡膠反震：把附近的對手往外彈開並累積爆裂量，自己附帶反擊', () => {
+    const { a, b, before } = fire('drake');
+    expect(b.vel.x).toBeGreaterThan(0);
+    expect(b.burst).toBeGreaterThan(before.burstB);
+    expect(a.buff?.mods.reflect).toBeGreaterThan(0);
+  });
+
+  test('霸帝換檔：切成攻擊模式，攻擊與巡航提升、防禦略降', () => {
+    const { a } = fire('emperor');
+    expect(a.buff?.mods.atk).toBeGreaterThanOrEqual(1.5);
+    expect(a.buff?.mods.cruise).toBeGreaterThan(1);
+    expect(a.buff?.mods.def).toBeLessThan(1);
+  });
+
+  test('一點粉碎：朝對手全速突進，短時間造成的爆裂量 2 倍以上', () => {
+    const { a } = fire('bahamut');
+    expect(a.vel.x).toBeGreaterThan(0);
+    expect(a.buff?.mods.burstDealt).toBeGreaterThan(2);
+  });
+
   test('冰封減益：對手推移倍率下降，時間到解除', () => {
     const sim = new BattleSim(TOP_SPECS.wolborg, TOP_SPECS.wolf, { seed: 1, launch: [0.9, 0.9] });
     sim.tops[0].special = 1;

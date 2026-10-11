@@ -29,8 +29,8 @@ function defineTop(d: TopDef): TopSpec {
 }
 
 /**
- * 全部陀螺。前四顆是原創；其餘 16 顆致敬歷代有名的戰鬥陀螺（名稱改寫，類型、旋轉方向、屬性、外形、招式風格參考原型）。
- * 屬性來源：Beyblade Wiki 的官方零件能力值加總後換算成 1～10 分；初代沒有官方值，為估計值。
+ * 全部陀螺。前四顆是原創；其餘 22 顆致敬歷代有名的戰鬥陀螺（名稱改寫，類型、旋轉方向、屬性、外形、招式風格參考原型）。
+ * 屬性來源：Beyblade Wiki 的官方零件能力值加總後換算成 1～10 分（2026-10-11 新增的 6 顆改用 Takara Tomy 商品頁的官方值）；初代沒有官方值，為估計值。
  * 對照表與換算方式見 docs/design.md「陀螺名鑑」。
  * 數值平衡由 tests/battle.test.ts 的 CPU 對打耐久測試把關。
  */
@@ -328,6 +328,160 @@ const DEFS: TopDef[] = [
     color: 0x1a6aff,
     glow: 0xffd21a,
   },
+  // 以下四顆攻擊型為 2026-10-11 新增的 X 世代致敬陀螺：官方攻擊值都破表，改用 X Dash、Bit 形狀、重量拉開差異
+  {
+    id: 'shark',
+    type: 'attack',
+    nameJa: 'アビス・シャーク',
+    nameZh: '深淵鯊',
+    nameEn: 'Abyss Shark',
+    origin: 'SharkScale 4-50UF（UX-15・鯊魚）',
+    originEn: 'SharkScale 4-50UF (UX-15)',
+    spinDir: 1,
+    emblem: '鮫',
+    look: {
+      primary: 0xb02fd0,
+      secondary: 0x2f6fe0,
+      metal: 0xc2c6cc,
+      tip: 0x4a3aa0,
+      // 兩片低矮的大主刃，每片有多個打擊點
+      ring: [{ n: 2, phase: 0, width: 80, height: 0.14, skew: 0.5 }, { n: 6, phase: 15, width: 10, height: 0.04, skew: 0.4 }],
+      inner: [{ n: 4, phase: 45, width: 30, height: 0.05 }],
+    },
+    stats: { attack: 9, defense: 3, stamina: 3, weight: 43, burst: 5, dash: 7 },
+    stock: { disk: 'light', driver: 'flat' },
+    special: {
+      nameJa: 'アビス・アッパー',
+      nameZh: '深淵上顎',
+      nameEn: 'Abyss Upper',
+      descZh: '從低處鑽進對手懷裡往上撈：突進，1.5 秒內對手抓地剩 40%、防禦降到 70%，容易被撞出場。',
+      descEn: 'Dives low and scoops upward: charges in; for 1.5 s the opponent keeps only 40% grip and 70% defense, easy to knock out.',
+      cue: 'close',
+      charge: 6.5,
+      steps: [
+        { op: 'dash', speed: 6.5, keep: 0.3 },
+        { op: 'hex', time: 1.5, mods: { fric: 0.4, def: 0.7 } },
+      ],
+    },
+    color: 0xb02fd0,
+    glow: 0x6a8aff,
+  },
+  {
+    id: 'phoenix',
+    type: 'attack',
+    nameJa: 'ファイアバード・ウイング',
+    nameZh: '焚天火鳥',
+    nameEn: 'Firebird Wing',
+    origin: 'PhoenixWing 9-60GF（BX-23・鳳凰）',
+    originEn: 'PhoenixWing 9-60GF (BX-23)',
+    spinDir: 1,
+    emblem: '炎',
+    look: {
+      primary: 0xd8202a,
+      secondary: 0xffc828,
+      // 原型的金屬刃塗成紅色
+      metal: 0xc84040,
+      tip: 0x2a2630,
+      // 三片往上斜的火焰翅膀刃，刃根的發射鉤突出外緣
+      ring: [{ n: 3, phase: 0, width: 60, height: 0.22, skew: 0.55 }, { n: 3, phase: 40, width: 10, height: 0.08, skew: 0.3 }],
+      inner: [{ n: 3, phase: 60, width: 40, height: 0.07, skew: 0.3 }],
+    },
+    stats: { attack: 8, defense: 3, stamina: 3, weight: 42, burst: 5, dash: 8 },
+    stock: { disk: 'blade', driver: 'flat' },
+    special: {
+      nameJa: 'リヴァイヴ・フレア',
+      nameZh: '浴火重生',
+      nameEn: 'Revive Flare',
+      descZh: '浴火重生：修復爆裂量、回復 5% 轉速，再朝對手突進，1 秒內攻擊 1.25 倍。',
+      descEn: 'Rises from the flames: repairs burst damage and restores 5% spin, then charges: 1.25× attack for 1 s.',
+      cue: 'danger',
+      charge: 8,
+      steps: [
+        { op: 'repair', amount: 0.2 },
+        { op: 'spin', ratio: 0.05 },
+        { op: 'dash', speed: 6.5, keep: 0.3 },
+        { op: 'buff', time: 1.0, mods: { atk: 1.25 } },
+      ],
+    },
+    color: 0xe02020,
+    glow: 0xffa030,
+  },
+  {
+    id: 'drake',
+    type: 'attack',
+    nameJa: 'リバウンド・ドレイク',
+    nameZh: '反震飛龍',
+    nameEn: 'Rebound Drake',
+    origin: 'ImpactDrake 9-60LR（UX-11・飛龍）',
+    originEn: 'ImpactDrake 9-60LR (UX-11)',
+    spinDir: 1,
+    emblem: '震',
+    look: {
+      primary: 0x1f5fd0,
+      // 四個紅色橡膠龍頭
+      secondary: 0xe0302a,
+      metal: 0xc2c6cc,
+      tip: 0x1a2a6a,
+      // 四片厚刃，刃緣鋸齒狀
+      ring: [{ n: 4, phase: 0, width: 55, height: 0.16, skew: 0.35 }, { n: 8, phase: 20, width: 8, height: 0.04, skew: 0.6 }],
+      inner: [{ n: 4, phase: 45, width: 25, height: 0.06 }],
+    },
+    stats: { attack: 9, defense: 3, stamina: 3, weight: 44, burst: 5, dash: 5 },
+    stock: { disk: 'heavy', driver: 'flat' },
+    special: {
+      nameJa: 'ラバー・リバウンド',
+      nameZh: '橡膠反震',
+      nameEn: 'Rubber Rebound',
+      descZh: '橡膠龍頭反彈：1.4 以內的對手被彈開並累積爆裂量，接著突進追擊，1.5 秒內攻擊 1.2 倍、撞上來的對手承受 40% 反擊。',
+      descEn: 'Rubber dragon heads bounce back: opponents within 1.4 are knocked away and take burst damage, then it chases in: 1.2× attack for 1.5 s; attackers take 40% recoil.',
+      cue: 'close',
+      charge: 7,
+      steps: [
+        { op: 'shove', speed: 6, range: 1.4, burst: 0.06 },
+        { op: 'dash', speed: 6, keep: 0.3 },
+        { op: 'buff', time: 1.5, mods: { atk: 1.2, reflect: 0.4 } },
+      ],
+    },
+    color: 0x1f5fd0,
+    glow: 0xff5040,
+  },
+  {
+    id: 'bahamut',
+    type: 'attack',
+    nameJa: 'ティアマト・ブリッツ',
+    nameZh: '魔龍閃擊',
+    nameEn: 'Tiamat Blitz',
+    origin: 'BahamutBlitz BK1-50I（CX-13・巴哈姆特）',
+    originEn: 'BahamutBlitz BK1-50I (CX-13)',
+    spinDir: 1,
+    emblem: '閃',
+    look: {
+      primary: 0x23202a,
+      secondary: 0xe0208f,
+      metal: 0xc2c6cc,
+      tip: 0x7a3ac0,
+      // 非對稱：各零件的重擊點疊在同一處，形成單一集中重擊點
+      ring: [{ n: 1, phase: 0, width: 70, height: 0.2, skew: 0.4 }, { n: 5, phase: 36, width: 20, height: 0.06, skew: 0.3 }],
+      inner: [{ n: 1, phase: 0, width: 50, height: 0.08 }],
+    },
+    stats: { attack: 9, defense: 3, stamina: 2, weight: 46, burst: 5, dash: 6 },
+    stock: { disk: 'standard', driver: 'rubber' },
+    special: {
+      nameJa: 'ピンポイント・クラッシュ',
+      nameZh: '一點粉碎',
+      nameEn: 'Pinpoint Crush',
+      descZh: '把力量集中在一點：全速突進，0.7 秒內質量 1.4 倍、造成的爆裂量 2.2 倍。',
+      descEn: 'Focuses all its power on one point: a full-speed charge with 1.4× mass and 2.2× burst damage dealt for 0.7 s.',
+      cue: 'close',
+      charge: 7.5,
+      steps: [
+        { op: 'dash', speed: 7.5, keep: 0.1 },
+        { op: 'buff', time: 0.7, mods: { mass: 1.4, burstDealt: 2.2 } },
+      ],
+    },
+    color: 0xe0208f,
+    glow: 0xff60c0,
+  },
 
   // ---------------- 防禦型（致敬） ----------------
   {
@@ -612,6 +766,44 @@ const DEFS: TopDef[] = [
     color: 0x6a3ad0,
     glow: 0xc0a0ff,
   },
+  {
+    // 2026-10-11 新增
+    id: 'rod',
+    type: 'stamina',
+    nameJa: 'メイジ・ロッド',
+    nameZh: '魔導杖',
+    nameEn: 'Mage Rod',
+    origin: 'WizardRod 5-70DB（UX-03・巫師杖）',
+    originEn: 'WizardRod 5-70DB (UX-03)',
+    spinDir: 1,
+    emblem: '杖',
+    look: {
+      primary: 0xf2c81a,
+      secondary: 0xffa020,
+      metal: 0xc8ccd2,
+      tip: 0xf2c81a,
+      // 大直徑、接近圓形的五片刃，金屬外框上每片刃有一個圓凸
+      ring: [{ n: 5, phase: 0, width: 50, height: 0.05 }, { n: 5, phase: 36, width: 12, height: 0.03 }],
+      inner: [{ n: 5, phase: 0, width: 30, height: 0.04 }],
+    },
+    stats: { attack: 4, defense: 5, stamina: 10, weight: 45, burst: 3, dash: 3 },
+    stock: { disk: 'rim', driver: 'wideBall' },
+    special: {
+      nameJa: 'ウィンド・ワルツ',
+      nameZh: '風之圓舞',
+      nameEn: 'Wind Waltz',
+      descZh: '乘風卸力：3 秒內防禦 1.5 倍、巡航速度 1.3 倍、轉速流失減半，對手轉速流失 1.6 倍。',
+      descEn: 'Rides the wind to deflect hits: 1.5× defense, 1.3× cruising speed and half the spin loss for 3 s; the opponent loses spin 1.6× faster.',
+      cue: 'lowSpin',
+      charge: 7,
+      steps: [
+        { op: 'buff', time: 3.0, mods: { def: 1.5, cruise: 1.3, decay: 0.5 } },
+        { op: 'hex', time: 3.0, mods: { decay: 1.6 } },
+      ],
+    },
+    color: 0xf2c81a,
+    glow: 0xfff080,
+  },
 
   // ---------------- 平衡型（致敬） ----------------
   {
@@ -755,6 +947,45 @@ const DEFS: TopDef[] = [
     },
     color: 0xa01010,
     glow: 0xff5020,
+  },
+  {
+    // 2026-10-11 新增。原型的 Bit 可切換防禦／攻擊模式：平常用防禦模式的數值，必殺技切成攻擊模式
+    id: 'emperor',
+    type: 'balance',
+    nameJa: 'カイザー・クラウン',
+    nameZh: '皇冠霸帝',
+    nameEn: 'Kaiser Crown',
+    origin: 'EmperorMight HOp（CX-11・皇帝）',
+    originEn: 'EmperorMight HOp (CX-11)',
+    spinDir: 1,
+    emblem: '帝',
+    look: {
+      primary: 0xe0b030,
+      secondary: 0x1d1d22,
+      // 原型的外圈是塗成金色的金屬
+      metal: 0xd8b040,
+      tip: 0x6a1a24,
+      // 八面多角刃＋內圈低矮的六片刃
+      ring: [{ n: 8, phase: 0, width: 30, height: 0.06 }],
+      inner: [{ n: 6, phase: 30, width: 25, height: 0.05 }],
+    },
+    stats: { attack: 6, defense: 8, stamina: 7, weight: 60, burst: 3, dash: 3 },
+    stock: { disk: 'heavy', driver: 'ball' },
+    special: {
+      nameJa: 'カイザー・シフト',
+      nameZh: '霸帝換檔',
+      nameEn: 'Kaiser Shift',
+      descZh: '扭轉軸心切成攻擊模式並衝出：4 秒內攻擊 1.5 倍、巡航速度 1.6 倍，防禦降到 85%。',
+      descEn: 'Twists its tip into attack mode and bursts forward: 1.5× attack and 1.6× cruising speed for 4 s, defense drops to 85%.',
+      cue: 'far',
+      charge: 6,
+      steps: [
+        { op: 'dash', speed: 5, keep: 0.5 },
+        { op: 'buff', time: 4.0, mods: { atk: 1.5, cruise: 1.6, def: 0.85 } },
+      ],
+    },
+    color: 0xe0b030,
+    glow: 0xffe070,
   },
 ];
 

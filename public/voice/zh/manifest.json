@@ -390,5 +390,53 @@
     "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
     "hash": "fb6387b3f07de46f",
     "seconds": 1.007
+  },
+  "p_special_shark": {
+    "file": "p_special_shark.mp3",
+    "text": "[shouting][excited] 必殺！深淵上顎！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "b60e24694cb99b23",
+    "seconds": 1.887
+  },
+  "p_special_phoenix": {
+    "file": "p_special_phoenix.mp3",
+    "text": "[shouting][excited] 必殺！浴火重生！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "516815f56e013dd7",
+    "seconds": 2.364
+  },
+  "p_special_drake": {
+    "file": "p_special_drake.mp3",
+    "text": "[shouting][excited] 必殺！橡膠反震！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "c8dd98107bfdaa8f",
+    "seconds": 1.887
+  },
+  "p_special_bahamut": {
+    "file": "p_special_bahamut.mp3",
+    "text": "[shouting][excited] 必殺！一點粉碎！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "b8a84965531327c3",
+    "seconds": 1.731
+  },
+  "p_special_rod": {
+    "file": "p_special_rod.mp3",
+    "text": "[shouting][excited] 必殺！風之圓舞！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "2fd146758af17289",
+    "seconds": 1.717
+  },
+  "p_special_emperor": {
+    "file": "p_special_emperor.mp3",
+    "text": "[shouting][excited] 必殺！霸帝換檔！！",
+    "speaker": "player",
+    "voiceId": "1e85fd1e0d3e4cc2b79fbca800e7e3fe",
+    "hash": "ffff884dd602a0c2",
+    "seconds": 1.685
   }
 }

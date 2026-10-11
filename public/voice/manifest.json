@@ -390,5 +390,53 @@
     "voiceId": "d738c70d206149e69f8e3b6fc8af9d96",
     "hash": "69c2f4b6a96f5efa",
     "seconds": 1.4
+  },
+  "p_special_shark": {
+    "file": "p_special_shark.mp3",
+    "text": "[shouting][excited] 必殺！ アビス・アッパー！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "ee55ee7d439ea162",
+    "seconds": 2.154
+  },
+  "p_special_phoenix": {
+    "file": "p_special_phoenix.mp3",
+    "text": "[shouting][excited] 必殺！ リヴァイヴ・フレア！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "f4c85bd59954bd6e",
+    "seconds": 1.978
+  },
+  "p_special_drake": {
+    "file": "p_special_drake.mp3",
+    "text": "[shouting][excited] 必殺！ ラバー・リバウンド！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "9fa47ec1c3a13a54",
+    "seconds": 1.96
+  },
+  "p_special_bahamut": {
+    "file": "p_special_bahamut.mp3",
+    "text": "[shouting][excited] 必殺！ ピンポイント・クラッシュ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "8fa9b0c802a2b246",
+    "seconds": 2.82
+  },
+  "p_special_rod": {
+    "file": "p_special_rod.mp3",
+    "text": "[shouting][excited] 必殺！ ウィンド・ワルツ！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "86f6bd8a50875444",
+    "seconds": 2.03
+  },
+  "p_special_emperor": {
+    "file": "p_special_emperor.mp3",
+    "text": "[shouting][excited] 必殺！ カイザー・シフト！！",
+    "speaker": "player",
+    "voiceId": "c496c7d0e93640a59a0befd78b47f39e",
+    "hash": "286ee9a1151316ff",
+    "seconds": 2.122
   }
 }

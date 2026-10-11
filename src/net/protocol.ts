@@ -29,8 +29,9 @@ export const MAX_MESSAGE = 2048;
  * 協定版本：進房類訊息（create／join／quick／resume）都要帶，伺服器只接受相同版本。
  * 2：組隊分成「選三顆」與「順序與零件（限時）」兩步（picks／arrange／ready）。舊版網頁沒帶版本，伺服器回「請重新整理」。
  * 3：新增雙層戰鬥盤（arena: 'double'）與極限終結（finish: 'xtreme'），標準戰鬥盤改成實體比賽盤的出場口；舊版網頁看不懂，一樣要重新整理。
+ * 4（2026-10-11）：新增 6 顆陀螺（shark、phoenix、drake、bahamut、rod、emperor）；舊版網頁的名鑑沒有這些代號，要重新整理。
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** 房號使用的字元：去掉容易混淆的 I、O、0、1 */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

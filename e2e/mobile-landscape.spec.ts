@@ -17,7 +17,7 @@ test('橫向手機：觸控組隊、拉條發射、三指必殺、滑動推移�
   await expect(page.locator('#select')).toBeVisible();
   expect((await dbg(page)).touchMode).toBe(true);
   await expect(page.locator('#select .tc')).toBeVisible();
-  // 名鑑 20 格在可捲動的格狀區內：區塊本身、詳細資料、場地與出陣按鈕都要在畫面內
+  // 名鑑 26 格在可捲動的格狀區內：區塊本身、詳細資料、場地與出陣按鈕都要在畫面內
   await expectInViewport(page, '#select .cards');
   await expectInViewport(page, '#select .detail');
   await expectInViewport(page, '#select .arena');
@@ -27,7 +27,7 @@ test('橫向手機：觸控組隊、拉條發射、三指必殺、滑動推移�
 
   // 觸控組隊：點三格（點選順序 = 出場順序），再按出陣
   for (const id of ['turtle', 'gale', 'blaze']) await page.locator(`#select .card[data-id="${id}"]`).tap();
-  await expect(page.locator('#select .card .badge')).toHaveText(['3', '1', '2', ...Array(17).fill('')]);
+  await expect(page.locator('#select .card .badge')).toHaveText(['3', '1', '2', ...Array(23).fill('')]);
   await page.screenshot({ path: 'e2e/screenshots/30-mobile-select.png' });
   await page.locator('#select .go').tap();
   await expect(page.locator('#select')).toBeHidden();
