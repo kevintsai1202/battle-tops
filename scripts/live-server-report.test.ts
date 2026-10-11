@@ -13,6 +13,7 @@ import { Bot } from '../server/tests/bot';
  * 執行（PowerShell 7）：
  *   npx vitest run --project balance live-server-report --reporter=verbose
  *   改測其他伺服器：$env:GAME_SERVER = 'ws://localhost:8787/ws'; npx vitest run --project balance live-server-report --reporter=verbose; Remove-Item Env:GAME_SERVER
+ *   指定雙方隊伍：$env:HOST_TEAM = 'shark,rod,emperor'; $env:GUEST_TEAM = 'phoenix,drake,bahamut'; npx vitest run --project balance live-server-report --reporter=verbose; Remove-Item Env:HOST_TEAM, Env:GUEST_TEAM
  */
 
 /** 要檢查的伺服器 */
@@ -45,10 +46,12 @@ test('線上伺服器：兩個機器人以真實時間打完整一場', async ()
     const room = await host.waitFor('room', () => true, 10_000);
     guest.send({ t: 'join', code: room.code, name: '機器人B', v: PROTOCOL_VERSION });
     await guest.waitFor('room', () => true, 10_000);
-    const hostTeam: TopId[] = ['blaze', 'turtle', 'gale'];
-    const guestTeam: TopId[] = ['wolf', 'orion', 'pegasus'];
-    // 第 1 步選三顆；第 2 步機器人收到公開陣容後自動準備完成（房主的疾風鳳換軸承軸）
-    host.plan = { loadouts: { gale: { disk: null, driver: 'bearing' } } };
+    // 環境變數 HOST_TEAM／GUEST_TEAM（逗號分隔的陀螺代號）可指定雙方隊伍，例如新增陀螺後確認正式伺服器的名鑑已更新
+    const teamOf = (v: string | undefined, fallback: TopId[]): TopId[] => (v ? v.split(',').map((s) => s.trim()) : fallback);
+    const hostTeam = teamOf(process.env.HOST_TEAM, ['blaze', 'turtle', 'gale']);
+    const guestTeam = teamOf(process.env.GUEST_TEAM, ['wolf', 'orion', 'pegasus']);
+    // 第 1 步選三顆；第 2 步機器人收到公開陣容後自動準備完成（房主的疾風鳳在隊伍裡時換軸承軸）
+    host.plan = { loadouts: hostTeam.includes('gale') ? { gale: { disk: null, driver: 'bearing' } } : {} };
     host.send({ t: 'picks', picks: hostTeam });
     guest.send({ t: 'picks', picks: guestTeam });
     const started = performance.now();
