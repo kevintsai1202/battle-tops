@@ -25,9 +25,9 @@ test('橫向手機：觸控組隊、拉條發射、三指必殺、滑動推移�
   await expectInViewport(page, '#select .go');
   await expectNoHorizontalScroll(page);
 
-  // 觸控組隊：點三格（點選順序 = 出場順序），再按出陣
+  // 觸控組隊：點三格（點選順序 = 出場順序；烈焰龍等原本的陀螺排在 6 顆新陀螺之後），再按出陣
   for (const id of ['turtle', 'gale', 'blaze']) await page.locator(`#select .card[data-id="${id}"]`).tap();
-  await expect(page.locator('#select .card .badge')).toHaveText(['3', '1', '2', ...Array(23).fill('')]);
+  await expect(page.locator('#select .card .badge')).toHaveText([...Array(6).fill(''), '3', '1', '2', ...Array(17).fill('')]);
   await page.screenshot({ path: 'e2e/screenshots/30-mobile-select.png' });
   await page.locator('#select .go').tap();
   await expect(page.locator('#select')).toBeHidden();

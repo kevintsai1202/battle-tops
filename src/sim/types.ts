@@ -155,6 +155,8 @@ export interface TopSpec {
   /** 致敬的原型陀螺（說明用；原創陀螺為 null）；originEn 是英文版顯示的寫法（不含中文暱稱） */
   origin: string | null;
   originEn: string | null;
+  /** 最近一次更新新增的陀螺：名鑑排在最前面並標 NEW（見 sim/tops.ts 的 ROSTER_IDS） */
+  isNew: boolean;
   /** 旋轉方向：1 = 右旋，-1 = 左旋（渲染時右旋從上方看為順時針） */
   spinDir: 1 | -1;
   /** 紋章字（頂部晶片與小圖示） */

@@ -1450,6 +1450,25 @@ html:lang(en) .card.tile .nm {
   color: #fff;
 }
 
+/* 新陀螺的 NEW 標籤：和左旋標示同一角，兩個都有時左旋往下排 */
+.card.tile .new {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #ffe14a, #ff8a1a);
+  color: #3a1600;
+  box-shadow: 0 0 6px rgba(255, 190, 40, 0.75);
+}
+
+.card.tile .new ~ .left {
+  top: 18px;
+}
+
 .card.tile.on {
   transform: translateY(-4px) scale(1.06);
 }

@@ -35,9 +35,9 @@ const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}・　-〿＀-￯]/u;
 /**
  * 中文版允許出現的英文：鍵盤按鍵名稱、瀏覽器與技術名稱（WebGL、Chrome、Edge、3D），
- * 以及發射的口號「Go Shoot」（台灣與日本原作的習慣，使用者決定保留）
+ * 以及發射的口號「Go Shoot」（台灣與日本原作的習慣，使用者決定保留）、名鑑新陀螺的「NEW」標籤（2026-10-11 使用者決定三種語言都用 NEW）
  */
-const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|W|A|S|D|Enter|Backspace|Esc|Ctrl|F5|Q|E|M|X|WebGL|Chrome|Edge|3D|GO SHOOT|Go Shoot)\b/g;
+const KEY_NAMES = /\b(SPACE|Space|Shift|WASD|W|A|S|D|Enter|Backspace|Esc|Ctrl|F5|Q|E|M|X|WebGL|Chrome|Edge|3D|GO SHOOT|Go Shoot|NEW)\b/g;
 /** 英文版刻意不用的參數：日文版詳細資料附的中文必殺名（英文版不顯示中文） */
 const EN_DROPS: Partial<Record<TextKey, string[]>> = { 'card.specialWithZh': ['zh'] };
 
@@ -137,6 +137,13 @@ describe('字串表', () => {
     expect(tr('banner.go')).toBe('GO SHOOT!!');
     expect(tr('select.next')).toBe('Next ▶');
     expect(tr('opp.label', { name: 'Ken' })).toBe('Opponent: Ken');
+  });
+
+  test('名鑑新陀螺的標籤三種語言都是 NEW', () => {
+    for (const l of ['ja', 'zh', 'en'] as const) {
+      setLang(l, false);
+      expect(tr('tile.new'), l).toBe('NEW');
+    }
   });
 
   test('擬聲字：中文版沒有假名、英文版沒有中日文字', () => {

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * 場地與名鑑：
- * 1. 組隊畫面有 26 格陀螺、詳細資料（雷達圖）；切換場地會換掉場館外觀，重新整理後仍記得。
+ * 1. 組隊畫面有 26 格陀螺（新陀螺排最前面並標 NEW）、詳細資料（雷達圖）；切換場地會換掉場館外觀，重新整理後仍記得。
  * 2. 五個特殊場地各跑一段展示對戰並截圖；火山的熔岩會噴發（場地機關事件）；
  *    雙層戰鬥盤把模擬時間撥到中央降下的時段，確認凹槽出現（升降狀態 level = 1）再截圖。
  */
@@ -16,6 +16,12 @@ test('組隊畫面：26 顆名鑑、雷達圖、切換場地並記住', async ({
   await page.goto('./?seed=61');
   await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select .card')).toHaveCount(26);
+  // 新陀螺排最前面並標 NEW（2026-10-11 新增的 6 顆），其餘照原順序、不標
+  const ids = await page.locator('#select .card').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.id));
+  expect(ids.slice(0, 7)).toEqual(['shark', 'phoenix', 'drake', 'bahamut', 'rod', 'emperor', 'blaze']);
+  await expect(page.locator('#select .card.tile .new')).toHaveCount(6);
+  await expect(page.locator('#select .card.tile .new').first()).toHaveText('NEW');
+  await expect(page.locator('#select .card[data-id="blaze"] .new')).toHaveCount(0);
   await expect(page.locator('#select .arena button')).toHaveCount(7);
   await expect(page.locator('#select .arena button.on')).toHaveAttribute('data-id', 'practice');
 

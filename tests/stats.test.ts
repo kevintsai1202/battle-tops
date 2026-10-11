@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { derivePhysics } from '../src/sim/stats';
-import { TOP_IDS, TOP_SPECS } from '../src/sim/tops';
+import { buildSpec, inRosterOrder, ROSTER_IDS, TOP_IDS, TOP_SPECS } from '../src/sim/tops';
 import type { BaseStats } from '../src/sim/types';
 
 /** 中等屬性的陀螺，用來單獨調一項屬性觀察變化 */
@@ -75,6 +75,20 @@ describe('陀螺名鑑', () => {
       expect(s.originEn, id).toContain(e.model);
     }
     expect(TOP_IDS).toHaveLength(26);
+  });
+
+  test('名鑑順序：標成新陀螺的排最前面（照名鑑原順序），其餘照原順序；對戰用的 TOP_IDS 不變', () => {
+    const fresh = ['shark', 'phoenix', 'drake', 'bahamut', 'rod', 'emperor'];
+    expect(TOP_IDS.filter((id) => TOP_SPECS[id].isNew)).toEqual(fresh);
+    expect(ROSTER_IDS.slice(0, 6)).toEqual(fresh);
+    expect(ROSTER_IDS.slice(6)).toEqual(TOP_IDS.filter((id) => !fresh.includes(id)));
+    expect([...ROSTER_IDS].sort()).toEqual([...TOP_IDS].sort());
+    expect(TOP_IDS[0]).toBe('blaze');
+    // 只顯示一部分陀螺時（CPU 陣容、對手陣容）也照名鑑順序，不洩漏出場順序
+    expect(inRosterOrder(['gale', 'emperor', 'blaze'])).toEqual(['emperor', 'blaze', 'gale']);
+    // 換零件後的規格保留新陀螺標記
+    expect(buildSpec('shark', { disk: 'heavy', driver: null }).isNew).toBe(true);
+    expect(TOP_SPECS.blaze.isNew).toBe(false);
   });
 
   test('有左旋陀螺；代號、名稱、紋章、必殺技名都不重複', () => {

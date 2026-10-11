@@ -54,6 +54,9 @@ test('試驗模式：指定雙方的陀螺與零件 → 一戰的數據與累計
   await page.locator('#title .to-trial').click();
   await expect(page.locator('#trial')).toBeVisible();
   await expect(page.locator('#trial .card')).toHaveCount(26);
+  // 名鑑順序與 NEW 標籤和組隊畫面相同
+  await expect(page.locator('#trial .card').first()).toHaveAttribute('data-id', 'shark');
+  await expect(page.locator('#trial .card.tile .new')).toHaveCount(6);
   // 預設：你＝烈焰龍、電腦＝鐵壁龜，選取「你」；場地沒有「隨機」
   await expect(page.locator('#trial .tr-side[data-side="player"]')).toHaveClass(/on/);
   await expect(page.locator('#trial .tr-side[data-side="player"] .tr-name')).toContainText('烈焰龍');

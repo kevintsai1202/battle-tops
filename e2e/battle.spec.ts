@@ -126,15 +126,15 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.locator('#title .to-cpu').click();
   await expect(page.locator('#select')).toBeVisible();
   await page.waitForFunction(() => (window as any).__game.debug().voice.mode !== 'none', null, { timeout: 30_000 });
-  // 組隊：名鑑前三顆（烈焰龍 → 鐵壁龜 → 疾風鳳），小格右上角依序顯示 1、2、3
+  // 組隊：名鑑前三顆是新陀螺（深淵鯊 → 焚天火鳥 → 反震飛龍，2026-10-11 起排最前面），小格右上角依序顯示 1、2、3
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await expect(page.locator('#select .card .badge')).toHaveText(['1', '2', '3', ...Array(23).fill('')]);
-  // 右側詳細資料：游標在第三顆（疾風鳳），有雷達圖與必殺技說明
-  await expect(page.locator('#select .detail .d-zh')).toHaveText('疾風鳳');
+  // 右側詳細資料：游標在第三顆（反震飛龍），有雷達圖與必殺技說明
+  await expect(page.locator('#select .detail .d-zh')).toHaveText('反震飛龍');
   await expect(page.locator('#select .detail .radar')).toBeVisible();
   await expect(page.locator('#select .go')).toBeEnabled();
   await expect(page.locator('.cpu-team .chip')).toHaveCount(3);
@@ -142,11 +142,11 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.screenshot({ path: 'e2e/screenshots/11-select.png' });
   await page.keyboard.press('Enter');
 
-  // 第 2 步（出場順序與零件）：Shift＋↓ 把第 1 戰的烈焰龍往後調一戰，Enter 出陣
+  // 第 2 步（出場順序與零件）：Shift＋↓ 把第 1 戰的深淵鯊往後調一戰，Enter 出陣
   await expect(page.locator('#arrange')).toBeVisible();
   await expect(page.locator('#arrange .ar-slot')).toHaveCount(3);
   await page.keyboard.press('Shift+ArrowDown');
-  await expect.poll(() => arrangeOrder(page)).toEqual(['turtle', 'blaze', 'gale']);
+  await expect.poll(() => arrangeOrder(page)).toEqual(['phoenix', 'shark', 'drake']);
   await page.screenshot({ path: 'e2e/screenshots/11b-arrange.png' });
   await page.keyboard.press('Enter');
   await expect(page.locator('#arrange')).toBeHidden();
@@ -160,8 +160,8 @@ test('玩家流程：標題 → 組隊 → 抓時機發射 → 推移操控', as
   await page.keyboard.press('Space');
   await page.waitForFunction(() => (window as any).__game.debug().state === 'battle', null, { timeout: 10_000 });
   const s = await snap(page);
-  // 第 1 戰上場的是調換順序後的鐵壁龜
-  expect((s as unknown as { tops: { id: string }[] }).tops[0].id).toBe('turtle');
+  // 第 1 戰上場的是調換順序後的焚天火鳥
+  expect((s as unknown as { tops: { id: string }[] }).tops[0].id).toBe('phoenix');
   expect(s.launch.ratio).toBeGreaterThanOrEqual(0.5);
   expect(s.launch.ratio).toBeLessThanOrEqual(0.85);
   expect(s.launch.label).not.toBe('');

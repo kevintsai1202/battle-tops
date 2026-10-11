@@ -70,6 +70,8 @@ export const TEXT = {
   'type.stamina.s': { zh: '持', en: 'S' },
   'type.balance.s': { zh: '平', en: 'B' },
   'tile.left': { zh: '左', en: 'L' },
+  // 名鑑新陀螺的標籤：三種語言都用 NEW（2026-10-11 使用者決定）
+  'tile.new': { zh: 'NEW', en: 'NEW' },
   'tile.title': { zh: '{name}（{type}）', en: '{name} ({type})' },
   'spin.right': { zh: '右旋', en: 'Right spin' },
   'spin.left': { zh: '左旋', en: 'Left spin' },

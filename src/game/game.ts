@@ -33,7 +33,7 @@ import {
   type TrialStore,
 } from '../sim/trial';
 import type { AutoDuelMessage, AutoDuelRequest } from '../sim/autoDuelJob';
-import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
+import { buildSpec, inRosterOrder, TOP_IDS, TOP_SPECS } from '../sim/tops';
 import type { FinishType, SimEvent, TopId, TopSpec, TopState, V2 } from '../sim/types';
 import { css, Hud, type ArenaChoice, type CordView, type TrialBattleStats } from '../ui/hud';
 import { rpmOf } from '../ui/common';
@@ -452,7 +452,7 @@ export class Game {
       specs: TOP_SPECS,
       order: picks,
       loadouts,
-      opponent: { label: tr('select.cpuTeam'), team: TOP_IDS.filter((t) => this.cpuTeam.includes(t)), note: tr('select.cpuNote') },
+      opponent: { label: tr('select.cpuTeam'), team: inRosterOrder(this.cpuTeam), note: tr('select.cpuNote') },
       arena: this.arenaChoice === 'random' ? tr('arena.randomPick') : plainName(ARENAS[this.arenaChoice]),
       deadline: null,
       readyLabel: tr('arrange.ready'),
@@ -1544,7 +1544,7 @@ ${tr('banner.at', { arena: plainName(this.arena) })}`, {
       specs: TOP_SPECS,
       order: m.order,
       loadouts: m.loadouts,
-      opponent: { label: tr('opp.label', { name: o.opponentName }), team: m.theirs, note: this.arrangeOpponentText(o.lobby?.opponent ?? null) },
+      opponent: { label: tr('opp.label', { name: o.opponentName }), team: inRosterOrder(m.theirs), note: this.arrangeOpponentText(o.lobby?.opponent ?? null) },
       arena: arena === 'random' ? tr('arena.randomPick') : plainName(ARENAS[arena]),
       deadline: o.toLocal(m.deadline),
       readyLabel: tr('arrange.readyOnline'),

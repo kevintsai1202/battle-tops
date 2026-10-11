@@ -4,7 +4,7 @@ import { DIFFICULTIES, DIFFICULTY_IDS, type DifficultyId } from '../sim/difficul
 import { equip, PARTS, STOCK, type PartId, type PartSlot, type TeamLoadouts } from '../sim/parts';
 import { spinRatio } from '../sim/physics';
 import { currentPairing, type Pairing, type TeamMatch } from '../sim/team';
-import { buildSpec, TOP_IDS, TOP_SPECS } from '../sim/tops';
+import { buildSpec, inRosterOrder, ROSTER_IDS, TOP_SPECS } from '../sim/tops';
 import type { DuelSummary, TrialConfig, TrialRecord, TrialSide } from '../sim/trial';
 import type { FinishType, TopId, TopSpec, TopState } from '../sim/types';
 import { $, chip, css, el, joinDot, rpmOf, spinLabel, STAT_AXES, statLabel, statScore, typeLabel } from './common';
@@ -57,6 +57,8 @@ function buildTile(sp: TopSpec): HTMLButtonElement {
   img.hidden = true;
   const emb = el('i', 'emb', emblemOf(sp));
   c.append(el('span', 'badge'), img, emb, el('span', 'nm', plainName(sp)), el('span', 'ty', typeLabel(sp.type, true)));
+  // 新陀螺標 NEW（放在左旋標示前面，兩個都有時左旋往下排）
+  if (sp.isNew) c.append(el('span', 'new', tr('tile.new')));
   if (sp.spinDir === -1) c.append(el('span', 'left', tr('tile.left')));
   return c;
 }
@@ -521,7 +523,7 @@ export class Hud {
     const detail = new DetailView($('.detail', root), { parts: false });
     this.detail = detail;
     // CPU 陣容：依名鑑順序顯示，不洩漏出場順序；線上時改成對手狀態
-    $('.cpu-team .chips', root).replaceChildren(...TOP_IDS.filter((t) => o.cpuTeam.includes(t)).map((t) => chip(o.specs[t])));
+    $('.cpu-team .chips', root).replaceChildren(...inRosterOrder(o.cpuTeam).map((t) => chip(o.specs[t])));
     $('.cpu-team .ct-label', root).textContent = online ? tr('opp.label', { name: online.opponent }) : tr('select.cpuTeam');
     $('.cpu-team small', root).textContent = tr(online ? 'opp.choosing' : 'select.cpuNote');
     const go = $<HTMLButtonElement>('.go', root);
@@ -532,7 +534,7 @@ export class Hud {
 
     const refresh = () => {
       els.forEach((e, k) => {
-        const n = picks.indexOf(TOP_IDS[k]);
+        const n = picks.indexOf(ROSTER_IDS[k]);
         e.classList.toggle('on', k === idx);
         e.classList.toggle('picked', n >= 0);
         $('.badge', e).textContent = n >= 0 ? String(n + 1) : '';
@@ -547,8 +549,8 @@ export class Hud {
       go.disabled = picks.length !== 3;
     };
     const setIdx = (i: number) => {
-      idx = (i + TOP_IDS.length) % TOP_IDS.length;
-      const t = TOP_IDS[idx];
+      idx = (i + ROSTER_IDS.length) % ROSTER_IDS.length;
+      const t = ROSTER_IDS[idx];
       const sp = specOf(t);
       o.onHover(sp);
       detail.show(sp);
@@ -556,7 +558,7 @@ export class Hud {
       els[idx]?.scrollIntoView({ block: 'nearest' });
     };
     const toggle = (i: number) => {
-      const t = TOP_IDS[i];
+      const t = ROSTER_IDS[i];
       const n = picks.indexOf(t);
       if (n >= 0) picks.splice(n, 1);
       else if (picks.length < 3) picks.push(t);
@@ -580,7 +582,7 @@ export class Hud {
     };
 
     cards.replaceChildren();
-    TOP_IDS.forEach((id, i) => {
+    ROSTER_IDS.forEach((id, i) => {
       const c = buildTile(o.specs[id]);
       o.thumb(o.specs[id], (url) => setTileThumb(c, url));
       c.addEventListener('pointerenter', (e) => {
@@ -882,7 +884,7 @@ export class Hud {
     /** 目前的設定、選取的那一邊、名鑑游標 */
     const cfg: TrialConfig = structuredClone(o.config);
     let active: 'player' | 'cpu' = 'player';
-    let idx = Math.max(0, TOP_IDS.indexOf(cfg.player.top));
+    let idx = Math.max(0, ROSTER_IDS.indexOf(cfg.player.top));
     const specOf = (s: TrialSide) => buildSpec(s.top, s.loadout);
     const mode = bindModeRow(root, {
       difficulty: cfg.difficulty,
@@ -950,7 +952,7 @@ export class Hud {
         }),
       );
       els.forEach((e, k) => {
-        const t = TOP_IDS[k];
+        const t = ROSTER_IDS[k];
         e.classList.toggle('on', k === idx);
         e.classList.toggle('picked', t === cfg.player.top || t === cfg.cpu.top);
         $('.badge', e).textContent = [t === cfg.player.top ? tr('trial.badgeYou') : '', t === cfg.cpu.top ? tr('trial.badgeCpu') : ''].filter(Boolean).join('');
@@ -962,18 +964,18 @@ export class Hud {
     const setActive = (who: 'player' | 'cpu') => {
       if (active === who) return;
       active = who;
-      idx = TOP_IDS.indexOf(cfg[who].top);
+      idx = ROSTER_IDS.indexOf(cfg[who].top);
       render();
     };
     /** 把名鑑第 i 格換到選取的那一邊（零件回到原廠） */
     const assign = (i: number) => {
       idx = i;
-      cfg[active] = { top: TOP_IDS[i], loadout: { ...STOCK } };
+      cfg[active] = { top: ROSTER_IDS[i], loadout: { ...STOCK } };
       partMenu.close();
       render();
     };
     const setIdx = (i: number) => {
-      idx = (i + TOP_IDS.length) % TOP_IDS.length;
+      idx = (i + ROSTER_IDS.length) % ROSTER_IDS.length;
       render();
       els[idx]?.scrollIntoView({ block: 'nearest' });
     };
@@ -983,7 +985,7 @@ export class Hud {
       return n > 0 ? n : els.length;
     };
     cards.replaceChildren();
-    TOP_IDS.forEach((id, i) => {
+    ROSTER_IDS.forEach((id, i) => {
       const c = buildTile(o.specs[id]);
       o.thumb(o.specs[id], (url) => setTileThumb(c, url));
       // 滑鼠移過去先看那一顆（原廠），移開回到選取那一邊
@@ -1281,7 +1283,7 @@ export class Hud {
         return c;
       });
     // CPU 陣容依名鑑順序排列，避免洩漏出場順序
-    const cpuShown = TOP_IDS.filter((t) => m.cpu.includes(t));
+    const cpuShown = inRosterOrder(m.cpu);
     $('#hud .lineup .t0').replaceChildren(...side(m.player, 0));
     $('#hud .lineup .t1').replaceChildren(...side(cpuShown, 1));
   }

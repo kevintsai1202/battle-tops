@@ -11,6 +11,8 @@ interface TopDef {
   nameEn: string;
   origin: string | null;
   originEn: string | null;
+  /** 最近一次更新新增的陀螺填 true：名鑑排最前面並標 NEW。下次再加陀螺時，把這批的標記拿掉、改標新的那批 */
+  isNew?: true;
   spinDir: 1 | -1;
   emblem: string;
   look: TopLook;
@@ -25,7 +27,7 @@ interface TopDef {
 /** 基本屬性 + 推導出的物理能力值 → 完整規格（原廠組合）；攻擊環屬性由原本的屬性扣掉原廠零件反推 */
 function defineTop(d: TopDef): TopSpec {
   const ring = ringOf(d.stats, PARTS[d.stock.disk], PARTS[d.stock.driver]);
-  return { ...d, ring, parts: { ...d.stock }, ...derivePhysics(d.stats) };
+  return { ...d, isNew: d.isNew ?? false, ring, parts: { ...d.stock }, ...derivePhysics(d.stats) };
 }
 
 /**
@@ -337,6 +339,7 @@ const DEFS: TopDef[] = [
     nameEn: 'Abyss Shark',
     origin: 'SharkScale 4-50UF（UX-15・鯊魚）',
     originEn: 'SharkScale 4-50UF (UX-15)',
+    isNew: true,
     spinDir: 1,
     emblem: '鮫',
     look: {
@@ -374,6 +377,7 @@ const DEFS: TopDef[] = [
     nameEn: 'Firebird Wing',
     origin: 'PhoenixWing 9-60GF（BX-23・鳳凰）',
     originEn: 'PhoenixWing 9-60GF (BX-23)',
+    isNew: true,
     spinDir: 1,
     emblem: '炎',
     look: {
@@ -414,6 +418,7 @@ const DEFS: TopDef[] = [
     nameEn: 'Rebound Drake',
     origin: 'ImpactDrake 9-60LR（UX-11・飛龍）',
     originEn: 'ImpactDrake 9-60LR (UX-11)',
+    isNew: true,
     spinDir: 1,
     emblem: '震',
     look: {
@@ -453,6 +458,7 @@ const DEFS: TopDef[] = [
     nameEn: 'Tiamat Blitz',
     origin: 'BahamutBlitz BK1-50I（CX-13・巴哈姆特）',
     originEn: 'BahamutBlitz BK1-50I (CX-13)',
+    isNew: true,
     spinDir: 1,
     emblem: '閃',
     look: {
@@ -775,6 +781,7 @@ const DEFS: TopDef[] = [
     nameEn: 'Mage Rod',
     origin: 'WizardRod 5-70DB（UX-03・巫師杖）',
     originEn: 'WizardRod 5-70DB (UX-03)',
+    isNew: true,
     spinDir: 1,
     emblem: '杖',
     look: {
@@ -957,6 +964,7 @@ const DEFS: TopDef[] = [
     nameEn: 'Kaiser Crown',
     origin: 'EmperorMight HOp（CX-11・皇帝）',
     originEn: 'EmperorMight HOp (CX-11)',
+    isNew: true,
     spinDir: 1,
     emblem: '帝',
     look: {
@@ -992,8 +1000,19 @@ const DEFS: TopDef[] = [
 /** 陀螺代號 → 規格 */
 export const TOP_SPECS: Record<TopId, TopSpec> = Object.fromEntries(DEFS.map((d) => [d.id, defineTop(d)]));
 
-/** 全部陀螺代號（選單順序：原創四顆在前，其後依類型排列） */
+/** 全部陀螺代號（定義順序：原創四顆在前，其後依類型排列）。對戰、CPU 隨機選隊、平衡報表與測試用這個順序，不要改動 */
 export const TOP_IDS: TopId[] = DEFS.map((d) => d.id);
+
+/**
+ * 名鑑的顯示順序（組隊、試驗模式、CPU 與對手陣容）：標成新陀螺（isNew）的排最前面，其餘照 TOP_IDS。
+ * 2026-10-11 起為 shark → phoenix → drake → bahamut → rod → emperor，接著烈焰龍等原本的 20 顆。
+ */
+export const ROSTER_IDS: TopId[] = [...TOP_IDS.filter((id) => TOP_SPECS[id].isNew), ...TOP_IDS.filter((id) => !TOP_SPECS[id].isNew)];
+
+/** 把一部分陀螺（例如對手的三顆）照名鑑順序排列，避免洩漏出場順序 */
+export function inRosterOrder(ids: readonly TopId[]): TopId[] {
+  return ROSTER_IDS.filter((id) => ids.includes(id));
+}
 
 /**
  * 依零件組合建立陀螺規格：攻擊環（身分、外觀、必殺）不變，屬性與物理能力值依盤與軸重算。
